@@ -60,6 +60,14 @@ const MITRE_TECHNIQUES = [
       'Adversaries impersonate a trusted individual or organization to persuade a target into taking an action, such as a fraudulent wire transfer — the core mechanism of Business Email Compromise.',
     url: 'https://attack.mitre.org/techniques/T1656/',
   },
+  {
+    techniqueId: 'T1048',
+    name: 'Exfiltration Over Alternative Protocol',
+    tactic: 'TA0010',
+    description:
+      'Adversaries (or insiders) move data out of an environment using a protocol other than the primary command-and-control channel — including ordinary outbound email to a personal account.',
+    url: 'https://attack.mitre.org/techniques/T1048/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -88,6 +96,28 @@ const DETECTION_RULES = [
     logicSummary: 'count(DISTINCT identity_id) grouped by source_ip WHERE result = failure >= 5 within the session.',
     defaultSeverity: 'high' as const,
     mitreTechniqueSlug: 'T1110.003',
+  },
+  {
+    name: 'Identity: MFA Fatigue Pattern Detected',
+    description: 'Fires when one identity receives several MFA-denied results from one source IP in a short window.',
+    logicSummary: 'count(result = mfa_denied) grouped by (identity_id, source_ip) >= 5 within the session.',
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1621',
+  },
+  {
+    name: 'Identity: Impossible Travel Detected',
+    description:
+      "Fires when the implied speed between two consecutive successful sign-ins for the same identity exceeds feasible travel.",
+    logicSummary: 'implied_speed_kmh(consecutive successful sign-ins for the same identity) >= 900 km/h.',
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1078',
+  },
+  {
+    name: 'Email: Outbound Message to Personal Webmail with Attachment',
+    description: 'Fires when an outbound message with at least one attachment is sent to a known personal webmail domain.',
+    logicSummary: "direction = outbound AND has_attachment AND recipient domain IN (gmail.com, yahoo.com, outlook.com, hotmail.com, icloud.com).",
+    defaultSeverity: 'medium' as const,
+    mitreTechniqueSlug: 'T1048',
   },
 ];
 
@@ -460,8 +490,203 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'mfa-fatigue-push-bombing',
+      title: 'MFA Fatigue — Push Bombing',
+      summary:
+        'An engineer\'s phone lit up with a burst of MFA approval requests overnight, then one was approved. Determine whether the account was actually accessed.',
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1621', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            'An attacker with a valid password (obtained elsewhere) repeatedly triggers MFA push notifications against one account, hoping the user approves one out of annoyance or confusion — then signs in once one is approved.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 12, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1621',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_fatigue_batch_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'mfa-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_fatigue_success_signin_v1',
+            relative_timestamp: '+2h30m',
+            correlation_group: 'mfa-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1621', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Search sign-in events for this identity — how many MFA prompts were denied before one succeeded?' },
+          { unlock_cost_percent: 10, text: 'Check whether the denied attempts and the eventual success share a source IP.' },
+          { unlock_cost_percent: 15, text: 'A dozen denied prompts in minutes, from one address, is not normal user behavior — even if the final approval looks legitimate.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'impossible-travel',
+      title: 'Impossible Travel',
+      summary:
+        'The same account signed in successfully from two cities less than an hour apart. Determine whether this is a compromised account or something benign.',
+      category: 'identity',
+      difficulty: 'beginner',
+      estimatedMinutes: 15,
+      requiredTechniques: ['T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'beginner',
+          estimated_minutes: 15,
+          narrative_summary:
+            "An attacker signs in with a compromised credential from a distant location shortly after the legitimate user's own sign-in — the gap between the two locations is not physically travelable in the time available.",
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Legal', job_title: 'Compliance Analyst', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'impossible_travel_first_signin_v1',
+            relative_timestamp: '+5h',
+            correlation_group: 'travel-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'impossible_travel_second_signin_v1',
+            relative_timestamp: '+5h45m',
+            correlation_group: 'travel-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Look at this identity's sign-in timeline — do any two consecutive entries look geographically odd?" },
+          { unlock_cost_percent: 10, text: 'Compare the time between the two sign-ins against how long that trip would actually take.' },
+          { unlock_cost_percent: 15, text: "One of the noise sign-ins in this session is a slow, plausible trip — don't confuse it with the fast, implausible pair." },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'insider-data-exfiltration',
+      title: 'Insider Threat — Data Exfiltration to Personal Email',
+      summary:
+        'A sales employee emailed a spreadsheet to a personal Gmail address late at night. Determine whether this is a policy violation worth escalating.',
+      category: 'insider_threat',
+      difficulty: 'beginner',
+      estimatedMinutes: 15,
+      requiredTechniques: ['T1048'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'insider_threat',
+          difficulty: 'beginner',
+          estimated_minutes: 15,
+          narrative_summary:
+            'An employee emails a sensitive company file from their own corporate account to their personal webmail address. There is no external attacker and no spoofing — every authentication check on the message passes, because it genuinely was sent by the organization\'s own mail system on the employee\'s behalf.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1048',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'insider_data_exfil_email_v1',
+            relative_timestamp: '+20h',
+            correlation_group: 'exfil-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: { signal_to_noise_ratio: 0.1, false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 1 }] },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1048'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 1,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Search outbound email — where is company data actually going?' },
+          { unlock_cost_percent: 10, text: 'Check the authentication results on the message closely — is this actually spoofed, or genuinely sent by the org?' },
+          { unlock_cost_percent: 15, text: 'The timing of the message (late at night) and the destination domain matter as much as the content.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 3 scenarios.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 6 scenarios.`,
   );
 }
 

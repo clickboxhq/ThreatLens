@@ -36,6 +36,12 @@ export const LOOKALIKE_INTERNAL_DOMAIN = 'contoso-finance-support.example.com';
 export const EXEC_LOOKALIKE_DOMAIN = 'contoso-finance-exec.example.net';
 export const EXEC_NAME = 'Morgan Reyes';
 export const EXEC_TITLE = 'Chief Financial Officer';
+export const PERSONAL_EMAIL_DOMAIN_FOR_GENERATION = 'gmail.com';
+export const SENSITIVE_ATTACHMENT_FILENAMES = [
+  'Q3_Customer_Contracts_Export.xlsx',
+  'Employee_Compensation_Bands_2026.xlsx',
+  'Pending_M&A_Due_Diligence_Notes.docx',
+];
 
 export interface CountryCity {
   country: string;

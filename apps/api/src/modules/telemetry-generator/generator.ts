@@ -15,7 +15,9 @@ import {
   LOOKALIKE_INTERNAL_DOMAIN,
   MALICIOUS_DOMAIN,
   ORG_DOMAIN,
+  PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
   RISKY_UNFAMILIAR_COUNTRIES,
+  SENSITIVE_ATTACHMENT_FILENAMES,
   TRAVEL_COUNTRIES,
 } from './templates';
 
@@ -473,6 +475,137 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         dmarcResult: 'fail',
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+    case 'mfa_fatigue_batch_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'mfa-fatigue');
+      const denialCount = ctx.rng.intBetween(6, 9);
+      for (let i = 0; i < denialCount; i++) {
+        const offsetMinutes = i * ctx.rng.intBetween(1, 3);
+        ctx.signInEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'mfa_fatigue_denial' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          sourceIp: attacker.ip,
+          sourceCountry: attacker.country,
+          sourceCity: attacker.city,
+          application: 'Office 365 Exchange Online',
+          result: 'mfa_denied',
+          isLegacyAuth: false,
+          clientApp: 'Modern Auth Client',
+        });
+      }
+      break;
+    }
+    case 'mfa_fatigue_success_signin_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'mfa-fatigue');
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'mfa_fatigue_success' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        sourceIp: attacker.ip,
+        sourceCountry: attacker.country,
+        sourceCity: attacker.city,
+        application: 'Office 365 Exchange Online',
+        result: 'success',
+        isLegacyAuth: false,
+        clientApp: 'Modern Auth Client',
+      });
+      break;
+    }
+    case 'impossible_travel_first_signin_v1': {
+      const home = HOME_COUNTRIES.find((c) => c.country === ctx.identity.homeCountry) ?? HOME_COUNTRIES[0];
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'impossible_travel_first' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        sourceIp: syntheticIp(ctx.rng),
+        sourceCountry: home.country,
+        sourceCity: home.city,
+        application: 'Office 365 Exchange Online',
+        result: 'success',
+        isLegacyAuth: false,
+        clientApp: 'Modern Auth Client',
+      });
+      break;
+    }
+    case 'impossible_travel_second_signin_v1': {
+      // A distant, unfamiliar location reached implausibly soon after the first sign-in —
+      // the relative_timestamp gap between the two kill-chain steps is what makes the
+      // Alert Engine's speed calculation (§9.6) come out impossible, not anything here.
+      const risky = ctx.rng.pick(RISKY_UNFAMILIAR_COUNTRIES);
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'impossible_travel_second' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        sourceIp: syntheticIp(ctx.rng),
+        sourceCountry: risky.country,
+        sourceCity: risky.city,
+        application: 'Office 365 Exchange Online',
+        result: 'success',
+        isLegacyAuth: false,
+        clientApp: 'Modern Auth Client',
+      });
+      break;
+    }
+    case 'insider_data_exfil_email_v1': {
+      const emailId = randomUUID();
+      const personalLocalPart = (ctx.identity.displayName as string).toLowerCase().replace(/\s+/g, '.') + ctx.rng.intBetween(10, 999);
+      const personalAddress = `${personalLocalPart}@${PERSONAL_EMAIL_DOMAIN_FOR_GENERATION}`;
+      const filename = ctx.rng.pick(SENSITIVE_ATTACHMENT_FILENAMES);
+      ctx.emailMessages.push({
+        id: emailId,
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        messageId: `<${randomUUID()}@${ORG_DOMAIN}>`,
+        direction: 'outbound',
+        senderAddress: ctx.identity.userPrincipalName as string,
+        senderDisplayName: ctx.identity.displayName as string,
+        recipientAddresses: [personalAddress],
+        subject: 'Backup copy',
+        bodyHtml: '<p>Saving a copy of this for my records.</p>',
+        headersRaw: {
+          'Received-Chain': [`mail.${ORG_DOMAIN}`],
+          // Genuinely sent by the org's own mail system — not spoofed, unlike every other
+          // scenario's ground-truth email (§8.2's evaluateOutboundPersonalEmailRule note).
+          'Authentication-Results': `spf=pass smtp.mailfrom=${ORG_DOMAIN}; dkim=pass; dmarc=pass`,
+        },
+        spfResult: 'pass',
+        dkimResult: 'pass',
+        dmarcResult: 'pass',
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      ctx.emailAttachments.push({
+        id: randomUUID(),
+        emailMessageId: emailId,
+        filename,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        sizeBytes: ctx.rng.intBetween(20_000, 500_000),
+        hashSha256: Array.from({ length: 64 }, () => ctx.rng.intBetween(0, 15).toString(16)).join(''),
+        sandboxVerdict: 'benign',
       });
       break;
     }

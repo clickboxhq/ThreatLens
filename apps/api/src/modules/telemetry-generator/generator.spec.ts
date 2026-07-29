@@ -247,3 +247,195 @@ describe('generateTelemetry — BEC wire transfer scenario (§7.2)', () => {
     expect(noiseEmails[0].mitreTechniqueId ?? null).toBeNull();
   });
 });
+
+function buildMfaFatigueDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 8, devices: 0 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1621',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mfa_fatigue_batch_v1',
+        relative_timestamp: '+2h',
+        correlation_group: 'mfa-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1078',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mfa_fatigue_success_signin_v1',
+        relative_timestamp: '+2h30m',
+        correlation_group: 'mfa-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — MFA fatigue scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1621', randomUUID()],
+    ['T1078', randomUUID()],
+  ]);
+
+  it('produces 6-9 mfa_denied attempts for the victim from one IP, then one success from the same IP', () => {
+    const def = buildMfaFatigueDefinition();
+    const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlug);
+    const groundTruth = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+
+    const denials = groundTruth.filter((s) => s.result === 'mfa_denied');
+    const successes = groundTruth.filter((s) => s.result === 'success');
+    expect(denials.length).toBeGreaterThanOrEqual(6);
+    expect(denials.length).toBeLessThanOrEqual(9);
+    expect(successes).toHaveLength(1);
+    expect(new Set(groundTruth.map((s) => s.sourceIp)).size).toBe(1);
+  });
+
+  it('feeds the Alert Engine\'s MFA-fatigue rule correctly end-to-end', async () => {
+    const { evaluateMfaFatigueRule } = await import('../alert-engine/rules');
+    const def = buildMfaFatigueDefinition();
+    const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlug);
+
+    const candidates = evaluateMfaFatigueRule(
+      result.signInEvents as unknown as Parameters<typeof evaluateMfaFatigueRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateMfaFatigueRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+  });
+});
+
+function buildImpossibleTravelDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Legal', job_title: 'Compliance Analyst', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 8, devices: 0 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1078',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'impossible_travel_first_signin_v1',
+        relative_timestamp: '+5h',
+        correlation_group: 'travel-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1078',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'impossible_travel_second_signin_v1',
+        relative_timestamp: '+5h45m',
+        correlation_group: 'travel-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }] },
+  };
+}
+
+describe('generateTelemetry — impossible travel scenario (§7.2, §8.2, §9.6)', () => {
+  const techniqueIdBySlug = new Map([['T1078', randomUUID()]]);
+
+  it('produces two ground-truth sign-ins from different cities close together in time', () => {
+    const def = buildImpossibleTravelDefinition();
+    const result = generateTelemetry(randomUUID(), 13n, def, techniqueIdBySlug);
+    const groundTruth = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+
+    expect(groundTruth).toHaveLength(2);
+    expect(groundTruth[0].sourceCity).not.toBe(groundTruth[1].sourceCity);
+    const minutesApart = Math.abs(new Date(groundTruth[1].occurredAt).getTime() - new Date(groundTruth[0].occurredAt).getTime()) / 60000;
+    expect(minutesApart).toBeLessThanOrEqual(60);
+  });
+
+  it('feeds the Alert Engine\'s impossible-travel rule correctly end-to-end', async () => {
+    const { evaluateImpossibleTravelRule } = await import('../alert-engine/rules');
+    const def = buildImpossibleTravelDefinition();
+    const result = generateTelemetry(randomUUID(), 13n, def, techniqueIdBySlug);
+
+    const candidates = evaluateImpossibleTravelRule(
+      result.signInEvents as unknown as Parameters<typeof evaluateImpossibleTravelRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateImpossibleTravelRule>[1],
+    );
+    expect(candidates.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+function buildInsiderExfilDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 8, devices: 0 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1048',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'insider_data_exfil_email_v1',
+        relative_timestamp: '+20h',
+        correlation_group: 'exfil-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — insider data exfiltration scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([['T1048', randomUUID()]]);
+
+  it('produces one outbound ground-truth email with an attachment, authenticated cleanly (no spoofing)', () => {
+    const def = buildInsiderExfilDefinition();
+    const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
+    const groundTruthEmails = result.emailMessages.filter((m) => m.isGroundTruthEvidence);
+
+    expect(groundTruthEmails).toHaveLength(1);
+    expect(groundTruthEmails[0].direction).toBe('outbound');
+    expect(groundTruthEmails[0].spfResult).toBe('pass');
+    expect(groundTruthEmails[0].dkimResult).toBe('pass');
+    expect(groundTruthEmails[0].dmarcResult).toBe('pass');
+    expect(result.emailAttachments.filter((a) => a.emailMessageId === groundTruthEmails[0].id)).toHaveLength(1);
+  });
+
+  it('sends to a personal webmail address derived from the victim, not an organizational one', () => {
+    const def = buildInsiderExfilDefinition();
+    const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
+    const groundTruthEmail = result.emailMessages.find((m) => m.isGroundTruthEvidence)!;
+
+    expect(groundTruthEmail.recipientAddresses[0]).toContain('@gmail.com');
+  });
+
+  it('feeds the Alert Engine\'s outbound-personal-email rule correctly end-to-end', async () => {
+    const { evaluateOutboundPersonalEmailRule } = await import('../alert-engine/rules');
+    const def = buildInsiderExfilDefinition();
+    const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
+
+    const candidates = evaluateOutboundPersonalEmailRule(
+      result.emailMessages as unknown as Parameters<typeof evaluateOutboundPersonalEmailRule>[0],
+      result.emailAttachments as unknown as Parameters<typeof evaluateOutboundPersonalEmailRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+  });
+});

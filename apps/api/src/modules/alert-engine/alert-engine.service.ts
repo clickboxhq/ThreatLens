@@ -3,10 +3,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   AlertCandidate,
   correlateCandidates,
+  evaluateImpossibleTravelRule,
+  evaluateMfaFatigueRule,
   evaluateNewCountryRule,
+  evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluateSpfFailRule,
+  IMPOSSIBLE_TRAVEL_RULE_NAME,
+  MFA_FATIGUE_RULE_NAME,
   NEW_COUNTRY_RULE_NAME,
+  OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
   PASSWORD_SPRAY_RULE_NAME,
   SPF_FAIL_RULE_NAME,
 } from './rules';
@@ -25,25 +31,47 @@ export class AlertEngineService {
       return;
     }
 
-    const [emails, signIns, identities, spfRule, newCountryRule, passwordSprayRule] = await Promise.all([
+    const [
+      emails,
+      attachments,
+      signIns,
+      identities,
+      spfRule,
+      newCountryRule,
+      passwordSprayRule,
+      mfaFatigueRule,
+      impossibleTravelRule,
+      outboundPersonalEmailRule,
+    ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
+      this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
       this.prisma.signInEvent.findMany({ where: { sessionId } }),
       this.prisma.identity.findMany({ where: { sessionId } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SPF_FAIL_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: NEW_COUNTRY_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: PASSWORD_SPRAY_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: MFA_FATIGUE_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: IMPOSSIBLE_TRAVEL_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: OUTBOUND_PERSONAL_EMAIL_RULE_NAME } }),
     ]);
 
-    const emailCandidates = evaluateSpfFailRule(emails, identities);
-    const signInCandidates = evaluateNewCountryRule(signIns, identities);
-    const passwordSprayCandidates = evaluatePasswordSprayRule(signIns, identities);
-    const allCandidates = [...emailCandidates, ...signInCandidates, ...passwordSprayCandidates];
+    const allCandidates: AlertCandidate[] = [
+      ...evaluateSpfFailRule(emails, identities),
+      ...evaluateNewCountryRule(signIns, identities),
+      ...evaluatePasswordSprayRule(signIns, identities),
+      ...evaluateMfaFatigueRule(signIns, identities),
+      ...evaluateImpossibleTravelRule(signIns, identities),
+      ...evaluateOutboundPersonalEmailRule(emails, attachments),
+    ];
     const links = correlateCandidates(allCandidates);
 
     const ruleByName = new Map([
       [SPF_FAIL_RULE_NAME, spfRule],
       [NEW_COUNTRY_RULE_NAME, newCountryRule],
       [PASSWORD_SPRAY_RULE_NAME, passwordSprayRule],
+      [MFA_FATIGUE_RULE_NAME, mfaFatigueRule],
+      [IMPOSSIBLE_TRAVEL_RULE_NAME, impossibleTravelRule],
+      [OUTBOUND_PERSONAL_EMAIL_RULE_NAME, outboundPersonalEmailRule],
     ]);
 
     await this.prisma.$transaction(

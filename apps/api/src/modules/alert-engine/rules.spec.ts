@@ -1,6 +1,14 @@
 import { randomUUID } from 'crypto';
-import type { EmailMessage, Identity, SignInEvent } from '@prisma/client';
-import { correlateCandidates, evaluateNewCountryRule, evaluatePasswordSprayRule, evaluateSpfFailRule } from './rules';
+import type { EmailAttachment, EmailMessage, Identity, SignInEvent } from '@prisma/client';
+import {
+  correlateCandidates,
+  evaluateImpossibleTravelRule,
+  evaluateMfaFatigueRule,
+  evaluateNewCountryRule,
+  evaluateOutboundPersonalEmailRule,
+  evaluatePasswordSprayRule,
+  evaluateSpfFailRule,
+} from './rules';
 
 function identity(overrides: Partial<Identity> = {}): Identity {
   return {
@@ -64,6 +72,19 @@ function signIn(identityId: string, overrides: Partial<SignInEvent> = {}): SignI
     clientApp: 'Modern Auth Client',
     ...overrides,
   } as SignInEvent;
+}
+
+function attachment(emailMessageId: string, overrides: Partial<EmailAttachment> = {}): EmailAttachment {
+  return {
+    id: randomUUID(),
+    emailMessageId,
+    filename: 'Q3_Customer_Contracts_Export.xlsx',
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sizeBytes: 48213,
+    hashSha256: 'a'.repeat(64),
+    sandboxVerdict: 'benign',
+    ...overrides,
+  } as EmailAttachment;
 }
 
 describe('evaluateSpfFailRule (§8.2)', () => {
@@ -148,6 +169,128 @@ describe('evaluatePasswordSprayRule (§8.2)', () => {
     const fromIpB = targets.slice(3, 6).map((t) => signIn(t.id, { sourceIp: '198.51.100.2', result: 'failure' }));
 
     expect(evaluatePasswordSprayRule([...fromIpA, ...fromIpB], targets)).toHaveLength(0);
+  });
+});
+
+describe('evaluateMfaFatigueRule (§8.2)', () => {
+  it('fires when one identity gets >= 5 mfa_denied results from one IP', () => {
+    const victim = identity();
+    const attackerIp = '198.51.100.20';
+    const denials = Array.from({ length: 6 }, () => signIn(victim.id, { sourceIp: attackerIp, result: 'mfa_denied' }));
+
+    const candidates = evaluateMfaFatigueRule(denials, [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityId).toBe(victim.id);
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+  });
+
+  it('includes the eventual success in evidence and names it in the title', () => {
+    const victim = identity();
+    const attackerIp = '198.51.100.20';
+    const denials = Array.from({ length: 5 }, () => signIn(victim.id, { sourceIp: attackerIp, result: 'mfa_denied' }));
+    const success = signIn(victim.id, { sourceIp: attackerIp, result: 'success' });
+
+    const candidates = evaluateMfaFatigueRule([...denials, success], [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+    expect(candidates[0].title).toContain(victim.displayName);
+  });
+
+  it('does not fire below the denial threshold', () => {
+    const victim = identity();
+    const denials = Array.from({ length: 4 }, () => signIn(victim.id, { sourceIp: '198.51.100.20', result: 'mfa_denied' }));
+    expect(evaluateMfaFatigueRule(denials, [victim])).toHaveLength(0);
+  });
+
+  it('does not conflate denials against different identities from the same IP (that is password spray, not MFA fatigue)', () => {
+    const targets = Array.from({ length: 6 }, () => identity());
+    const denials = targets.map((t) => signIn(t.id, { sourceIp: '198.51.100.20', result: 'mfa_denied' }));
+    expect(evaluateMfaFatigueRule(denials, targets)).toHaveLength(0);
+  });
+});
+
+describe('evaluateImpossibleTravelRule (§8.2, §9.6)', () => {
+  it('fires when two consecutive successful sign-ins imply an infeasible travel speed', () => {
+    const victim = identity();
+    const first = signIn(victim.id, {
+      sourceCity: 'Chicago',
+      sourceCountry: 'US',
+      occurredAt: new Date('2026-01-01T10:00:00Z'),
+    });
+    const second = signIn(victim.id, {
+      sourceCity: 'Tokyo',
+      sourceCountry: 'JP',
+      occurredAt: new Date('2026-01-01T10:45:00Z'),
+    });
+
+    const candidates = evaluateImpossibleTravelRule([first, second], [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs.map((r) => r.eventId).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it('does not fire for a feasible travel time between two cities', () => {
+    const victim = identity();
+    const first = signIn(victim.id, {
+      sourceCity: 'Chicago',
+      sourceCountry: 'US',
+      occurredAt: new Date('2026-01-01T10:00:00Z'),
+    });
+    const second = signIn(victim.id, {
+      sourceCity: 'Toronto',
+      sourceCountry: 'CA',
+      occurredAt: new Date('2026-01-02T10:00:00Z'), // 24 hours later — plenty of time
+    });
+
+    expect(evaluateImpossibleTravelRule([first, second], [victim])).toHaveLength(0);
+  });
+
+  it('ignores failed sign-ins entirely', () => {
+    const victim = identity();
+    const first = signIn(victim.id, { sourceCity: 'Chicago', result: 'failure', occurredAt: new Date('2026-01-01T10:00:00Z') });
+    const second = signIn(victim.id, { sourceCity: 'Tokyo', result: 'failure', occurredAt: new Date('2026-01-01T10:45:00Z') });
+    expect(evaluateImpossibleTravelRule([first, second], [victim])).toHaveLength(0);
+  });
+
+  it('does not fire for consecutive sign-ins from the same city', () => {
+    const victim = identity();
+    const first = signIn(victim.id, { sourceCity: 'Chicago', occurredAt: new Date('2026-01-01T10:00:00Z') });
+    const second = signIn(victim.id, { sourceCity: 'Chicago', occurredAt: new Date('2026-01-01T10:05:00Z') });
+    expect(evaluateImpossibleTravelRule([first, second], [victim])).toHaveLength(0);
+  });
+});
+
+describe('evaluateOutboundPersonalEmailRule (§8.2)', () => {
+  it('fires on an outbound message with an attachment sent to a personal webmail address', () => {
+    const victim = identity();
+    const msg = email(
+      { direction: 'outbound', senderAddress: victim.userPrincipalName, spfResult: 'pass', dkimResult: 'pass', dmarcResult: 'pass' },
+      'victim.personal123@gmail.com',
+    );
+    const att = attachment(msg.id);
+
+    const candidates = evaluateOutboundPersonalEmailRule([msg], [att]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'email_messages', eventId: msg.id }]);
+  });
+
+  it('does not fire on an outbound message with no attachment', () => {
+    const victim = identity();
+    const msg = email({ direction: 'outbound' }, 'victim.personal123@gmail.com');
+    expect(evaluateOutboundPersonalEmailRule([msg], [])).toHaveLength(0);
+  });
+
+  it('does not fire on an inbound message to a personal-looking address', () => {
+    const victim = identity();
+    const msg = email({ direction: 'inbound' }, 'victim.personal123@gmail.com');
+    const att = attachment(msg.id);
+    expect(evaluateOutboundPersonalEmailRule([msg], [att])).toHaveLength(0);
+  });
+
+  it('does not fire on an outbound message with an attachment sent to an organizational address', () => {
+    const victim = identity();
+    const msg = email({ direction: 'outbound' }, 'colleague@contoso-finance.example.com');
+    const att = attachment(msg.id);
+    expect(evaluateOutboundPersonalEmailRule([msg], [att])).toHaveLength(0);
   });
 });
 

@@ -5,7 +5,7 @@ import { InvestigationActionsService } from '../session-core/investigation-actio
 import { AppException } from '../../common/exceptions/app-exception';
 import { toStudentIdentityDto } from '../../common/dto/identity.dto';
 import { toStudentSignInDto } from '../../common/dto/sign-in.dto';
-import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from './geo';
+import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { IdentityRiskLevel, MfaStatus, Prisma, SignInResult } from '@prisma/client';
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
-import type { EmailMessage, Identity, SignInEvent } from '@prisma/client';
+import type { EmailAttachment, EmailMessage, Identity, SignInEvent } from '@prisma/client';
+import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 
 // A detection firing, before it's turned into a persisted Alert row. Kept separate from
 // the Prisma model so rule logic is a pure function of already-fetched data and is
@@ -22,8 +23,16 @@ export interface AlertCandidate {
 export const SPF_FAIL_RULE_NAME = 'Email: SPF Fail with Lookalike Sender Domain';
 export const NEW_COUNTRY_RULE_NAME = 'Identity: Sign-in From New Country';
 export const PASSWORD_SPRAY_RULE_NAME = 'Identity: Password Spray Campaign Detected';
+export const MFA_FATIGUE_RULE_NAME = 'Identity: MFA Fatigue Pattern Detected';
+export const IMPOSSIBLE_TRAVEL_RULE_NAME = 'Identity: Impossible Travel Detected';
+export const OUTBOUND_PERSONAL_EMAIL_RULE_NAME = 'Email: Outbound Message to Personal Webmail with Attachment';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
+const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
+// Faster than sustained commercial subsonic flight (~880-926 km/h) — a comfortable margin
+// so the rule never mistakes a fast-but-feasible trip for an impossible one.
+const IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH = 900;
+const PERSONAL_EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
 
 /**
  * Fires whenever an inbound message fails SPF — deliberately naive (§8.1: realistic, not
@@ -126,6 +135,131 @@ export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Id
     });
   }
   return candidates;
+}
+
+/**
+ * Fires when one identity racks up several MFA-denied results from one source IP in a
+ * short window — a push-bombing/MFA-fatigue attack — regardless of whether it eventually
+ * succeeds. Unlike password spraying (many identities, one IP), this is one identity
+ * hit repeatedly (§8.2).
+ */
+export function evaluateMfaFatigueRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const byIdentityAndIp = new Map<string, SignInEvent[]>();
+  for (const event of signIns) {
+    const key = `${event.identityId}::${event.sourceIp}`;
+    const group = byIdentityAndIp.get(key) ?? [];
+    group.push(event);
+    byIdentityAndIp.set(key, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const events of byIdentityAndIp.values()) {
+    const deniedEvents = events.filter((e) => e.result === 'mfa_denied');
+    if (deniedEvents.length < MFA_FATIGUE_DENIAL_THRESHOLD) continue;
+
+    const identity = identityById.get(deniedEvents[0].identityId);
+    if (!identity) continue;
+    const successEvent = events.find((e) => e.result === 'success');
+    const latestEvent = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: MFA_FATIGUE_RULE_NAME,
+      title: successEvent
+        ? `${identity.displayName} approved an MFA prompt after a push-bombing burst`
+        : `MFA fatigue pattern detected against ${identity.displayName}`,
+      description: successEvent
+        ? `${deniedEvents.length} MFA prompts were denied in quick succession from ${deniedEvents[0].sourceIp}, then one was approved — a classic push-bombing pattern.`
+        : `${deniedEvents.length} MFA prompts were denied in quick succession from ${deniedEvents[0].sourceIp}. No approval was observed.`,
+      primaryEntityType: 'identity' as const,
+      primaryEntityId: identity.id,
+      evidenceRefs: events
+        .filter((e) => e.result === 'mfa_denied' || e.result === 'success')
+        .map((e) => ({ eventTable: 'sign_in_events', eventId: e.id })),
+      correlationId: null,
+      occurredAt: latestEvent.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fires when the implied speed between two consecutive successful sign-ins for the same
+ * identity exceeds what's physically feasible — the classic impossible-travel heuristic
+ * (§9.6), computed with the same geo helper the Identity Portal itself uses so an
+ * investigator's manual reasoning and the automated alert agree.
+ */
+export function evaluateImpossibleTravelRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const byIdentity = new Map<string, SignInEvent[]>();
+  for (const event of signIns) {
+    if (event.result !== 'success') continue;
+    const group = byIdentity.get(event.identityId) ?? [];
+    group.push(event);
+    byIdentity.set(event.identityId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [identityId, events] of byIdentity) {
+    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+    const identity = identityById.get(identityId);
+    if (!identity) continue;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (prev.sourceCity === curr.sourceCity) continue;
+
+      const distanceKm = distanceBetweenCitiesKm(prev.sourceCity, curr.sourceCity);
+      if (distanceKm === null) continue;
+      const minutesElapsed = (curr.occurredAt.getTime() - prev.occurredAt.getTime()) / 60000;
+      const speedKmh = impliedTravelSpeedKmh(distanceKm, minutesElapsed);
+      if (speedKmh === null || speedKmh < IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH) continue;
+
+      candidates.push({
+        id: randomUUID(),
+        detectionRuleName: IMPOSSIBLE_TRAVEL_RULE_NAME,
+        title: `${identity.displayName}'s sign-ins imply impossible travel`,
+        description: `Sign-in from ${prev.sourceCity} was followed ${Math.round(minutesElapsed)} minutes later by a sign-in from ${curr.sourceCity} — an implied speed of ~${Math.round(speedKmh).toLocaleString()} km/h, far beyond feasible travel.`,
+        primaryEntityType: 'identity' as const,
+        primaryEntityId: identity.id,
+        evidenceRefs: [
+          { eventTable: 'sign_in_events', eventId: prev.id },
+          { eventTable: 'sign_in_events', eventId: curr.id },
+        ],
+        correlationId: curr.correlationId,
+        occurredAt: curr.occurredAt,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Fires on an outbound message, with at least one attachment, to a well-known personal
+ * webmail domain — a common data-exfiltration/insider-threat pattern that has nothing to
+ * do with a spoofed sender (§8.2): the message is genuinely sent by the organization's own
+ * mail system, so SPF/DKIM/DMARC all legitimately pass, unlike every other rule so far.
+ */
+export function evaluateOutboundPersonalEmailRule(emails: EmailMessage[], attachments: EmailAttachment[]): AlertCandidate[] {
+  const emailIdsWithAttachments = new Set(attachments.map((a) => a.emailMessageId));
+
+  return emails
+    .filter((email) => email.direction === 'outbound')
+    .filter((email) => emailIdsWithAttachments.has(email.id))
+    .filter((email) => email.recipientAddresses.some((addr) => PERSONAL_EMAIL_DOMAINS.some((d) => addr.toLowerCase().endsWith(`@${d}`))))
+    .map((email) => ({
+      id: randomUUID(),
+      detectionRuleName: OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
+      title: `Outbound message with attachment sent to a personal email address`,
+      description: `A message from "${email.senderAddress}" was sent to "${email.recipientAddresses[0]}" — a personal webmail address, not an organizational one. Subject: "${email.subject}".`,
+      primaryEntityType: 'mailbox' as const,
+      primaryEntityId: email.id,
+      evidenceRefs: [{ eventTable: 'email_messages', eventId: email.id }],
+      correlationId: email.correlationId,
+      occurredAt: email.occurredAt,
+    }));
 }
 
 /**
