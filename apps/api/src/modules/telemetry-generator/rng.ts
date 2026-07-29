@@ -23,4 +23,17 @@ export class SeededRng {
   pick<T>(items: readonly T[]): T {
     return items[this.intBetween(0, items.length - 1)];
   }
+
+  /** Partial Fisher-Yates: `count` distinct items, deterministic given the RNG's state. */
+  sample<T>(items: readonly T[], count: number): T[] {
+    const pool = [...items];
+    const n = Math.min(count, pool.length);
+    const result: T[] = [];
+    for (let i = 0; i < n; i++) {
+      const idx = this.intBetween(0, pool.length - 1 - i);
+      result.push(pool[idx]);
+      pool[idx] = pool[pool.length - 1 - i];
+    }
+    return result;
+  }
 }

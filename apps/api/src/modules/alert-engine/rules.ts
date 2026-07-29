@@ -11,14 +11,19 @@ export interface AlertCandidate {
   description: string;
   primaryEntityType: 'identity' | 'device' | 'mailbox';
   primaryEntityId: string;
-  eventTable: string;
-  eventId: string;
+  // A rule may cite more than one supporting event (e.g. a password-spray campaign's
+  // whole burst of failed sign-ins plus the eventual successful one), not just the single
+  // event that made the pattern first cross threshold.
+  evidenceRefs: { eventTable: string; eventId: string }[];
   correlationId: string | null;
   occurredAt: Date;
 }
 
 export const SPF_FAIL_RULE_NAME = 'Email: SPF Fail with Lookalike Sender Domain';
 export const NEW_COUNTRY_RULE_NAME = 'Identity: Sign-in From New Country';
+export const PASSWORD_SPRAY_RULE_NAME = 'Identity: Password Spray Campaign Detected';
+
+const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 
 /**
  * Fires whenever an inbound message fails SPF — deliberately naive (§8.1: realistic, not
@@ -41,8 +46,7 @@ export function evaluateSpfFailRule(emails: EmailMessage[], identities: Identity
         // No standalone mailbox table exists yet (§6 leaves mailbox modeling as future work);
         // the owning identity's id stands in for the mailbox entity in the meantime.
         primaryEntityId: recipient?.id ?? email.id,
-        eventTable: 'email_messages',
-        eventId: email.id,
+        evidenceRefs: [{ eventTable: 'email_messages', eventId: email.id }],
         correlationId: email.correlationId,
         occurredAt: email.occurredAt,
       };
@@ -72,12 +76,56 @@ export function evaluateNewCountryRule(signIns: SignInEvent[], identities: Ident
         description: `Sign-in to "${event.application}" from ${event.sourceCity}, ${event.sourceCountry} — this identity's home country is ${identity.homeCountry}.`,
         primaryEntityType: 'identity' as const,
         primaryEntityId: identity.id,
-        eventTable: 'sign_in_events',
-        eventId: event.id,
+        evidenceRefs: [{ eventTable: 'sign_in_events', eventId: event.id }],
         correlationId: event.correlationId,
         occurredAt: event.occurredAt,
       };
     });
+}
+
+/**
+ * Fires when one source IP racks up failed sign-ins against many distinct identities —
+ * a password-spray pattern — within the session. Unlike the other rules, this one
+ * correlates *across* entities by construction, so it naturally produces a single alert
+ * citing every supporting event (every failed attempt, plus a successful one if the spray
+ * ultimately compromised an account) rather than one alert per event (§8.2).
+ */
+export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const bySourceIp = new Map<string, SignInEvent[]>();
+  for (const event of signIns) {
+    const group = bySourceIp.get(event.sourceIp) ?? [];
+    group.push(event);
+    bySourceIp.set(event.sourceIp, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [sourceIp, events] of bySourceIp) {
+    const failedEvents = events.filter((e) => e.result === 'failure');
+    const distinctFailedIdentityIds = new Set(failedEvents.map((e) => e.identityId));
+    if (distinctFailedIdentityIds.size < PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD) continue;
+
+    const successEvent = events.find((e) => e.result === 'success');
+    const representativeIdentity = identityById.get(successEvent?.identityId ?? failedEvents[0].identityId)!;
+    const latestEvent = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: PASSWORD_SPRAY_RULE_NAME,
+      title: successEvent
+        ? `Password spray campaign from ${sourceIp} compromised ${representativeIdentity.displayName}'s account`
+        : `Password spray campaign detected from ${sourceIp}`,
+      description: successEvent
+        ? `${distinctFailedIdentityIds.size} accounts received failed sign-in attempts from ${sourceIp} in a short window, followed by a successful sign-in to ${representativeIdentity.displayName}'s account from the same address.`
+        : `${distinctFailedIdentityIds.size} accounts received failed sign-in attempts from ${sourceIp} in a short window. No successful sign-in from this address was observed.`,
+      primaryEntityType: 'identity' as const,
+      primaryEntityId: representativeIdentity.id,
+      evidenceRefs: events.map((e) => ({ eventTable: 'sign_in_events', eventId: e.id })),
+      correlationId: null,
+      occurredAt: latestEvent.occurredAt,
+    });
+  }
+  return candidates;
 }
 
 /**

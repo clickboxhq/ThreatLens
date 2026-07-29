@@ -4,6 +4,9 @@ import { SeededRng } from './rng';
 import {
   APPLICATIONS,
   DEPARTMENTS,
+  EXEC_LOOKALIKE_DOMAIN,
+  EXEC_NAME,
+  EXEC_TITLE,
   FIRST_NAMES,
   HOME_COUNTRIES,
   HOSTNAME_PREFIX,
@@ -213,6 +216,7 @@ export function generateTelemetry(
       rng,
       sessionId,
       identity,
+      decoyIdentities,
       occurredAt,
       correlationId,
       mitreTechniqueId,
@@ -233,6 +237,7 @@ export function generateTelemetry(
         rng,
         sessionId,
         identity: decoyIdentity,
+        decoyIdentities,
         occurredAt,
         correlationId: null,
         mitreTechniqueId: null,
@@ -252,6 +257,7 @@ interface TemplateContext {
   rng: SeededRng;
   sessionId: string;
   identity: Prisma.IdentityCreateManyInput & { id: string };
+  decoyIdentities: (Prisma.IdentityCreateManyInput & { id: string })[];
   occurredAt: Date;
   correlationId: string | null;
   mitreTechniqueId: string | null;
@@ -363,6 +369,113 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       });
       break;
     }
+    case 'password_spray_batch_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'spray');
+      // Victim plus a handful of decoys — enough to cross the Alert Engine's distinct-identity
+      // threshold (§8.2) without needing every decoy in the population to be targeted.
+      const targets = [ctx.identity, ...ctx.rng.sample(ctx.decoyIdentities, 7)];
+      for (const target of targets) {
+        const attemptCount = ctx.rng.intBetween(1, 2);
+        for (let i = 0; i < attemptCount; i++) {
+          const offsetMinutes = ctx.rng.intBetween(0, 20);
+          ctx.signInEvents.push({
+            id: randomUUID(),
+            sessionId: ctx.sessionId,
+            occurredAt: new Date(ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000),
+            correlationId: ctx.correlationId,
+            raw: { source: 'ground_truth', pattern: 'password_spray_attempt' },
+            isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+            mitreTechniqueId: ctx.mitreTechniqueId,
+            identityId: target.id,
+            sourceIp: attacker.ip,
+            sourceCountry: attacker.country,
+            sourceCity: attacker.city,
+            application: 'Office 365 Exchange Online',
+            result: 'failure',
+            failureReason: 'Invalid username or password.',
+            isLegacyAuth: true,
+            clientApp: 'Legacy Auth Client',
+          });
+        }
+      }
+      break;
+    }
+    case 'password_spray_success_signin_v1': {
+      // Derived from the same correlation_id as password_spray_batch_v1 so both templates
+      // agree on the attacker's IP/geo without sharing mutable state across the two
+      // independent kill-chain steps that invoke them (§7.2 stage 4).
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'spray');
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'password_spray_success' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        sourceIp: attacker.ip,
+        sourceCountry: attacker.country,
+        sourceCity: attacker.city,
+        application: 'Office 365 Exchange Online',
+        result: 'success',
+        isLegacyAuth: true,
+        clientApp: 'Legacy Auth Client',
+      });
+      break;
+    }
+    case 'bec_wire_transfer_request_v1': {
+      ctx.emailMessages.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        messageId: `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`,
+        direction: 'inbound',
+        senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
+        senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
+        recipientAddresses: [ctx.identity.userPrincipalName as string],
+        subject: 'URGENT: Confidential Wire Transfer — Approval Needed Today',
+        bodyHtml:
+          `<p>I need you to process a wire transfer to a new vendor today — this is time-sensitive and confidential, so please don't discuss it with anyone else on the team yet. I'm in meetings all day and won't be reachable by phone. Reply here with the transfer confirmation once it's done.</p>`,
+        headersRaw: {
+          'Received-Chain': [`mail.${EXEC_LOOKALIKE_DOMAIN}`, 'edge-relay-01.example-mx.net'],
+          'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
+        },
+        spfResult: 'fail',
+        dkimResult: 'none',
+        dmarcResult: 'fail',
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+    case 'bec_wire_transfer_followup_v1': {
+      ctx.emailMessages.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        messageId: `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`,
+        direction: 'inbound',
+        senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
+        senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
+        recipientAddresses: [ctx.identity.userPrincipalName as string],
+        subject: 'Re: URGENT: Confidential Wire Transfer — Approval Needed Today',
+        bodyHtml:
+          `<p>Following up — I need this completed before end of day. Please confirm as soon as the transfer is sent.</p>`,
+        headersRaw: {
+          'Received-Chain': [`mail.${EXEC_LOOKALIKE_DOMAIN}`, 'edge-relay-01.example-mx.net'],
+          'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
+        },
+        spfResult: 'fail',
+        dkimResult: 'none',
+        dmarcResult: 'fail',
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
     default:
       break;
   }
@@ -370,5 +483,13 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
 
 function syntheticIp(rng: SeededRng): string {
   return `${rng.intBetween(20, 223)}.${rng.intBetween(0, 255)}.${rng.intBetween(0, 255)}.${rng.intBetween(1, 254)}`;
+}
+
+function attackerProfileFromSeed(seed: string): { ip: string; country: string; city: string } {
+  let hash = 0;
+  for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const country = RISKY_UNFAMILIAR_COUNTRIES[hash % RISKY_UNFAMILIAR_COUNTRIES.length];
+  const ip = `${45 + (hash % 150)}.${(hash >>> 3) % 256}.${(hash >>> 7) % 256}.${1 + ((hash >>> 11) % 253)}`;
+  return { ip, country: country.country, city: country.city };
 }
 

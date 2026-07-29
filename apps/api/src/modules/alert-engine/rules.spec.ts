@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { EmailMessage, Identity, SignInEvent } from '@prisma/client';
-import { correlateCandidates, evaluateNewCountryRule, evaluateSpfFailRule } from './rules';
+import { correlateCandidates, evaluateNewCountryRule, evaluatePasswordSprayRule, evaluateSpfFailRule } from './rules';
 
 function identity(overrides: Partial<Identity> = {}): Identity {
   return {
@@ -102,6 +102,52 @@ describe('evaluateNewCountryRule (§8.2)', () => {
     const victim = identity();
     const failed = signIn(victim.id, { sourceCountry: 'RO', result: 'failure' });
     expect(evaluateNewCountryRule([failed], [victim])).toHaveLength(0);
+  });
+});
+
+describe('evaluatePasswordSprayRule (§8.2)', () => {
+  it('fires once for a source IP with failed attempts against >= 5 distinct identities, citing every event', () => {
+    const attackerIp = '198.51.100.7';
+    const targets = Array.from({ length: 6 }, () => identity());
+    const failedAttempts = targets.map((t) => signIn(t.id, { sourceIp: attackerIp, result: 'failure' }));
+    const unrelatedBaseline = signIn(targets[0].id, { sourceIp: '10.0.0.1', result: 'success', sourceCountry: 'US' });
+
+    const candidates = evaluatePasswordSprayRule([...failedAttempts, unrelatedBaseline], targets);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+    expect(candidates[0].evidenceRefs.map((r) => r.eventId).sort()).toEqual(failedAttempts.map((e) => e.id).sort());
+  });
+
+  it('does not fire below the distinct-identity threshold', () => {
+    const attackerIp = '198.51.100.7';
+    const targets = Array.from({ length: 4 }, () => identity());
+    const failedAttempts = targets.map((t) => signIn(t.id, { sourceIp: attackerIp, result: 'failure' }));
+
+    expect(evaluatePasswordSprayRule(failedAttempts, targets)).toHaveLength(0);
+  });
+
+  it('names the compromised identity and includes the success event when the spray succeeded', () => {
+    const attackerIp = '198.51.100.7';
+    const targets = Array.from({ length: 5 }, () => identity());
+    const failedAttempts = targets.map((t) => signIn(t.id, { sourceIp: attackerIp, result: 'failure' }));
+    const compromised = targets[2];
+    const successEvent = signIn(compromised.id, { sourceIp: attackerIp, result: 'success', sourceCountry: 'RO' });
+
+    const candidates = evaluatePasswordSprayRule([...failedAttempts, successEvent], targets);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityId).toBe(compromised.id);
+    expect(candidates[0].title).toContain(compromised.displayName);
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+  });
+
+  it('does not conflate failed attempts from different source IPs', () => {
+    const targets = Array.from({ length: 10 }, () => identity());
+    const fromIpA = targets.slice(0, 3).map((t) => signIn(t.id, { sourceIp: '198.51.100.1', result: 'failure' }));
+    const fromIpB = targets.slice(3, 6).map((t) => signIn(t.id, { sourceIp: '198.51.100.2', result: 'failure' }));
+
+    expect(evaluatePasswordSprayRule([...fromIpA, ...fromIpB], targets)).toHaveLength(0);
   });
 });
 

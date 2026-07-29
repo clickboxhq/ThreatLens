@@ -33,6 +33,9 @@ export const HOSTNAME_PREFIX: Record<string, string> = {
 export const ORG_DOMAIN = 'contoso-finance.example.com';
 export const MALICIOUS_DOMAIN = 'secure-invoice-portal-verify.com';
 export const LOOKALIKE_INTERNAL_DOMAIN = 'contoso-finance-support.example.com';
+export const EXEC_LOOKALIKE_DOMAIN = 'contoso-finance-exec.example.net';
+export const EXEC_NAME = 'Morgan Reyes';
+export const EXEC_TITLE = 'Chief Financial Officer';
 
 export interface CountryCity {
   country: string;

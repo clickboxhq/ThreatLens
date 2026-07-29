@@ -1,7 +1,8 @@
-// Reference data + the one walking-skeleton scenario (docs/SOCVerse-Architecture.md §12.1, §12.6).
+// Reference data + the scenario library (docs/SOCVerse-Architecture.md §12.1, §12.6).
 // Idempotent: safe to re-run against the same database.
 
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -37,11 +38,27 @@ const MITRE_TECHNIQUES = [
     url: 'https://attack.mitre.org/techniques/T1110/',
   },
   {
+    techniqueId: 'T1110.003',
+    name: 'Brute Force: Password Spraying',
+    tactic: 'TA0006',
+    description:
+      'Adversaries use a single password (or small list) against many accounts to avoid account lockout, then attempt to use any credentials that succeed.',
+    url: 'https://attack.mitre.org/techniques/T1110/003/',
+  },
+  {
     techniqueId: 'T1621',
     name: 'Multi-Factor Authentication Request Generation',
     tactic: 'TA0006',
     description: 'Adversaries repeatedly generate MFA push notifications to induce a user into approving one, bypassing MFA.',
     url: 'https://attack.mitre.org/techniques/T1621/',
+  },
+  {
+    techniqueId: 'T1656',
+    name: 'Impersonation',
+    tactic: 'TA0005',
+    description:
+      'Adversaries impersonate a trusted individual or organization to persuade a target into taking an action, such as a fraudulent wire transfer — the core mechanism of Business Email Compromise.',
+    url: 'https://attack.mitre.org/techniques/T1656/',
   },
 ];
 
@@ -64,7 +81,92 @@ const DETECTION_RULES = [
     defaultSeverity: 'high' as const,
     mitreTechniqueSlug: 'T1078',
   },
+  {
+    name: 'Identity: Password Spray Campaign Detected',
+    description:
+      'Fires when one source IP produces failed sign-ins against several distinct identities within the session window.',
+    logicSummary: 'count(DISTINCT identity_id) grouped by source_ip WHERE result = failure >= 5 within the session.',
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1110.003',
+  },
 ];
+
+interface ScenarioSeed {
+  slug: string;
+  title: string;
+  summary: string;
+  category: Prisma.AttackScenarioCreateInput['category'];
+  difficulty: Prisma.AttackScenarioCreateInput['difficulty'];
+  estimatedMinutes: number;
+  groundTruthDefinition: Record<string, unknown>;
+  requiredTechniques: string[];
+  threatIntel: {
+    indicatorType: Prisma.ThreatIntelIndicatorCreateManyInput['indicatorType'];
+    value: string;
+    reputation: Prisma.ThreatIntelIndicatorCreateManyInput['reputation'];
+    actorAttribution?: string;
+    context: string;
+  }[];
+}
+
+async function seedScenario(
+  seed: ScenarioSeed,
+  systemAuthorId: string,
+  techniqueBySlug: Map<string, string>,
+): Promise<void> {
+  const scenario = await prisma.attackScenario.upsert({
+    where: { slug: seed.slug },
+    update: {},
+    create: {
+      slug: seed.slug,
+      title: seed.title,
+      summary: seed.summary,
+      category: seed.category,
+      difficulty: seed.difficulty,
+      estimatedMinutes: seed.estimatedMinutes,
+      status: 'published',
+      authorId: systemAuthorId,
+    },
+  });
+
+  let version = await prisma.scenarioVersion.findFirst({
+    where: { scenarioId: scenario.id, versionNumber: 1 },
+  });
+  if (!version) {
+    version = await prisma.scenarioVersion.create({
+      data: {
+        scenarioId: scenario.id,
+        versionNumber: 1,
+        groundTruthDefinition: seed.groundTruthDefinition as unknown as Prisma.InputJsonValue,
+        publishedAt: new Date(),
+        createdBy: systemAuthorId,
+      },
+    });
+  }
+
+  await prisma.attackScenario.update({
+    where: { id: scenario.id },
+    data: { currentVersionId: version.id },
+  });
+
+  for (const techniqueSlug of seed.requiredTechniques) {
+    const mitreTechniqueId = techniqueBySlug.get(techniqueSlug)!;
+    await prisma.scenarioTechnique.upsert({
+      where: { scenarioVersionId_mitreTechniqueId: { scenarioVersionId: version.id, mitreTechniqueId } },
+      update: {},
+      create: { scenarioVersionId: version.id, mitreTechniqueId, isRequiredForFullCredit: true },
+    });
+  }
+
+  const existingIndicators = await prisma.threatIntelIndicator.count({ where: { scenarioVersionId: version.id } });
+  if (existingIndicators === 0 && seed.threatIntel.length > 0) {
+    await prisma.threatIntelIndicator.createMany({
+      data: seed.threatIntel.map((indicator) => ({ scenarioVersionId: version!.id, ...indicator })),
+    });
+  }
+
+  console.log(`  scenario "${scenario.slug}" v${version.versionNumber}`);
+}
 
 async function main() {
   const techniqueBySlug = new Map<string, string>();
@@ -106,76 +208,10 @@ async function main() {
     },
   });
 
-  const groundTruthDefinition = {
-    metadata: {
-      category: 'email',
-      difficulty: 'beginner',
-      estimated_minutes: 30,
-      narrative_summary:
-        "A finance-department employee clicks a spearphishing link, enters their credentials on a lookalike login page, and the attacker uses the stolen credentials to sign in from an unfamiliar location shortly after.",
-    },
-    population: {
-      narrative_identities: [
-        {
-          ref: 'victim_identity_1',
-          attributes: { department: 'Finance', job_title: 'Accounts Payable Specialist', home_country: 'US' },
-        },
-      ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'FIN-WKS-07', os_platform: 'windows' } }],
-      decoy_population_size: { identities: 12, devices: 10 },
-      world_time_window_hours: 24,
-    },
-    kill_chain: [
-      {
-        step_order: 1,
-        mitre_technique_id: 'T1566.002',
-        entity_ref: 'victim_identity_1',
-        event_template_id: 'phishing_email_invoice_lookalike_login_v1',
-        relative_timestamp: '+2h',
-        correlation_group: 'phish-chain-1',
-        is_required_for_full_credit: true,
-      },
-      {
-        step_order: 2,
-        mitre_technique_id: 'T1078',
-        entity_ref: 'victim_identity_1',
-        event_template_id: 'risky_signin_new_country_v1',
-        relative_timestamp: '+2h45m',
-        correlation_group: 'phish-chain-1',
-        is_required_for_full_credit: true,
-      },
-    ],
-    noise_profile: {
-      signal_to_noise_ratio: 0.08,
-      false_positive_bait: [
-        { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
-        { event_template_id: 'benign_it_admin_email_v1', count: 2 },
-      ],
-    },
-    distractor_pool: [],
-    scoring_rubric: {
-      required_techniques: ['T1566.002', 'T1078'],
-      required_verdict: 'true_positive',
-      min_evidence_items: 2,
-      containment_expectations: [],
-    },
-    hints: [
-      {
-        unlock_cost_percent: 5,
-        text: "Check the victim identity's mailbox for anything unusual received a few hours before the risky sign-in.",
-      },
-      { unlock_cost_percent: 10, text: 'Look closely at the sender domain and the authentication results on that email.' },
-      {
-        unlock_cost_percent: 15,
-        text: "Compare the sign-in's source country against the identity's home country and recent sign-in history.",
-      },
-    ],
-  };
+  console.log('Seeding scenarios...');
 
-  const scenario = await prisma.attackScenario.upsert({
-    where: { slug: 'phishing-stolen-credentials' },
-    update: {},
-    create: {
+  await seedScenario(
+    {
       slug: 'phishing-stolen-credentials',
       title: 'Phishing → Stolen Credentials → Risky Sign-in',
       summary:
@@ -183,57 +219,74 @@ async function main() {
       category: 'email',
       difficulty: 'beginner',
       estimatedMinutes: 30,
-      status: 'published',
-      authorId: systemAuthor.id,
-    },
-  });
-
-  let version = await prisma.scenarioVersion.findFirst({
-    where: { scenarioId: scenario.id, versionNumber: 1 },
-  });
-  if (!version) {
-    version = await prisma.scenarioVersion.create({
-      data: {
-        scenarioId: scenario.id,
-        versionNumber: 1,
-        groundTruthDefinition,
-        publishedAt: new Date(),
-        createdBy: systemAuthor.id,
-      },
-    });
-  }
-
-  await prisma.attackScenario.update({
-    where: { id: scenario.id },
-    data: { currentVersionId: version.id },
-  });
-
-  for (const techniqueSlug of ['T1566.002', 'T1078']) {
-    const mitreTechniqueId = techniqueBySlug.get(techniqueSlug)!;
-    await prisma.scenarioTechnique.upsert({
-      where: {
-        scenarioVersionId_mitreTechniqueId: {
-          scenarioVersionId: version.id,
-          mitreTechniqueId,
+      requiredTechniques: ['T1566.002', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'email',
+          difficulty: 'beginner',
+          estimated_minutes: 30,
+          narrative_summary:
+            'A finance-department employee clicks a spearphishing link, enters their credentials on a lookalike login page, and the attacker uses the stolen credentials to sign in from an unfamiliar location shortly after.',
         },
+        population: {
+          narrative_identities: [
+            {
+              ref: 'victim_identity_1',
+              attributes: { department: 'Finance', job_title: 'Accounts Payable Specialist', home_country: 'US' },
+            },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'FIN-WKS-07', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 12, devices: 10 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'phishing_email_invoice_lookalike_login_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'phish-chain-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+2h45m',
+            correlation_group: 'phish-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+            { event_template_id: 'benign_it_admin_email_v1', count: 2 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.002', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          {
+            unlock_cost_percent: 5,
+            text: "Check the victim identity's mailbox for anything unusual received a few hours before the risky sign-in.",
+          },
+          { unlock_cost_percent: 10, text: 'Look closely at the sender domain and the authentication results on that email.' },
+          {
+            unlock_cost_percent: 15,
+            text: "Compare the sign-in's source country against the identity's home country and recent sign-in history.",
+          },
+        ],
       },
-      update: {},
-      create: {
-        scenarioVersionId: version.id,
-        mitreTechniqueId,
-        isRequiredForFullCredit: true,
-      },
-    });
-  }
-
-  const existingIndicators = await prisma.threatIntelIndicator.count({
-    where: { scenarioVersionId: version.id },
-  });
-  if (existingIndicators === 0) {
-    await prisma.threatIntelIndicator.createMany({
-      data: [
+      threatIntel: [
         {
-          scenarioVersionId: version.id,
           indicatorType: 'domain',
           value: 'secure-invoice-portal-verify.com',
           reputation: 'malicious',
@@ -241,17 +294,175 @@ async function main() {
           context: 'Lookalike domain hosting a credential-harvesting login page impersonating an invoicing portal.',
         },
         {
-          scenarioVersionId: version.id,
           indicatorType: 'domain',
           value: 'contoso-finance.example.com',
           reputation: 'known_good',
           context: "The organization's legitimate finance portal domain, for comparison.",
         },
       ],
-    });
-  }
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
 
-  console.log(`Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, scenario "${scenario.slug}" v${version.versionNumber}.`);
+  await seedScenario(
+    {
+      slug: 'password-spraying-campaign',
+      title: 'Password Spraying Campaign',
+      summary:
+        'A burst of failed sign-ins hit multiple accounts from one external address overnight. Determine whether any account was actually compromised.',
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1110.003', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An external attacker sprays a small set of common passwords across many accounts from a single IP to avoid lockouts. Most attempts fail, but one account — reused/weak credentials — succeeds, and the attacker signs in.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 18, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1110.003',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'password_spray_batch_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'spray-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'password_spray_success_signin_v1',
+            relative_timestamp: '+3h20m',
+            correlation_group: 'spray-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1110.003', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Search sign-in events by source IP — how many different accounts did it try?' },
+          {
+            unlock_cost_percent: 10,
+            text: 'Most of the attempts from that address failed. Did any of them succeed? Check the results, not just the count.',
+          },
+          {
+            unlock_cost_percent: 15,
+            text: 'If one account did succeed, that identity needs a closer look — check their normal sign-in pattern.',
+          },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'bec-wire-transfer-fraud',
+      title: 'Business Email Compromise — Executive Wire Transfer Fraud',
+      summary:
+        'A Finance employee received two urgent emails, apparently from the CFO, requesting a same-day wire transfer. No credentials were involved — determine whether this is a real request.',
+      category: 'email',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1656'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'email',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            "An attacker registers a domain that closely resembles the organization's own, impersonates the CFO by name and title, and pressures a Finance employee into an urgent, confidential wire transfer — no link, attachment, or credential theft involved.",
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Controller', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 12,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1656',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'bec_wire_transfer_request_v1',
+            relative_timestamp: '+1h',
+            correlation_group: 'bec-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1656',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'bec_wire_transfer_followup_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'bec-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.15,
+          false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1656'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check the sender's actual domain closely against the organization's real domain." },
+          { unlock_cost_percent: 10, text: 'Review the SPF/DKIM/DMARC authentication results on both emails.' },
+          {
+            unlock_cost_percent: 15,
+            text: 'Notice the request explicitly asks for secrecy and urgency, with no phone verification offered — a classic BEC pattern, not ordinary phishing.',
+          },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'contoso-finance-exec.example.net',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed BEC actor',
+          context: "Lookalike domain used to impersonate the organization's CFO in wire-transfer fraud attempts.",
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  console.log(
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 3 scenarios.`,
+  );
 }
 
 main()
