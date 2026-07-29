@@ -1,0 +1,695 @@
+// SOCVerse — Prisma schema (walking-skeleton subset of docs/SOCVerse-Architecture.md §6)
+// Only the tables needed for the "Phishing -> Stolen Credentials -> Risky Sign-in" skeleton
+// scenario are modeled here. Breadth (Device Portal event tables, Instructor Mode, Learning
+// Platform, etc.) is added incrementally following the same conventions (§6.1).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext]
+}
+
+// ---------- §6.1 shared conventions ----------
+// - UUID v4 primary keys, application-generated (Prisma `uuid()`), per §6.1.
+// - `deletedAt` soft delete on compliance-weight tables (users); hard delete elsewhere.
+// - Every synthetic/session-scoped table carries `sessionId` (§6.2).
+
+// ---------- Identity & Access (§6.3, §6.4, §6.19) ----------
+
+enum UserRole {
+  student
+  instructor
+  org_admin
+  platform_admin
+}
+
+enum UserStatus {
+  active
+  suspended
+  pending_verification
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("organizations")
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  orgId           String?    @map("org_id") @db.Uuid
+  email           String     @unique @db.Citext
+  passwordHash    String?    @map("password_hash")
+  role            UserRole   @default(student)
+  displayName     String     @map("display_name")
+  status          UserStatus @default(active)
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  sessionVersion  Int        @default(1) @map("session_version")
+  lastLoginAt     DateTime?  @map("last_login_at")
+  deletedAt       DateTime?  @map("deleted_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  organization          Organization?          @relation(fields: [orgId], references: [id])
+  refreshTokens         RefreshToken[]
+  investigationSessions InvestigationSession[]
+  authoredScenarios     AttackScenario[]       @relation("ScenarioAuthor")
+  authoredVersions      ScenarioVersion[]      @relation("ScenarioVersionAuthor")
+  pinnedEvidence        EvidenceCollection[]
+  analystNotes          AnalystNote[]
+  investigationActions  InvestigationAction[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash")
+  deviceLabel       String?   @map("device_label")
+  issuedAt          DateTime  @default(now()) @map("issued_at")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  replacedByTokenId String?   @unique @map("replaced_by_token_id") @db.Uuid
+
+  user         User          @relation(fields: [userId], references: [id])
+  replacedBy   RefreshToken? @relation("RefreshTokenChain", fields: [replacedByTokenId], references: [id])
+  replacedFrom RefreshToken? @relation("RefreshTokenChain")
+
+  @@map("refresh_tokens")
+}
+
+// ---------- Scenario & Content (§6.7, §6.8) ----------
+
+enum ScenarioCategory {
+  identity
+  endpoint
+  email
+  cloud
+  insider_threat
+  web
+  malware
+  ransomware
+}
+
+enum ScenarioDifficulty {
+  beginner
+  intermediate
+  advanced
+  expert
+}
+
+enum ScenarioStatus {
+  draft
+  published
+  archived
+}
+
+model MitreTechnique {
+  id          String  @id @default(uuid()) @db.Uuid
+  techniqueId String  @unique @map("technique_id")
+  name        String
+  tactic      String
+  description String
+  url         String?
+
+  scenarioTechniques ScenarioTechnique[]
+  incidentTechniques IncidentTechnique[]
+  alerts             Alert[]
+
+  @@map("mitre_techniques")
+}
+
+model AttackScenario {
+  id               String             @id @default(uuid()) @db.Uuid
+  slug             String             @unique
+  title            String
+  summary          String
+  category         ScenarioCategory
+  difficulty       ScenarioDifficulty
+  estimatedMinutes Int                @map("estimated_minutes")
+  status           ScenarioStatus     @default(draft)
+  currentVersionId String?            @unique @map("current_version_id") @db.Uuid
+  authorId         String             @map("author_id") @db.Uuid
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  author         User                   @relation("ScenarioAuthor", fields: [authorId], references: [id])
+  currentVersion ScenarioVersion?       @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions       ScenarioVersion[]      @relation("ScenarioVersions")
+  sessions       InvestigationSession[]
+
+  @@map("attack_scenarios")
+}
+
+model ScenarioVersion {
+  id                    String    @id @default(uuid()) @db.Uuid
+  scenarioId            String    @map("scenario_id") @db.Uuid
+  versionNumber         Int       @map("version_number")
+  groundTruthDefinition Json      @map("ground_truth_definition")
+  publishedAt           DateTime? @map("published_at")
+  createdBy             String?   @map("created_by") @db.Uuid
+
+  scenario           AttackScenario         @relation("ScenarioVersions", fields: [scenarioId], references: [id])
+  currentForScenario AttackScenario?        @relation("CurrentVersion")
+  author             User?                  @relation("ScenarioVersionAuthor", fields: [createdBy], references: [id])
+  techniques         ScenarioTechnique[]
+  sessions           InvestigationSession[]
+  threatIntel        ThreatIntelIndicator[]
+
+  @@unique([scenarioId, versionNumber])
+  @@map("scenario_versions")
+}
+
+model ScenarioTechnique {
+  scenarioVersionId       String  @map("scenario_version_id") @db.Uuid
+  mitreTechniqueId        String  @map("mitre_technique_id") @db.Uuid
+  isRequiredForFullCredit Boolean @default(true) @map("is_required_for_full_credit")
+
+  scenarioVersion ScenarioVersion @relation(fields: [scenarioVersionId], references: [id])
+  mitreTechnique  MitreTechnique  @relation(fields: [mitreTechniqueId], references: [id])
+
+  @@id([scenarioVersionId, mitreTechniqueId])
+  @@map("scenario_techniques")
+}
+
+// ---------- Session (§6.9) ----------
+
+enum SessionStatus {
+  active
+  submitted
+  scored
+  abandoned
+}
+
+model InvestigationSession {
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @map("user_id") @db.Uuid
+  scenarioId          String        @map("scenario_id") @db.Uuid
+  scenarioVersionId   String        @map("scenario_version_id") @db.Uuid
+  status              SessionStatus @default(active)
+  seed                BigInt
+  startedAt           DateTime      @default(now()) @map("started_at")
+  submittedAt         DateTime?     @map("submitted_at")
+  expiresAt           DateTime      @map("expires_at")
+  currentScenarioTime DateTime?     @map("current_scenario_time")
+
+  user            User            @relation(fields: [userId], references: [id])
+  scenario        AttackScenario  @relation(fields: [scenarioId], references: [id])
+  scenarioVersion ScenarioVersion @relation(fields: [scenarioVersionId], references: [id])
+
+  identities           Identity[]
+  devices              Device[]
+  signInEvents         SignInEvent[]
+  emailMessages        EmailMessage[]
+  alerts               Alert[]
+  incidents            Incident[]
+  investigationActions InvestigationAction[]
+  score                Score?
+
+  @@index([userId, status])
+  @@index([scenarioId])
+  @@map("investigation_sessions")
+}
+
+// ---------- Synthetic Telemetry: Identities & Devices (§6.10, §6.11) ----------
+
+enum IdentityRiskLevel {
+  none
+  low
+  medium
+  high
+}
+
+enum MfaStatus {
+  enforced
+  registered_not_enforced
+  not_registered
+}
+
+enum AccountStatus {
+  active
+  disabled
+  locked
+}
+
+model Identity {
+  id                 String            @id @default(uuid()) @db.Uuid
+  sessionId          String            @map("session_id") @db.Uuid
+  displayName        String            @map("display_name")
+  userPrincipalName  String            @map("user_principal_name")
+  department         String
+  jobTitle           String            @map("job_title")
+  managerIdentityId  String?           @map("manager_identity_id") @db.Uuid
+  riskLevel          IdentityRiskLevel @default(none) @map("risk_level")
+  mfaStatus          MfaStatus         @map("mfa_status")
+  accountStatus      AccountStatus     @default(active) @map("account_status")
+  isPrivileged       Boolean           @default(false) @map("is_privileged")
+  homeCountry        String            @map("home_country")
+  isGroundTruthActor Boolean           @default(false) @map("is_ground_truth_actor")
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  manager Identity?            @relation("IdentityManager", fields: [managerIdentityId], references: [id])
+  reports Identity[]           @relation("IdentityManager")
+
+  primaryForDevices      Device[]
+  signInEvents           SignInEvent[]
+  conditionalAccessEvals ConditionalAccessEvaluation[]
+
+  @@index([sessionId])
+  @@map("identities")
+}
+
+model ConditionalAccessEvaluation {
+  id            String  @id @default(uuid()) @db.Uuid
+  identityId    String  @map("identity_id") @db.Uuid
+  signInEventId String? @map("sign_in_event_id") @db.Uuid
+  policyName    String  @map("policy_name")
+  result        String
+  reasons       Json?
+
+  identity    Identity     @relation(fields: [identityId], references: [id])
+  signInEvent SignInEvent? @relation(fields: [signInEventId], references: [id])
+
+  @@map("conditional_access_evaluations")
+}
+
+enum DeviceRiskLevel {
+  none
+  low
+  medium
+  high
+}
+
+enum IsolationStatus {
+  not_isolated
+  isolated
+}
+
+model Device {
+  id                 String          @id @default(uuid()) @db.Uuid
+  sessionId          String          @map("session_id") @db.Uuid
+  hostname           String
+  osPlatform         String          @map("os_platform")
+  osVersion          String          @map("os_version")
+  primaryIdentityId  String?         @map("primary_identity_id") @db.Uuid
+  riskLevel          DeviceRiskLevel @default(none) @map("risk_level")
+  isolationStatus    IsolationStatus @default(not_isolated) @map("isolation_status")
+  lastSeenAt         DateTime        @map("last_seen_at")
+  isGroundTruthActor Boolean         @default(false) @map("is_ground_truth_actor")
+
+  session         InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  primaryIdentity Identity?            @relation(fields: [primaryIdentityId], references: [id])
+  signInEvents    SignInEvent[]
+
+  @@index([sessionId])
+  @@map("devices")
+}
+
+// ---------- Telemetry Event Tables (§6.12) — skeleton subset ----------
+
+enum SignInResult {
+  success
+  failure
+  mfa_denied
+  blocked_by_ca
+}
+
+model SignInEvent {
+  id                    String       @id @default(uuid()) @db.Uuid
+  sessionId             String       @map("session_id") @db.Uuid
+  occurredAt            DateTime     @map("occurred_at")
+  correlationId         String?      @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean      @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?      @map("mitre_technique_id") @db.Uuid
+  identityId            String       @map("identity_id") @db.Uuid
+  deviceId              String?      @map("device_id") @db.Uuid
+  sourceIp              String       @map("source_ip")
+  sourceCountry         String       @map("source_country")
+  sourceCity            String       @map("source_city")
+  application           String
+  result                SignInResult
+  failureReason         String?      @map("failure_reason")
+  isLegacyAuth          Boolean      @default(false) @map("is_legacy_auth")
+  clientApp             String       @map("client_app")
+
+  session  InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  identity Identity             @relation(fields: [identityId], references: [id])
+  device   Device?              @relation(fields: [deviceId], references: [id])
+
+  conditionalAccessEvals ConditionalAccessEvaluation[]
+
+  @@index([sessionId, identityId, occurredAt])
+  @@map("sign_in_events")
+}
+
+enum EmailDirection {
+  inbound
+  outbound
+  internal
+}
+
+enum SpfResult {
+  pass
+  fail
+  softfail
+  none
+}
+
+enum DkimResult {
+  pass
+  fail
+  none
+}
+
+enum DmarcResult {
+  pass
+  fail
+  none
+}
+
+model EmailMessage {
+  id                    String         @id @default(uuid()) @db.Uuid
+  sessionId             String         @map("session_id") @db.Uuid
+  occurredAt            DateTime       @map("occurred_at")
+  correlationId         String?        @map("correlation_id") @db.Uuid
+  messageId             String         @map("message_id")
+  direction             EmailDirection
+  senderAddress         String         @map("sender_address")
+  senderDisplayName     String         @map("sender_display_name")
+  recipientAddresses    String[]       @map("recipient_addresses")
+  subject               String
+  bodyHtml              String         @map("body_html")
+  headersRaw            Json           @map("headers_raw")
+  spfResult             SpfResult      @map("spf_result")
+  dkimResult            DkimResult     @map("dkim_result")
+  dmarcResult           DmarcResult    @map("dmarc_result")
+  isGroundTruthEvidence Boolean        @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?        @map("mitre_technique_id") @db.Uuid
+
+  session     InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  attachments EmailAttachment[]
+  urls        EmailUrl[]
+
+  @@index([sessionId])
+  @@map("email_messages")
+}
+
+enum SandboxVerdict {
+  benign
+  suspicious
+  malicious
+  not_analyzed
+}
+
+model EmailAttachment {
+  id             String         @id @default(uuid()) @db.Uuid
+  emailMessageId String         @map("email_message_id") @db.Uuid
+  filename       String
+  contentType    String         @map("content_type")
+  sizeBytes      Int            @map("size_bytes")
+  hashSha256     String         @map("hash_sha256")
+  sandboxVerdict SandboxVerdict @default(not_analyzed) @map("sandbox_verdict")
+
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id])
+
+  @@map("email_attachments")
+}
+
+enum IndicatorReputation {
+  malicious
+  suspicious
+  unknown
+  known_good
+}
+
+model EmailUrl {
+  id                     String              @id @default(uuid()) @db.Uuid
+  emailMessageId         String              @map("email_message_id") @db.Uuid
+  url                    String
+  displayText            String              @map("display_text")
+  reputation             IndicatorReputation @default(unknown)
+  isRewrittenBySafeLinks Boolean             @default(false) @map("is_rewritten_by_safe_links")
+
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id])
+
+  @@map("email_urls")
+}
+
+enum IndicatorType {
+  hash
+  ip
+  domain
+  url
+}
+
+model ThreatIntelIndicator {
+  id                String              @id @default(uuid()) @db.Uuid
+  scenarioVersionId String              @map("scenario_version_id") @db.Uuid
+  indicatorType     IndicatorType       @map("indicator_type")
+  value             String
+  reputation        IndicatorReputation
+  actorAttribution  String?             @map("actor_attribution")
+  context           String
+
+  scenarioVersion ScenarioVersion @relation(fields: [scenarioVersionId], references: [id])
+
+  @@index([scenarioVersionId, indicatorType, value])
+  @@map("threat_intel_indicators")
+}
+
+// ---------- Alerting (§6.15) ----------
+
+enum AlertSeverity {
+  informational
+  low
+  medium
+  high
+  critical
+}
+
+enum AlertStatus {
+  new
+  in_progress
+  resolved
+  dismissed
+}
+
+enum EntityType {
+  identity
+  device
+  mailbox
+}
+
+model DetectionRule {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String
+  description      String
+  logicSummary     String        @map("logic_summary")
+  defaultSeverity  AlertSeverity @map("default_severity")
+  mitreTechniqueId String?       @map("mitre_technique_id") @db.Uuid
+  isActive         Boolean       @default(true) @map("is_active")
+
+  alerts Alert[]
+
+  @@map("detection_rules")
+}
+
+model Alert {
+  id                      String        @id @default(uuid()) @db.Uuid
+  sessionId               String        @map("session_id") @db.Uuid
+  title                   String
+  description             String
+  severity                AlertSeverity
+  status                  AlertStatus   @default(new)
+  dismissalReason         String?       @map("dismissal_reason")
+  primaryEntityType       EntityType    @map("primary_entity_type")
+  primaryEntityId         String        @map("primary_entity_id") @db.Uuid
+  mitreTechniqueId        String?       @map("mitre_technique_id") @db.Uuid
+  detectionRuleId         String?       @map("detection_rule_id") @db.Uuid
+  dedupCount              Int           @default(1) @map("dedup_count")
+  isFalsePositiveByDesign Boolean       @default(false) @map("is_false_positive_by_design")
+  relatedAlertId          String?       @map("related_alert_id") @db.Uuid
+  firstSeenAt             DateTime      @map("first_seen_at")
+  lastSeenAt              DateTime      @map("last_seen_at")
+
+  session        InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  detectionRule  DetectionRule?       @relation(fields: [detectionRuleId], references: [id])
+  mitreTechnique MitreTechnique?      @relation(fields: [mitreTechniqueId], references: [id])
+  relatedAlert   Alert?               @relation("AlertCorrelation", fields: [relatedAlertId], references: [id])
+  correlatedFrom Alert[]              @relation("AlertCorrelation")
+
+  evidenceRefs  AlertEvidenceRef[]
+  incidentLinks IncidentAlert[]
+
+  @@index([sessionId, status])
+  @@map("alerts")
+}
+
+model AlertEvidenceRef {
+  id         String @id @default(uuid()) @db.Uuid
+  alertId    String @map("alert_id") @db.Uuid
+  eventTable String @map("event_table")
+  eventId    String @map("event_id") @db.Uuid
+
+  alert Alert @relation(fields: [alertId], references: [id])
+
+  @@map("alert_evidence_refs")
+}
+
+// ---------- Investigation (§6.13, §6.16, §6.17) ----------
+
+enum IncidentStatus {
+  open
+  investigating
+  contained
+  closed
+  reopened
+}
+
+enum IncidentVerdict {
+  true_positive
+  false_positive
+  benign_positive
+}
+
+model Incident {
+  id        String           @id @default(uuid()) @db.Uuid
+  sessionId String           @map("session_id") @db.Uuid
+  title     String
+  status    IncidentStatus   @default(open)
+  verdict   IncidentVerdict?
+  summary   String?
+  closedAt  DateTime?        @map("closed_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  alertLinks           IncidentAlert[]
+  techniqueLinks       IncidentTechnique[]
+  evidenceCollection   EvidenceCollection[]
+  analystNotes         AnalystNote[]
+  investigationActions InvestigationAction[]
+
+  @@index([sessionId])
+  @@map("incidents")
+}
+
+model IncidentAlert {
+  incidentId String   @map("incident_id") @db.Uuid
+  alertId    String   @map("alert_id") @db.Uuid
+  linkedAt   DateTime @default(now()) @map("linked_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  alert    Alert    @relation(fields: [alertId], references: [id])
+
+  @@id([incidentId, alertId])
+  @@map("incident_alerts")
+}
+
+model IncidentTechnique {
+  incidentId       String @map("incident_id") @db.Uuid
+  mitreTechniqueId String @map("mitre_technique_id") @db.Uuid
+
+  incident       Incident       @relation(fields: [incidentId], references: [id])
+  mitreTechnique MitreTechnique @relation(fields: [mitreTechniqueId], references: [id])
+
+  @@id([incidentId, mitreTechniqueId])
+  @@map("incident_techniques")
+}
+
+model EvidenceCollection {
+  id               String   @id @default(uuid()) @db.Uuid
+  incidentId       String   @map("incident_id") @db.Uuid
+  eventTable       String   @map("event_table")
+  eventId          String   @map("event_id") @db.Uuid
+  justification    String
+  mitreTechniqueId String?  @map("mitre_technique_id") @db.Uuid
+  pinnedBy         String   @map("pinned_by") @db.Uuid
+  pinnedAt         DateTime @default(now()) @map("pinned_at")
+
+  incident     Incident @relation(fields: [incidentId], references: [id])
+  pinnedByUser User     @relation(fields: [pinnedBy], references: [id])
+
+  @@map("evidence_collection")
+}
+
+model AnalystNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  incidentId String   @map("incident_id") @db.Uuid
+  body       String
+  createdBy  String   @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  author   User     @relation(fields: [createdBy], references: [id])
+
+  @@map("analyst_notes")
+}
+
+enum InvestigationActionType {
+  view_entity
+  search
+  add_to_timeline
+  pin_evidence
+  isolate_device
+  disable_account
+  block_sender
+  dismiss_alert
+  escalate_to_incident
+  submit_verdict
+}
+
+model InvestigationAction {
+  id         String                  @id @default(uuid()) @db.Uuid
+  sessionId  String                  @map("session_id") @db.Uuid
+  incidentId String?                 @map("incident_id") @db.Uuid
+  userId     String                  @map("user_id") @db.Uuid
+  actionType InvestigationActionType @map("action_type")
+  targetType String                  @map("target_type")
+  targetId   String                  @map("target_id") @db.Uuid
+  metadata   Json?
+  occurredAt DateTime                @default(now()) @map("occurred_at")
+
+  session  InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  incident Incident?            @relation(fields: [incidentId], references: [id])
+  user     User                 @relation(fields: [userId], references: [id])
+
+  @@index([sessionId, occurredAt])
+  @@index([sessionId, actionType])
+  @@map("investigation_actions")
+}
+
+// ---------- Scoring (§6.14) ----------
+
+model Score {
+  id                       String   @id @default(uuid()) @db.Uuid
+  sessionId                String   @unique @map("session_id") @db.Uuid
+  overallPercent           Decimal  @map("overall_percent") @db.Decimal(5, 2)
+  techniqueAccuracyPercent Decimal  @map("technique_accuracy_percent") @db.Decimal(5, 2)
+  evidencePrecisionPercent Decimal  @map("evidence_precision_percent") @db.Decimal(5, 2)
+  evidenceRecallPercent    Decimal  @map("evidence_recall_percent") @db.Decimal(5, 2)
+  falsePositiveCount       Int      @map("false_positive_count")
+  hintPenaltyPercent       Decimal  @map("hint_penalty_percent") @db.Decimal(5, 2)
+  timeToResolutionSeconds  Int      @map("time_to_resolution_seconds")
+  verdictCorrect           Boolean  @map("verdict_correct")
+  rubricBreakdown          Json     @map("rubric_breakdown")
+  scoredAt                 DateTime @default(now()) @map("scored_at")
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+}
