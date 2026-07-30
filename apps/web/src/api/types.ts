@@ -4,7 +4,7 @@
 export interface AuthUser {
   id: string;
   displayName: string;
-  role: string;
+  role: 'student' | 'instructor' | 'org_admin' | 'platform_admin';
 }
 
 export interface TokenResponse {
@@ -233,4 +233,70 @@ export interface ScoreResult {
   verdictCorrect: boolean;
   rubricBreakdown: RubricBreakdown;
   scoredAt: string;
+}
+
+// ---------- Instructor Mode (§2.15) ----------
+
+export interface Cohort {
+  id: string;
+  name: string;
+  joinCode: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  enrollmentCount: number;
+  assignmentCount: number;
+  createdAt: string;
+}
+
+export interface CohortMembership {
+  id: string;
+  name: string;
+  enrolledAt: string;
+}
+
+export interface RosterEntry {
+  userId: string;
+  displayName: string;
+  email: string;
+  status: 'active' | 'dropped';
+  enrolledAt: string;
+}
+
+export interface CohortAssignment {
+  id: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  dueAt: string | null;
+  attemptLimit: number | null;
+  createdAt: string;
+}
+
+export interface MyAssignment {
+  id: string;
+  cohortName: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  dueAt: string | null;
+  attemptLimit: number | null;
+  attemptsUsed: number;
+}
+
+export interface ReviewQueueItem {
+  sessionId: string;
+  studentDisplayName: string;
+  studentEmail: string;
+  scenarioTitle: string;
+  status: 'submitted' | 'scored';
+  submittedAt: string | null;
+  overallPercent: number | null;
+  verdictCorrect: boolean | null;
+}
+
+export interface InstructorFeedbackItem {
+  id: string;
+  instructorDisplayName: string;
+  rubricOverrides: Record<string, number> | null;
+  comment: string | null;
+  reopenedSession: boolean;
+  createdAt: string;
 }

@@ -17,8 +17,8 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
-      navigate('/catalog');
+      const user = await login(email, password);
+      navigate(user.role === 'instructor' ? '/instructor' : '/catalog');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed.');
     } finally {

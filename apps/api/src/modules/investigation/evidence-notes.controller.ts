@@ -59,4 +59,15 @@ export class EvidenceNotesController {
   ) {
     return this.service.listNotes(sessionId, incidentId, user);
   }
+
+  // §2.15/§6.20: a Student sees both their automated score and any instructor feedback,
+  // distinctly attributed — this is the Student-facing read side of that requirement.
+  @Get('feedback')
+  async listFeedback(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
+  ) {
+    return this.service.listInstructorFeedback(sessionId, incidentId, user);
+  }
 }

@@ -1,8 +1,11 @@
-import { api } from './client';
+import { api, downloadFile } from './client';
 import type {
   Alert,
   AnalystNote,
   AuthUser,
+  Cohort,
+  CohortAssignment,
+  CohortMembership,
   Device,
   EmailMessage,
   EvidenceItem,
@@ -10,9 +13,13 @@ import type {
   Identity,
   Incident,
   IncidentSummary,
+  InstructorFeedbackItem,
   MitreTechniqueRef,
+  MyAssignment,
   NetworkEvent,
   ProcessEventNode,
+  ReviewQueueItem,
+  RosterEntry,
   ScenarioSummary,
   ScoreResult,
   SessionSummary,
@@ -21,8 +28,13 @@ import type {
 } from './types';
 
 export const authApi = {
-  signup: (email: string, password: string, displayName: string) =>
-    api.post<{ userId: string; emailVerificationRequired: boolean }>('/auth/signup', { email, password, displayName }),
+  signup: (email: string, password: string, displayName: string, role?: 'student' | 'instructor') =>
+    api.post<{ userId: string; emailVerificationRequired: boolean }>('/auth/signup', {
+      email,
+      password,
+      displayName,
+      role,
+    }),
   login: (email: string, password: string) =>
     api.post<TokenResponse & { user: AuthUser }>('/auth/login', { email, password }),
   logout: (refreshToken: string) => api.post<void>('/auth/logout', { refreshToken }),
@@ -33,7 +45,8 @@ export const scenarioApi = {
 };
 
 export const sessionApi = {
-  create: (scenarioId: string) => api.post<SessionSummary>('/sessions', { scenarioId }),
+  create: (scenarioId: string, cohortAssignmentId?: string) =>
+    api.post<SessionSummary>('/sessions', { scenarioId, cohortAssignmentId }),
   get: (sessionId: string) => api.get<SessionSummary>(`/sessions/${sessionId}`),
   submit: (sessionId: string, incidentIds: string[]) =>
     api.post<{ scoringStatus: string }>(`/sessions/${sessionId}/submit`, { incidentIds }),
@@ -71,6 +84,31 @@ export const incidentsApi = {
     api.post<AnalystNote>(`/sessions/${sessionId}/incidents/${incidentId}/notes`, { body }),
   listNotes: (sessionId: string, incidentId: string) =>
     api.get<AnalystNote[]>(`/sessions/${sessionId}/incidents/${incidentId}/notes`),
+  listFeedback: (sessionId: string, incidentId: string) =>
+    api.get<InstructorFeedbackItem[]>(`/sessions/${sessionId}/incidents/${incidentId}/feedback`),
+};
+
+export const cohortsApi = {
+  join: (joinCode: string) => api.post<{ cohortId: string; cohortName: string }>('/cohorts/join', { joinCode }),
+  listMine: () => api.get<CohortMembership[]>('/cohorts/mine'),
+  listMyAssignments: () => api.get<MyAssignment[]>('/cohorts/mine/assignments'),
+};
+
+export const instructorApi = {
+  createCohort: (name: string, startsAt?: string, endsAt?: string) =>
+    api.post<Cohort>('/instructor/cohorts', { name, startsAt, endsAt }),
+  listCohorts: () => api.get<Cohort[]>('/instructor/cohorts'),
+  getRoster: (cohortId: string) => api.get<RosterEntry[]>(`/instructor/cohorts/${cohortId}/roster`),
+  createAssignment: (cohortId: string, scenarioId: string, dueAt?: string, attemptLimit?: number) =>
+    api.post<CohortAssignment>(`/instructor/cohorts/${cohortId}/assignments`, { scenarioId, dueAt, attemptLimit }),
+  listAssignments: (cohortId: string) => api.get<CohortAssignment[]>(`/instructor/cohorts/${cohortId}/assignments`),
+  reviewQueue: (cohortId: string) => api.get<ReviewQueueItem[]>(`/instructor/cohorts/${cohortId}/review-queue`),
+  submitFeedback: (
+    incidentId: string,
+    payload: { rubricOverrides?: Record<string, number>; comment?: string; reopenSession?: boolean },
+  ) => api.post<InstructorFeedbackItem[]>(`/instructor/incidents/${incidentId}/feedback`, payload),
+  downloadGradebook: (cohortId: string, cohortName: string) =>
+    downloadFile(`/instructor/cohorts/${cohortId}/gradebook.csv`, `gradebook-${cohortName}.csv`),
 };
 
 export const identityPortalApi = {

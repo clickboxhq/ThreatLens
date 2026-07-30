@@ -14,7 +14,7 @@ export class SessionsController {
 
   @Post()
   async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateSessionDto) {
-    return this.sessionsService.createSession(user, dto.scenarioId);
+    return this.sessionsService.createSession(user, dto.scenarioId, dto.cohortAssignmentId);
   }
 
   @Get(':id')

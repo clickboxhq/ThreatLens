@@ -23,10 +23,14 @@ export class SessionsService {
     @InjectQueue(SCORING_QUEUE) private readonly scoringQueue: Queue<ScoringJobData>,
   ) {}
 
-  async createSession(user: AuthenticatedUser, scenarioId: string) {
+  async createSession(user: AuthenticatedUser, scenarioId: string, cohortAssignmentId?: string) {
     const scenario = await this.prisma.attackScenario.findUnique({ where: { id: scenarioId } });
     if (!scenario || scenario.status !== 'published' || !scenario.currentVersionId) {
       throw new AppException(404, 'SCENARIO_NOT_FOUND', 'Scenario not found or not published.');
+    }
+
+    if (cohortAssignmentId) {
+      await this.assertValidAssignmentAttempt(user, cohortAssignmentId, scenario.id);
     }
 
     const seed = randomBytes(6).readUIntBE(0, 6);
@@ -36,6 +40,7 @@ export class SessionsService {
         userId: user.id,
         scenarioId: scenario.id,
         scenarioVersionId: scenario.currentVersionId,
+        cohortAssignmentId,
         status: 'active',
         seed: BigInt(seed),
         expiresAt: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000),
@@ -105,6 +110,33 @@ export class SessionsService {
       rubricBreakdown: score.rubricBreakdown,
       scoredAt: score.scoredAt,
     };
+  }
+
+  private async assertValidAssignmentAttempt(
+    user: AuthenticatedUser,
+    cohortAssignmentId: string,
+    scenarioId: string,
+  ): Promise<void> {
+    const assignment = await this.prisma.cohortScenarioAssignment.findUnique({ where: { id: cohortAssignmentId } });
+    if (!assignment || assignment.scenarioId !== scenarioId) {
+      throw new AppException(400, 'INVALID_ASSIGNMENT', 'This assignment does not exist for this scenario.');
+    }
+
+    const enrollment = await this.prisma.cohortEnrollment.findUnique({
+      where: { cohortId_userId: { cohortId: assignment.cohortId, userId: user.id } },
+    });
+    if (!enrollment || enrollment.status !== 'active') {
+      throw new AppException(403, 'NOT_ENROLLED', 'You are not enrolled in this assignment’s cohort.');
+    }
+
+    if (assignment.attemptLimit != null) {
+      const attempts = await this.prisma.investigationSession.count({
+        where: { cohortAssignmentId, userId: user.id },
+      });
+      if (attempts >= assignment.attemptLimit) {
+        throw new AppException(409, 'ATTEMPT_LIMIT_REACHED', 'You have used all attempts for this assignment.');
+      }
+    }
   }
 
   private async toSessionDto(sessionId: string) {

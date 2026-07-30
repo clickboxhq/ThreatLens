@@ -88,3 +88,21 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+// Triggers a browser download for an authenticated file response (e.g. the gradebook CSV,
+// §16.13) — outside the JSON `request()` path since the response body isn't JSON.
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await rawRequest(path, { method: 'GET' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const err = body?.error ?? { code: 'UNKNOWN', message: 'Download failed.' };
+    throw new ApiError(response.status, err.code, err.message, err.correlationId);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}

@@ -60,16 +60,92 @@ model User {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  organization          Organization?          @relation(fields: [orgId], references: [id])
+  organization          Organization?              @relation(fields: [orgId], references: [id])
   refreshTokens         RefreshToken[]
   investigationSessions InvestigationSession[]
-  authoredScenarios     AttackScenario[]       @relation("ScenarioAuthor")
-  authoredVersions      ScenarioVersion[]      @relation("ScenarioVersionAuthor")
+  authoredScenarios     AttackScenario[]           @relation("ScenarioAuthor")
+  authoredVersions      ScenarioVersion[]          @relation("ScenarioVersionAuthor")
   pinnedEvidence        EvidenceCollection[]
   analystNotes          AnalystNote[]
   investigationActions  InvestigationAction[]
+  ownedCohorts          Cohort[]                   @relation("CohortOwner")
+  cohortEnrollments     CohortEnrollment[]         @relation("CohortEnrollments")
+  createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
+  instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
 
   @@map("users")
+}
+
+// ---------- Instructor Mode (§2.15, §6.5, §6.6, §6.20) ----------
+
+enum EnrollmentStatus {
+  active
+  dropped
+}
+
+model Cohort {
+  id        String    @id @default(uuid()) @db.Uuid
+  ownerId   String    @map("owner_id") @db.Uuid
+  name      String
+  joinCode  String?   @unique @map("join_code")
+  startsAt  DateTime? @map("starts_at")
+  endsAt    DateTime? @map("ends_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  owner       User                       @relation("CohortOwner", fields: [ownerId], references: [id])
+  enrollments CohortEnrollment[]
+  assignments CohortScenarioAssignment[]
+
+  @@map("cohorts")
+}
+
+model CohortEnrollment {
+  id         String           @id @default(uuid()) @db.Uuid
+  cohortId   String           @map("cohort_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  enrolledAt DateTime         @default(now()) @map("enrolled_at")
+  status     EnrollmentStatus @default(active)
+
+  cohort Cohort @relation(fields: [cohortId], references: [id])
+  user   User   @relation("CohortEnrollments", fields: [userId], references: [id])
+
+  @@unique([cohortId, userId])
+  @@map("cohort_enrollments")
+}
+
+model CohortScenarioAssignment {
+  id           String    @id @default(uuid()) @db.Uuid
+  cohortId     String    @map("cohort_id") @db.Uuid
+  scenarioId   String    @map("scenario_id") @db.Uuid
+  dueAt        DateTime? @map("due_at")
+  attemptLimit Int?      @map("attempt_limit")
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  cohort   Cohort                 @relation(fields: [cohortId], references: [id])
+  scenario AttackScenario         @relation(fields: [scenarioId], references: [id])
+  creator  User                   @relation("AssignmentCreator", fields: [createdBy], references: [id])
+  sessions InvestigationSession[]
+
+  @@index([cohortId])
+  @@map("cohort_scenario_assignments")
+}
+
+model InstructorFeedback {
+  id              String   @id @default(uuid()) @db.Uuid
+  incidentId      String   @map("incident_id") @db.Uuid
+  instructorId    String   @map("instructor_id") @db.Uuid
+  rubricOverrides Json?    @map("rubric_overrides")
+  comment         String?
+  reopenedSession Boolean  @default(false) @map("reopened_session")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  incident   Incident @relation(fields: [incidentId], references: [id])
+  instructor User     @relation("InstructorFeedbackAuthor", fields: [instructorId], references: [id])
+
+  @@index([incidentId])
+  @@map("instructor_feedback")
 }
 
 model RefreshToken {
@@ -144,10 +220,11 @@ model AttackScenario {
   createdAt        DateTime           @default(now()) @map("created_at")
   updatedAt        DateTime           @updatedAt @map("updated_at")
 
-  author         User                   @relation("ScenarioAuthor", fields: [authorId], references: [id])
-  currentVersion ScenarioVersion?       @relation("CurrentVersion", fields: [currentVersionId], references: [id])
-  versions       ScenarioVersion[]      @relation("ScenarioVersions")
-  sessions       InvestigationSession[]
+  author            User                       @relation("ScenarioAuthor", fields: [authorId], references: [id])
+  currentVersion    ScenarioVersion?           @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions          ScenarioVersion[]          @relation("ScenarioVersions")
+  sessions          InvestigationSession[]
+  cohortAssignments CohortScenarioAssignment[]
 
   @@map("attack_scenarios")
 }
@@ -197,6 +274,7 @@ model InvestigationSession {
   userId              String        @map("user_id") @db.Uuid
   scenarioId          String        @map("scenario_id") @db.Uuid
   scenarioVersionId   String        @map("scenario_version_id") @db.Uuid
+  cohortAssignmentId  String?       @map("cohort_assignment_id") @db.Uuid
   status              SessionStatus @default(active)
   seed                BigInt
   startedAt           DateTime      @default(now()) @map("started_at")
@@ -204,9 +282,10 @@ model InvestigationSession {
   expiresAt           DateTime      @map("expires_at")
   currentScenarioTime DateTime?     @map("current_scenario_time")
 
-  user            User            @relation(fields: [userId], references: [id])
-  scenario        AttackScenario  @relation(fields: [scenarioId], references: [id])
-  scenarioVersion ScenarioVersion @relation(fields: [scenarioVersionId], references: [id])
+  user             User                      @relation(fields: [userId], references: [id])
+  scenario         AttackScenario            @relation(fields: [scenarioId], references: [id])
+  scenarioVersion  ScenarioVersion           @relation(fields: [scenarioVersionId], references: [id])
+  cohortAssignment CohortScenarioAssignment? @relation(fields: [cohortAssignmentId], references: [id])
 
   identities           Identity[]
   devices              Device[]
@@ -678,6 +757,7 @@ model Incident {
   evidenceCollection   EvidenceCollection[]
   analystNotes         AnalystNote[]
   investigationActions InvestigationAction[]
+  instructorFeedback   InstructorFeedback[]
 
   @@index([sessionId])
   @@map("incidents")

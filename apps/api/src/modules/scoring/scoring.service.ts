@@ -102,8 +102,12 @@ export class ScoringService {
     const breakdown = computeScore(input);
 
     await this.prisma.$transaction([
-      this.prisma.score.create({
-        data: {
+      this.prisma.score.upsert({
+        where: { sessionId },
+        // §16.13 instructor reopen (§2.15) sends a session back to `active`, so a
+        // resubmission re-scores in place rather than colliding with `scores.session_id`'s
+        // UNIQUE constraint from the first scoring run.
+        create: {
           sessionId,
           overallPercent: breakdown.overallPercent,
           techniqueAccuracyPercent: breakdown.techniqueAccuracyPercent,
@@ -114,6 +118,18 @@ export class ScoringService {
           timeToResolutionSeconds,
           verdictCorrect: breakdown.verdictCorrect,
           rubricBreakdown: breakdown as unknown as object,
+        },
+        update: {
+          overallPercent: breakdown.overallPercent,
+          techniqueAccuracyPercent: breakdown.techniqueAccuracyPercent,
+          evidencePrecisionPercent: breakdown.evidencePrecisionPercent,
+          evidenceRecallPercent: breakdown.evidenceRecallPercent,
+          falsePositiveCount: breakdown.falsePositiveCount,
+          hintPenaltyPercent: input.hintPenaltyPercent,
+          timeToResolutionSeconds,
+          verdictCorrect: breakdown.verdictCorrect,
+          rubricBreakdown: breakdown as unknown as object,
+          scoredAt: new Date(),
         },
       }),
       this.prisma.investigationSession.update({ where: { id: sessionId }, data: { status: 'scored' } }),

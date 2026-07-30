@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { alertsApi, incidentsApi, mitreApi } from '../api/endpoints';
-import type { Alert, AnalystNote, EvidenceItem, Incident, MitreTechniqueRef } from '../api/types';
+import type { Alert, AnalystNote, EvidenceItem, Incident, InstructorFeedbackItem, MitreTechniqueRef } from '../api/types';
 import { ApiError } from '../api/client';
 import { SessionNav } from '../components/Layout';
 
@@ -29,20 +29,23 @@ export function IncidentWorkspacePage() {
   const [pinningEventId, setPinningEventId] = useState<string | null>(null);
   const [justificationDraft, setJustificationDraft] = useState('');
   const [allTechniques, setAllTechniques] = useState<MitreTechniqueRef[]>([]);
+  const [instructorFeedback, setInstructorFeedback] = useState<InstructorFeedbackItem[]>([]);
 
   async function load() {
     if (!sessionId || !incidentId) return;
-    const [inc, allAlerts, ev, allNotes, techniques] = await Promise.all([
+    const [inc, allAlerts, ev, allNotes, techniques, feedback] = await Promise.all([
       incidentsApi.get(sessionId, incidentId),
       alertsApi.list(sessionId),
       incidentsApi.listEvidence(sessionId, incidentId),
       incidentsApi.listNotes(sessionId, incidentId),
       mitreApi.list(),
+      incidentsApi.listFeedback(sessionId, incidentId),
     ]);
     setIncident(inc);
     setEvidence(ev);
     setNotes(allNotes);
     setAllTechniques(techniques);
+    setInstructorFeedback(feedback);
 
     const linked = allAlerts.filter((a) => inc.linkedAlertIds.includes(a.id));
     setLinkedAlerts(linked);
@@ -192,6 +195,26 @@ export function IncidentWorkspacePage() {
             />
             <button type="submit">Add</button>
           </form>
+
+          {instructorFeedback.length > 0 && (
+            <>
+              <h3>Instructor Feedback</h3>
+              <ul>
+                {instructorFeedback.map((f) => (
+                  <li key={f.id} style={{ marginBottom: 8 }}>
+                    <strong>{f.instructorDisplayName}</strong>
+                    {f.comment && <p style={{ margin: '4px 0' }}>{f.comment}</p>}
+                    {f.rubricOverrides && (
+                      <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                        Score overrides: {Object.entries(f.rubricOverrides).map(([k, v]) => `${k}: ${v}%`).join(', ')}
+                      </p>
+                    )}
+                    {f.reopenedSession && <p style={{ margin: '4px 0', color: '#b45309' }}>This incident was reopened for revision.</p>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
 
         <div>

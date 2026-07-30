@@ -1,10 +1,10 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class CreateSessionDto {
   @IsUUID()
   scenarioId!: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   cohortAssignmentId?: string;
 }

@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 export function AppLayout() {
@@ -14,7 +14,26 @@ export function AppLayout() {
           borderBottom: '1px solid #e2e8f0',
         }}
       >
-        <strong>SOCVerse</strong>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+          <Link to={user?.role === 'instructor' ? '/instructor' : '/catalog'} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <strong>SOCVerse</strong>
+          </Link>
+          {user?.role === 'instructor' && (
+            <Link to="/instructor" style={{ color: '#334155' }}>
+              Instructor
+            </Link>
+          )}
+          {user?.role === 'student' && (
+            <>
+              <Link to="/catalog" style={{ color: '#334155' }}>
+                Catalog
+              </Link>
+              <Link to="/cohorts/join" style={{ color: '#334155' }}>
+                Join Cohort
+              </Link>
+            </>
+          )}
+        </div>
         {user && (
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <span>{user.displayName}</span>

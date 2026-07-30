@@ -38,7 +38,7 @@ export class AuthService {
         email: dto.email,
         passwordHash,
         displayName: dto.displayName,
-        role: 'student',
+        role: dto.role ?? 'student',
         status: 'active',
         // Skeleton scope: no transactional email provider is wired up yet (§5.9's `email`
         // queue is a later milestone), so accounts are auto-verified rather than left in

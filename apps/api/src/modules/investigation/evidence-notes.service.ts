@@ -65,6 +65,24 @@ export class EvidenceNotesService {
     return this.prisma.analystNote.findMany({ where: { incidentId }, orderBy: { createdAt: 'asc' } });
   }
 
+  async listInstructorFeedback(sessionId: string, incidentId: string, user: AuthenticatedUser) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    await this.assertIncidentInSession(sessionId, incidentId);
+    const feedback = await this.prisma.instructorFeedback.findMany({
+      where: { incidentId },
+      include: { instructor: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return feedback.map((f) => ({
+      id: f.id,
+      instructorDisplayName: f.instructor.displayName,
+      rubricOverrides: f.rubricOverrides,
+      comment: f.comment,
+      reopenedSession: f.reopenedSession,
+      createdAt: f.createdAt,
+    }));
+  }
+
   private async assertIncidentInSession(sessionId: string, incidentId: string) {
     const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
     if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');

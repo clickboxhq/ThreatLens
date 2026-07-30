@@ -10,6 +10,7 @@ export function SignupPage() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isInstructor, setIsInstructor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -18,8 +19,8 @@ export function SignupPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await signup(email, password, displayName);
-      navigate('/catalog');
+      await signup(email, password, displayName, isInstructor ? 'instructor' : 'student');
+      navigate(isInstructor ? '/instructor' : '/catalog');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Signup failed.');
     } finally {
@@ -41,6 +42,10 @@ export function SignupPage() {
           minLength={12}
           required
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <input type="checkbox" checked={isInstructor} onChange={(e) => setIsInstructor(e.target.checked)} />
+          I'm creating this account as an instructor
+        </label>
         {error && <div style={{ color: '#dc2626' }}>{error}</div>}
         <button type="submit" disabled={submitting}>
           {submitting ? 'Creating account...' : 'Sign up'}

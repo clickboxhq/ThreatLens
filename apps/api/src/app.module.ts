@@ -21,6 +21,8 @@ import { ThreatIntelModule } from './modules/threat-intel/threat-intel.module';
 import { SearchModule } from './modules/search/search.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
 import { MitreModule } from './modules/mitre/mitre.module';
+import { CohortsModule } from './modules/cohorts/cohorts.module';
+import { InstructorModule } from './modules/instructor/instructor.module';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { MitreModule } from './modules/mitre/mitre.module';
     SearchModule,
     ScoringModule,
     MitreModule,
+    CohortsModule,
+    InstructorModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

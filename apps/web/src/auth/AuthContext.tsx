@@ -7,8 +7,8 @@ import type { AuthUser } from '../api/types';
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
+  signup: (email: string, password: string, displayName: string, role?: 'student' | 'instructor') => Promise<void>;
   logout: () => void;
 }
 
@@ -25,10 +25,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokens(result);
     setUser(result.user);
     localStorage.setItem('socverse_user', JSON.stringify(result.user));
+    return result.user;
   }
 
-  async function signup(email: string, password: string, displayName: string) {
-    await authApi.signup(email, password, displayName);
+  async function signup(email: string, password: string, displayName: string, role?: 'student' | 'instructor') {
+    await authApi.signup(email, password, displayName, role);
     await login(email, password);
   }
 

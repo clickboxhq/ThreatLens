@@ -15,11 +15,21 @@ export class SessionAccessService {
     if (!session) {
       throw new AppException(404, 'NOT_FOUND', 'Session not found.');
     }
-    const isOwner = session.userId === user.id;
-    const isPrivileged = user.role === 'instructor' || user.role === 'platform_admin';
-    if (!isOwner && !isPrivileged) {
-      throw new AppException(403, 'FORBIDDEN', 'You do not have access to this session.');
+    if (session.userId === user.id) return session;
+    if (user.role === 'platform_admin') return session;
+
+    // §15.2: an instructor may read a Student's session only if it belongs to a cohort
+    // assignment on a cohort that instructor owns — never a blanket cross-session bypass,
+    // since unauthorized read of another Student's session leaks ground-truth-adjacent
+    // information (§12.3) and would undermine assessment integrity.
+    if (user.role === 'instructor' && session.cohortAssignmentId) {
+      const assignment = await this.prisma.cohortScenarioAssignment.findUnique({
+        where: { id: session.cohortAssignmentId },
+        include: { cohort: true },
+      });
+      if (assignment && assignment.cohort.ownerId === user.id) return session;
     }
-    return session;
+
+    throw new AppException(403, 'FORBIDDEN', 'You do not have access to this session.');
   }
 }
