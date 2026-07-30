@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { EmailAttachment, EmailMessage, Identity, SignInEvent } from '@prisma/client';
+import type { Device, EmailAttachment, EmailMessage, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import {
   correlateCandidates,
   evaluateImpossibleTravelRule,
@@ -8,6 +8,7 @@ import {
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluateSpfFailRule,
+  evaluateSuspiciousProcessRule,
 } from './rules';
 
 function identity(overrides: Partial<Identity> = {}): Identity {
@@ -72,6 +73,44 @@ function signIn(identityId: string, overrides: Partial<SignInEvent> = {}): SignI
     clientApp: 'Modern Auth Client',
     ...overrides,
   } as SignInEvent;
+}
+
+function device(overrides: Partial<Device> = {}): Device {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    hostname: 'FIN-WKS-07',
+    osPlatform: 'windows',
+    osVersion: '11 23H2',
+    primaryIdentityId: null,
+    riskLevel: 'none',
+    isolationStatus: 'not_isolated',
+    lastSeenAt: new Date(),
+    isGroundTruthActor: true,
+    ...overrides,
+  } as Device;
+}
+
+function processEvent(deviceId: string, overrides: Partial<ProcessEvent> = {}): ProcessEvent {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date(),
+    correlationId: null,
+    raw: {},
+    isGroundTruthEvidence: true,
+    mitreTechniqueId: null,
+    deviceId,
+    processGuid: randomUUID(),
+    parentProcessGuid: null,
+    imagePath: 'C:\\Windows\\System32\\notepad.exe',
+    commandLine: 'notepad.exe',
+    hashSha256: 'a'.repeat(64),
+    parentImagePath: null,
+    integrityLevel: 'Medium',
+    identityId: null,
+    ...overrides,
+  } as ProcessEvent;
 }
 
 function attachment(emailMessageId: string, overrides: Partial<EmailAttachment> = {}): EmailAttachment {
@@ -291,6 +330,55 @@ describe('evaluateOutboundPersonalEmailRule (§8.2)', () => {
     const msg = email({ direction: 'outbound' }, 'colleague@contoso-finance.example.com');
     const att = attachment(msg.id);
     expect(evaluateOutboundPersonalEmailRule([msg], [att])).toHaveLength(0);
+  });
+});
+
+describe('evaluateSuspiciousProcessRule (§8.2, §10.3)', () => {
+  it('fires when an Office app is the direct parent of a script interpreter', () => {
+    const dev = device();
+    const parentGuid = randomUUID();
+    const parent = processEvent(dev.id, {
+      processGuid: parentGuid,
+      imagePath: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
+    });
+    const child = processEvent(dev.id, {
+      parentProcessGuid: parentGuid,
+      imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      commandLine: 'powershell.exe -EncodedCommand abcd',
+    });
+
+    const candidates = evaluateSuspiciousProcessRule([parent, child], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].primaryEntityId).toBe(dev.id);
+    expect(candidates[0].evidenceRefs).toHaveLength(2);
+  });
+
+  it('does not fire for an ordinary, unrelated parent-child pair', () => {
+    const dev = device();
+    const parentGuid = randomUUID();
+    const parent = processEvent(dev.id, { processGuid: parentGuid, imagePath: 'C:\\Windows\\explorer.exe' });
+    const child = processEvent(dev.id, { parentProcessGuid: parentGuid, imagePath: 'C:\\Windows\\System32\\notepad.exe' });
+
+    expect(evaluateSuspiciousProcessRule([parent, child], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire when a script interpreter has no matching parent in the dataset', () => {
+    const dev = device();
+    const orphanChild = processEvent(dev.id, {
+      parentProcessGuid: randomUUID(), // no process in the dataset has this guid
+      imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    });
+    expect(evaluateSuspiciousProcessRule([orphanChild], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire when an Office app spawns another ordinary process (not a script interpreter)', () => {
+    const dev = device();
+    const parentGuid = randomUUID();
+    const parent = processEvent(dev.id, { processGuid: parentGuid, imagePath: 'C:\\...\\EXCEL.EXE' });
+    const child = processEvent(dev.id, { parentProcessGuid: parentGuid, imagePath: 'C:\\Windows\\System32\\notepad.exe' });
+
+    expect(evaluateSuspiciousProcessRule([parent, child], [dev])).toHaveLength(0);
   });
 });
 

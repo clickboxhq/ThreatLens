@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { EmailAttachment, EmailMessage, Identity, SignInEvent } from '@prisma/client';
+import type { Device, EmailAttachment, EmailMessage, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 
 // A detection firing, before it's turned into a persisted Alert row. Kept separate from
@@ -26,6 +26,7 @@ export const PASSWORD_SPRAY_RULE_NAME = 'Identity: Password Spray Campaign Detec
 export const MFA_FATIGUE_RULE_NAME = 'Identity: MFA Fatigue Pattern Detected';
 export const IMPOSSIBLE_TRAVEL_RULE_NAME = 'Identity: Impossible Travel Detected';
 export const OUTBOUND_PERSONAL_EMAIL_RULE_NAME = 'Email: Outbound Message to Personal Webmail with Attachment';
+export const SUSPICIOUS_PROCESS_RULE_NAME = 'Device: Office Application Spawned a Script Interpreter';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
@@ -33,6 +34,13 @@ const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
 // so the rule never mistakes a fast-but-feasible trip for an impossible one.
 const IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH = 900;
 const PERSONAL_EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
+const OFFICE_APP_IMAGE_NAMES = ['WINWORD.EXE', 'EXCEL.EXE', 'OUTLOOK.EXE', 'POWERPNT.EXE'];
+const SCRIPT_INTERPRETER_IMAGE_NAMES = ['POWERSHELL.EXE', 'CMD.EXE', 'WSCRIPT.EXE', 'CSCRIPT.EXE', 'MSHTA.EXE'];
+
+function imageBaseName(imagePath: string): string {
+  const parts = imagePath.split(/[\\/]/);
+  return (parts[parts.length - 1] ?? imagePath).toUpperCase();
+}
 
 /**
  * Fires whenever an inbound message fails SPF — deliberately naive (§8.1: realistic, not
@@ -260,6 +268,47 @@ export function evaluateOutboundPersonalEmailRule(emails: EmailMessage[], attach
       correlationId: email.correlationId,
       occurredAt: email.occurredAt,
     }));
+}
+
+/**
+ * Fires when an Office application appears as the direct parent of a script interpreter or
+ * command shell — one of the most well-known endpoint LOLBin patterns (a macro-driven
+ * document spawning PowerShell/cmd/wscript), and the first rule scoped to a device rather
+ * than an identity or mailbox (§8.2, §10.3).
+ */
+export function evaluateSuspiciousProcessRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const byGuid = new Map(processEvents.map((p) => [p.processGuid, p]));
+
+  const candidates: AlertCandidate[] = [];
+  for (const child of processEvents) {
+    if (!child.parentProcessGuid) continue;
+    const parent = byGuid.get(child.parentProcessGuid);
+    if (!parent) continue;
+
+    const parentName = imageBaseName(parent.imagePath);
+    const childName = imageBaseName(child.imagePath);
+    if (!OFFICE_APP_IMAGE_NAMES.includes(parentName) || !SCRIPT_INTERPRETER_IMAGE_NAMES.includes(childName)) continue;
+
+    const device = deviceById.get(child.deviceId);
+    if (!device) continue;
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: SUSPICIOUS_PROCESS_RULE_NAME,
+      title: `${parentName} on ${device.hostname} spawned ${childName}`,
+      description: `"${parent.imagePath}" launched "${child.imagePath}" with command line: ${child.commandLine}`,
+      primaryEntityType: 'device' as const,
+      primaryEntityId: device.id,
+      evidenceRefs: [
+        { eventTable: 'process_events', eventId: parent.id },
+        { eventTable: 'process_events', eventId: child.id },
+      ],
+      correlationId: child.correlationId,
+      occurredAt: child.occurredAt,
+    });
+  }
+  return candidates;
 }
 
 /**

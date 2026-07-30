@@ -49,6 +49,9 @@ export function SessionNav() {
       <NavLink to={`/sessions/${sessionId}/identities`} style={linkStyle}>
         Identities
       </NavLink>
+      <NavLink to={`/sessions/${sessionId}/devices`} style={linkStyle}>
+        Devices
+      </NavLink>
       <NavLink to={`/sessions/${sessionId}/emails`} style={linkStyle}>
         Emails
       </NavLink>

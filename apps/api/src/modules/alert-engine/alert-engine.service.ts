@@ -9,12 +9,14 @@ import {
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluateSpfFailRule,
+  evaluateSuspiciousProcessRule,
   IMPOSSIBLE_TRAVEL_RULE_NAME,
   MFA_FATIGUE_RULE_NAME,
   NEW_COUNTRY_RULE_NAME,
   OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
   PASSWORD_SPRAY_RULE_NAME,
   SPF_FAIL_RULE_NAME,
+  SUSPICIOUS_PROCESS_RULE_NAME,
 } from './rules';
 
 @Injectable()
@@ -36,23 +38,29 @@ export class AlertEngineService {
       attachments,
       signIns,
       identities,
+      processEvents,
+      devices,
       spfRule,
       newCountryRule,
       passwordSprayRule,
       mfaFatigueRule,
       impossibleTravelRule,
       outboundPersonalEmailRule,
+      suspiciousProcessRule,
     ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
       this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
       this.prisma.signInEvent.findMany({ where: { sessionId } }),
       this.prisma.identity.findMany({ where: { sessionId } }),
+      this.prisma.processEvent.findMany({ where: { sessionId } }),
+      this.prisma.device.findMany({ where: { sessionId } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SPF_FAIL_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: NEW_COUNTRY_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: PASSWORD_SPRAY_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: MFA_FATIGUE_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: IMPOSSIBLE_TRAVEL_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: OUTBOUND_PERSONAL_EMAIL_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SUSPICIOUS_PROCESS_RULE_NAME } }),
     ]);
 
     const allCandidates: AlertCandidate[] = [
@@ -62,6 +70,7 @@ export class AlertEngineService {
       ...evaluateMfaFatigueRule(signIns, identities),
       ...evaluateImpossibleTravelRule(signIns, identities),
       ...evaluateOutboundPersonalEmailRule(emails, attachments),
+      ...evaluateSuspiciousProcessRule(processEvents, devices),
     ];
     const links = correlateCandidates(allCandidates);
 
@@ -72,6 +81,7 @@ export class AlertEngineService {
       [MFA_FATIGUE_RULE_NAME, mfaFatigueRule],
       [IMPOSSIBLE_TRAVEL_RULE_NAME, impossibleTravelRule],
       [OUTBOUND_PERSONAL_EMAIL_RULE_NAME, outboundPersonalEmailRule],
+      [SUSPICIOUS_PROCESS_RULE_NAME, suspiciousProcessRule],
     ]);
 
     await this.prisma.$transaction(

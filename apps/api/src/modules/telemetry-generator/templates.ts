@@ -42,6 +42,9 @@ export const SENSITIVE_ATTACHMENT_FILENAMES = [
   'Employee_Compensation_Bands_2026.xlsx',
   'Pending_M&A_Due_Diligence_Notes.docx',
 ];
+export const MALWARE_DELIVERY_DOMAIN = 'billing-statements-delivery.example.org';
+export const MALWARE_C2_IP = '185.220.101.47';
+export const MALWARE_C2_DOMAIN = 'cdn-update-relay.example.net';
 
 export interface CountryCity {
   country: string;

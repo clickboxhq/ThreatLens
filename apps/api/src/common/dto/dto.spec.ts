@@ -1,8 +1,9 @@
-import type { Alert, EmailMessage, Identity, MitreTechnique, SignInEvent } from '@prisma/client';
+import type { Alert, Device, EmailMessage, FileEvent, Identity, MitreTechnique, NetworkEvent, ProcessEvent, SignInEvent } from '@prisma/client';
 import { toStudentIdentityDto } from './identity.dto';
 import { toStudentSignInDto } from './sign-in.dto';
 import { toStudentEmailDto } from './email.dto';
 import { toStudentAlertDto } from './alert.dto';
+import { toStudentDeviceDto, toStudentFileEventDto, toStudentNetworkEventDto, toStudentProcessEventDto } from './device.dto';
 
 const FORBIDDEN_SUBSTRINGS = ['isGroundTruthEvidence', 'isGroundTruthActor', 'isFalsePositiveByDesign', 'correlationId'];
 
@@ -117,5 +118,89 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
     const dto = toStudentAlertDto(alert);
     assertNoForbiddenFields(dto);
     expect(dto.mitreTechnique?.techniqueId).toBe('T1078');
+  });
+
+  it('strips ground-truth fields from a device', () => {
+    const dev = {
+      id: 'd-1',
+      isGroundTruthActor: true,
+      sessionId: 's-1',
+      hostname: 'FIN-WKS-07',
+      osPlatform: 'windows',
+      osVersion: '11 23H2',
+      primaryIdentityId: null,
+      riskLevel: 'none',
+      isolationStatus: 'not_isolated',
+      lastSeenAt: new Date(),
+    } as Device;
+
+    assertNoForbiddenFields(toStudentDeviceDto(dev));
+  });
+
+  it('strips ground-truth fields from a process event', () => {
+    const event = {
+      id: 'p-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: 'technique-1',
+      correlationId: 'corr-1',
+      raw: { source: 'ground_truth' },
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      deviceId: 'd-1',
+      processGuid: 'guid-1',
+      parentProcessGuid: null,
+      imagePath: 'C:\\WINWORD.EXE',
+      commandLine: 'WINWORD.EXE',
+      hashSha256: 'a'.repeat(64),
+      parentImagePath: null,
+      integrityLevel: 'Medium',
+      identityId: 'id-1',
+    } as ProcessEvent;
+
+    const dto = toStudentProcessEventDto(event);
+    assertNoForbiddenFields(dto);
+    expect(JSON.parse(JSON.stringify(dto)).raw).toBeUndefined();
+  });
+
+  it('strips ground-truth fields from a file event', () => {
+    const event = {
+      id: 'f-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: 'technique-1',
+      correlationId: 'corr-1',
+      raw: {},
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      deviceId: 'd-1',
+      action: 'created',
+      filePath: 'C:\\Temp\\svc_update.exe',
+      hashSha256: 'a'.repeat(64),
+      processGuid: 'guid-1',
+    } as FileEvent;
+
+    assertNoForbiddenFields(toStudentFileEventDto(event));
+  });
+
+  it('strips ground-truth fields from a network event', () => {
+    const event = {
+      id: 'n-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: 'technique-1',
+      correlationId: 'corr-1',
+      raw: {},
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      deviceId: 'd-1',
+      direction: 'outbound',
+      protocol: 'tcp',
+      localPort: 51000,
+      remoteIp: '185.220.101.47',
+      remotePort: 443,
+      bytesSent: 400,
+      bytesReceived: 200,
+      processGuid: 'guid-1',
+    } as NetworkEvent;
+
+    assertNoForbiddenFields(toStudentNetworkEventDto(event));
   });
 });

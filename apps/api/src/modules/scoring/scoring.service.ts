@@ -47,11 +47,15 @@ export class ScoringService {
     ];
     const submittedVerdicts = closedIncidents.map((i) => i.verdict).filter((v): v is IncidentVerdict => Boolean(v));
 
-    const [groundTruthEmails, groundTruthSignIns] = await Promise.all([
+    const [groundTruthEmails, groundTruthSignIns, groundTruthProcesses, groundTruthFiles, groundTruthNetwork] = await Promise.all([
       this.prisma.emailMessage.count({ where: { sessionId, isGroundTruthEvidence: true } }),
       this.prisma.signInEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.processEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.fileEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.networkEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
     ]);
-    const totalGroundTruthEvidenceCount = groundTruthEmails + groundTruthSignIns;
+    const totalGroundTruthEvidenceCount =
+      groundTruthEmails + groundTruthSignIns + groundTruthProcesses + groundTruthFiles + groundTruthNetwork;
 
     const pinnedEvidence = closedIncidents.flatMap((i) => i.evidenceCollection);
     const pinnedTotalEvidenceCount = pinnedEvidence.length;
@@ -118,19 +122,33 @@ export class ScoringService {
     this.logger.log(`Scored session ${sessionId}: ${breakdown.overallPercent}%`);
   }
 
+  // §6.12: every telemetry event table an evidence_collection row can point at (§6.17).
+  // Adding a new investigation surface (e.g. Device Portal's process/file/network tables)
+  // means adding its table name and Prisma model here, or pinned evidence from it silently
+  // never counts toward recall/precision — Device Portal's addition caught exactly this gap.
+  private readonly groundTruthCounters: Record<string, (ids: string[]) => Promise<number>> = {
+    email_messages: (ids) => this.prisma.emailMessage.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    sign_in_events: (ids) => this.prisma.signInEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    process_events: (ids) => this.prisma.processEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    file_events: (ids) => this.prisma.fileEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    network_events: (ids) => this.prisma.networkEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+  };
+
   private async countGroundTruthAmong(pinnedEvidence: { eventTable: string; eventId: string }[]): Promise<number> {
-    const emailIds = pinnedEvidence.filter((e) => e.eventTable === 'email_messages').map((e) => e.eventId);
-    const signInIds = pinnedEvidence.filter((e) => e.eventTable === 'sign_in_events').map((e) => e.eventId);
+    const idsByTable = new Map<string, string[]>();
+    for (const item of pinnedEvidence) {
+      const list = idsByTable.get(item.eventTable) ?? [];
+      list.push(item.eventId);
+      idsByTable.set(item.eventTable, list);
+    }
 
-    const [groundTruthEmailCount, groundTruthSignInCount] = await Promise.all([
-      emailIds.length > 0
-        ? this.prisma.emailMessage.count({ where: { id: { in: emailIds }, isGroundTruthEvidence: true } })
-        : Promise.resolve(0),
-      signInIds.length > 0
-        ? this.prisma.signInEvent.count({ where: { id: { in: signInIds }, isGroundTruthEvidence: true } })
-        : Promise.resolve(0),
-    ]);
+    const counts = await Promise.all(
+      [...idsByTable.entries()].map(([table, ids]) => {
+        const counter = this.groundTruthCounters[table];
+        return counter ? counter(ids) : Promise.resolve(0);
+      }),
+    );
 
-    return groundTruthEmailCount + groundTruthSignInCount;
+    return counts.reduce((sum, count) => sum + count, 0);
   }
 }

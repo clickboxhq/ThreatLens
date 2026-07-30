@@ -14,6 +14,8 @@ import {
   LAST_NAMES,
   LOOKALIKE_INTERNAL_DOMAIN,
   MALICIOUS_DOMAIN,
+  MALWARE_C2_IP,
+  MALWARE_DELIVERY_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
   RISKY_UNFAMILIAR_COUNTRIES,
@@ -34,6 +36,9 @@ export interface GroundTruthDefinition {
     step_order: number;
     mitre_technique_id: string;
     entity_ref: string;
+    // Only set for templates that write device-scoped events (process/file/network) —
+    // the other templates (email, sign-in) only ever need the identity ref.
+    device_ref?: string;
     event_template_id: string;
     relative_timestamp: string;
     correlation_group: string;
@@ -48,6 +53,9 @@ export interface GeneratedTelemetry {
   identities: Prisma.IdentityCreateManyInput[];
   devices: Prisma.DeviceCreateManyInput[];
   signInEvents: Prisma.SignInEventCreateManyInput[];
+  processEvents: Prisma.ProcessEventCreateManyInput[];
+  fileEvents: Prisma.FileEventCreateManyInput[];
+  networkEvents: Prisma.NetworkEventCreateManyInput[];
   emailMessages: Prisma.EmailMessageCreateManyInput[];
   emailAttachments: Prisma.EmailAttachmentCreateManyInput[];
   emailUrls: Prisma.EmailUrlCreateManyInput[];
@@ -84,6 +92,9 @@ export function generateTelemetry(
   const identities: Prisma.IdentityCreateManyInput[] = [];
   const devices: Prisma.DeviceCreateManyInput[] = [];
   const signInEvents: Prisma.SignInEventCreateManyInput[] = [];
+  const processEvents: Prisma.ProcessEventCreateManyInput[] = [];
+  const fileEvents: Prisma.FileEventCreateManyInput[] = [];
+  const networkEvents: Prisma.NetworkEventCreateManyInput[] = [];
   const emailMessages: Prisma.EmailMessageCreateManyInput[] = [];
   const emailAttachments: Prisma.EmailAttachmentCreateManyInput[] = [];
   const emailUrls: Prisma.EmailUrlCreateManyInput[] = [];
@@ -210,6 +221,7 @@ export function generateTelemetry(
   for (const step of def.kill_chain) {
     const identity = identityByRef.get(step.entity_ref);
     if (!identity) continue;
+    const device = step.device_ref ? deviceByRef.get(step.device_ref) : undefined;
     const occurredAt = parseRelativeTimestamp(worldStart, step.relative_timestamp);
     const correlationId = correlationIdByGroup.get(step.correlation_group)!;
     const mitreTechniqueId = techniqueIdBySlug.get(step.mitre_technique_id) ?? null;
@@ -218,12 +230,16 @@ export function generateTelemetry(
       rng,
       sessionId,
       identity,
+      device,
       decoyIdentities,
       occurredAt,
       correlationId,
       mitreTechniqueId,
       isGroundTruthEvidence: true,
       signInEvents,
+      processEvents,
+      fileEvents,
+      networkEvents,
       emailMessages,
       emailAttachments,
       emailUrls,
@@ -239,12 +255,16 @@ export function generateTelemetry(
         rng,
         sessionId,
         identity: decoyIdentity,
+        device: undefined,
         decoyIdentities,
         occurredAt,
         correlationId: null,
         mitreTechniqueId: null,
         isGroundTruthEvidence: false,
         signInEvents,
+        processEvents,
+        fileEvents,
+        networkEvents,
         emailMessages,
         emailAttachments,
         emailUrls,
@@ -252,12 +272,26 @@ export function generateTelemetry(
     }
   }
 
-  return { identities, devices, signInEvents, emailMessages, emailAttachments, emailUrls };
+  return {
+    identities,
+    devices,
+    signInEvents,
+    processEvents,
+    fileEvents,
+    networkEvents,
+    emailMessages,
+    emailAttachments,
+    emailUrls,
+  };
 }
 
 interface TemplateContext {
   rng: SeededRng;
   sessionId: string;
+  device?: Prisma.DeviceCreateManyInput & { id: string };
+  processEvents: Prisma.ProcessEventCreateManyInput[];
+  fileEvents: Prisma.FileEventCreateManyInput[];
+  networkEvents: Prisma.NetworkEventCreateManyInput[];
   identity: Prisma.IdentityCreateManyInput & { id: string };
   decoyIdentities: (Prisma.IdentityCreateManyInput & { id: string })[];
   occurredAt: Date;
@@ -609,6 +643,129 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       });
       break;
     }
+    case 'malicious_attachment_email_v1': {
+      const emailId = randomUUID();
+      ctx.emailMessages.push({
+        id: emailId,
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        messageId: `<${randomUUID()}@${MALWARE_DELIVERY_DOMAIN}>`,
+        direction: 'inbound',
+        senderAddress: `statements@${MALWARE_DELIVERY_DOMAIN}`,
+        senderDisplayName: 'Billing Statements',
+        recipientAddresses: [ctx.identity.userPrincipalName as string],
+        subject: 'Your Monthly Statement is Ready',
+        bodyHtml:
+          '<p>Please find your statement attached. Open the document and click "Enable Content" to view the full report.</p>',
+        headersRaw: {
+          'Received-Chain': [`mail.${MALWARE_DELIVERY_DOMAIN}`, 'edge-relay-02.example-mx.net'],
+          'Authentication-Results': `spf=fail smtp.mailfrom=${MALWARE_DELIVERY_DOMAIN}; dkim=none; dmarc=fail`,
+        },
+        spfResult: 'fail',
+        dkimResult: 'none',
+        dmarcResult: 'fail',
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      ctx.emailAttachments.push({
+        id: randomUUID(),
+        emailMessageId: emailId,
+        filename: 'Statement_July2026.docm',
+        contentType: 'application/vnd.ms-word.document.macroEnabled.12',
+        sizeBytes: ctx.rng.intBetween(80_000, 250_000),
+        hashSha256: syntheticHash(ctx.rng),
+        sandboxVerdict: 'malicious',
+      });
+      break;
+    }
+    case 'malicious_process_execution_v1': {
+      if (!ctx.device) break;
+      const parentGuid = deterministicUuidFromSeed(`${ctx.correlationId}:parent`);
+      const childGuid = deterministicUuidFromSeed(`${ctx.correlationId}:child`);
+
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'malicious_macro_parent' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: parentGuid,
+        parentProcessGuid: null,
+        imagePath: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
+        commandLine: '"WINWORD.EXE" /n "C:\\Users\\Public\\Downloads\\Statement_July2026.docm"',
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+
+      const childOccurredAt = new Date(ctx.occurredAt.getTime() + 30 * 1000);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: childOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'malicious_macro_child' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: childGuid,
+        parentProcessGuid: parentGuid,
+        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        commandLine:
+          'powershell.exe -NoProfile -WindowStyle Hidden -EncodedCommand SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcA',
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+
+      const dropOccurredAt = new Date(childOccurredAt.getTime() + 15 * 1000);
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: dropOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'dropped_payload' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: 'C:\\Users\\Public\\AppData\\Local\\Temp\\svc_update.exe',
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: childGuid,
+      });
+      break;
+    }
+    case 'malicious_c2_beacon_v1': {
+      if (!ctx.device) break;
+      const childGuid = deterministicUuidFromSeed(`${ctx.correlationId}:child`);
+      const beaconCount = ctx.rng.intBetween(4, 6);
+      for (let i = 0; i < beaconCount; i++) {
+        ctx.networkEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 5 * 60 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'c2_beacon' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          direction: 'outbound',
+          protocol: 'tcp',
+          localPort: ctx.rng.intBetween(49152, 65535),
+          remoteIp: MALWARE_C2_IP,
+          remotePort: 443,
+          bytesSent: ctx.rng.intBetween(200, 800),
+          bytesReceived: ctx.rng.intBetween(100, 500),
+          processGuid: childGuid,
+        });
+      }
+      break;
+    }
     default:
       break;
   }
@@ -618,11 +775,30 @@ function syntheticIp(rng: SeededRng): string {
   return `${rng.intBetween(20, 223)}.${rng.intBetween(0, 255)}.${rng.intBetween(0, 255)}.${rng.intBetween(1, 254)}`;
 }
 
+function syntheticHash(rng: SeededRng): string {
+  return Array.from({ length: 64 }, () => rng.intBetween(0, 15).toString(16)).join('');
+}
+
 function attackerProfileFromSeed(seed: string): { ip: string; country: string; city: string } {
   let hash = 0;
   for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   const country = RISKY_UNFAMILIAR_COUNTRIES[hash % RISKY_UNFAMILIAR_COUNTRIES.length];
   const ip = `${45 + (hash % 150)}.${(hash >>> 3) % 256}.${(hash >>> 7) % 256}.${1 + ((hash >>> 11) % 253)}`;
   return { ip, country: country.country, city: country.city };
+}
+
+// Deterministic UUID-shaped identifier derived from a string seed, so two independent
+// kill-chain steps (e.g. process execution and its later C2 beacon) can agree on the same
+// process_guid without sharing mutable state (§7.2 stage 4 pattern, same idea as
+// attackerProfileFromSeed above).
+function deterministicUuidFromSeed(seed: string): string {
+  let h1 = 0;
+  let h2 = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h1 = (h1 * 31 + seed.charCodeAt(i)) >>> 0;
+    h2 = (h2 * 131 + seed.charCodeAt(i)) >>> 0;
+  }
+  const hex = (n: number, len: number) => (n >>> 0).toString(16).padStart(8, '0').slice(0, len);
+  return `${hex(h1, 8)}-${hex(h2, 4)}-4${hex(h1 ^ h2, 3)}-8${hex(h2 ^ h1, 3)}-${hex(h1, 6)}${hex(h2, 6)}`;
 }
 

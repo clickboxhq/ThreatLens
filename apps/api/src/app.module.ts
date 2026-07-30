@@ -15,10 +15,12 @@ import { ScenarioCatalogModule } from './modules/scenario-catalog/scenario-catal
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { InvestigationModule } from './modules/investigation/investigation.module';
 import { IdentityPortalModule } from './modules/identity-portal/identity-portal.module';
+import { DevicePortalModule } from './modules/device-portal/device-portal.module';
 import { EmailPortalModule } from './modules/email-portal/email-portal.module';
 import { ThreatIntelModule } from './modules/threat-intel/threat-intel.module';
 import { SearchModule } from './modules/search/search.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
+import { MitreModule } from './modules/mitre/mitre.module';
 
 @Module({
   imports: [
@@ -37,10 +39,12 @@ import { ScoringModule } from './modules/scoring/scoring.module';
     SessionsModule,
     InvestigationModule,
     IdentityPortalModule,
+    DevicePortalModule,
     EmailPortalModule,
     ThreatIntelModule,
     SearchModule,
     ScoringModule,
+    MitreModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

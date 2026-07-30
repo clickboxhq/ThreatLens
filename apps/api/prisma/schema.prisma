@@ -211,6 +211,9 @@ model InvestigationSession {
   identities           Identity[]
   devices              Device[]
   signInEvents         SignInEvent[]
+  processEvents        ProcessEvent[]
+  fileEvents           FileEvent[]
+  networkEvents        NetworkEvent[]
   emailMessages        EmailMessage[]
   alerts               Alert[]
   incidents            Incident[]
@@ -264,6 +267,7 @@ model Identity {
 
   primaryForDevices      Device[]
   signInEvents           SignInEvent[]
+  processEvents          ProcessEvent[]
   conditionalAccessEvals ConditionalAccessEvaluation[]
 
   @@index([sessionId])
@@ -311,6 +315,9 @@ model Device {
   session         InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   primaryIdentity Identity?            @relation(fields: [primaryIdentityId], references: [id])
   signInEvents    SignInEvent[]
+  processEvents   ProcessEvent[]
+  fileEvents      FileEvent[]
+  networkEvents   NetworkEvent[]
 
   @@index([sessionId])
   @@map("devices")
@@ -352,6 +359,95 @@ model SignInEvent {
 
   @@index([sessionId, identityId, occurredAt])
   @@map("sign_in_events")
+}
+
+// §10.3: process tree, reconstructed at read time via parentProcessGuid self-reference
+// within a device. Not a Prisma-level FK (a GUID isn't a row's primary key here) —
+// matches the polymorphic/loosely-referenced convention already used for evidence refs.
+model ProcessEvent {
+  id                    String   @id @default(uuid()) @db.Uuid
+  sessionId             String   @map("session_id") @db.Uuid
+  occurredAt            DateTime @map("occurred_at")
+  correlationId         String?  @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean  @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?  @map("mitre_technique_id") @db.Uuid
+  deviceId              String   @map("device_id") @db.Uuid
+  processGuid           String   @map("process_guid") @db.Uuid
+  parentProcessGuid     String?  @map("parent_process_guid") @db.Uuid
+  imagePath             String   @map("image_path")
+  commandLine           String   @map("command_line")
+  hashSha256            String   @map("hash_sha256")
+  parentImagePath       String?  @map("parent_image_path")
+  integrityLevel        String   @map("integrity_level")
+  identityId            String?  @map("identity_id") @db.Uuid
+
+  session  InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device   Device               @relation(fields: [deviceId], references: [id])
+  identity Identity?            @relation(fields: [identityId], references: [id])
+
+  @@index([sessionId, deviceId])
+  @@map("process_events")
+}
+
+enum FileEventAction {
+  created
+  modified
+  deleted
+  renamed
+  encrypted
+}
+
+// §10.5: encrypted action type supports ransomware-category scenarios (§1.8).
+model FileEvent {
+  id                    String          @id @default(uuid()) @db.Uuid
+  sessionId             String          @map("session_id") @db.Uuid
+  occurredAt            DateTime        @map("occurred_at")
+  correlationId         String?         @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean         @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?         @map("mitre_technique_id") @db.Uuid
+  deviceId              String          @map("device_id") @db.Uuid
+  action                FileEventAction
+  filePath              String          @map("file_path")
+  hashSha256            String?         @map("hash_sha256")
+  processGuid           String?         @map("process_guid") @db.Uuid
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device  Device               @relation(fields: [deviceId], references: [id])
+
+  @@index([sessionId, deviceId])
+  @@map("file_events")
+}
+
+enum NetworkDirection {
+  inbound
+  outbound
+}
+
+model NetworkEvent {
+  id                    String           @id @default(uuid()) @db.Uuid
+  sessionId             String           @map("session_id") @db.Uuid
+  occurredAt            DateTime         @map("occurred_at")
+  correlationId         String?          @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean          @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?          @map("mitre_technique_id") @db.Uuid
+  deviceId              String           @map("device_id") @db.Uuid
+  direction             NetworkDirection
+  protocol              String
+  localPort             Int              @map("local_port")
+  remoteIp              String           @map("remote_ip")
+  remotePort            Int              @map("remote_port")
+  bytesSent             Int              @map("bytes_sent")
+  bytesReceived         Int              @map("bytes_received")
+  processGuid           String?          @map("process_guid") @db.Uuid
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device  Device               @relation(fields: [deviceId], references: [id])
+
+  @@index([sessionId, deviceId])
+  @@map("network_events")
 }
 
 enum EmailDirection {

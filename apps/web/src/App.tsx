@@ -6,6 +6,7 @@ import { SignupPage } from './pages/SignupPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { SessionDashboardPage } from './pages/SessionDashboardPage';
 import { IdentityPortalPage } from './pages/IdentityPortalPage';
+import { DevicePortalPage } from './pages/DevicePortalPage';
 import { EmailPortalPage } from './pages/EmailPortalPage';
 import { IncidentsListPage } from './pages/IncidentsListPage';
 import { IncidentWorkspacePage } from './pages/IncidentWorkspacePage';
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/sessions/:sessionId/dashboard" element={<SessionDashboardPage />} />
         <Route path="/sessions/:sessionId/identities" element={<IdentityPortalPage />} />
+        <Route path="/sessions/:sessionId/devices" element={<DevicePortalPage />} />
         <Route path="/sessions/:sessionId/emails" element={<EmailPortalPage />} />
         <Route path="/sessions/:sessionId/incidents" element={<IncidentsListPage />} />
         <Route path="/sessions/:sessionId/incidents/:incidentId" element={<IncidentWorkspacePage />} />

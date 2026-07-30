@@ -68,6 +68,22 @@ const MITRE_TECHNIQUES = [
       'Adversaries (or insiders) move data out of an environment using a protocol other than the primary command-and-control channel — including ordinary outbound email to a personal account.',
     url: 'https://attack.mitre.org/techniques/T1048/',
   },
+  {
+    techniqueId: 'T1204.002',
+    name: 'User Execution: Malicious File',
+    tactic: 'TA0002',
+    description:
+      'An adversary relies on a user opening a malicious file (often a macro-enabled document) to gain code execution, typically spawning a script interpreter or shell as a child process.',
+    url: 'https://attack.mitre.org/techniques/T1204/002/',
+  },
+  {
+    techniqueId: 'T1071.001',
+    name: 'Application Layer Protocol: Web Protocols',
+    tactic: 'TA0011',
+    description:
+      'Adversaries use common web protocols (typically HTTPS on port 443) for command-and-control traffic so it blends in with legitimate outbound traffic.',
+    url: 'https://attack.mitre.org/techniques/T1071/001/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -118,6 +134,13 @@ const DETECTION_RULES = [
     logicSummary: "direction = outbound AND has_attachment AND recipient domain IN (gmail.com, yahoo.com, outlook.com, hotmail.com, icloud.com).",
     defaultSeverity: 'medium' as const,
     mitreTechniqueSlug: 'T1048',
+  },
+  {
+    name: 'Device: Office Application Spawned a Script Interpreter',
+    description: 'Fires when an Office application (Word, Excel, Outlook, PowerPoint) is the direct parent of a script interpreter or shell.',
+    logicSummary: "parent process image IN (WINWORD.EXE, EXCEL.EXE, OUTLOOK.EXE, POWERPNT.EXE) AND child process image IN (powershell.exe, cmd.exe, wscript.exe, cscript.exe, mshta.exe).",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1204.002',
   },
 ];
 
@@ -685,8 +708,103 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'malware-execution-via-attachment',
+      title: 'Malware Execution via Email Attachment',
+      summary:
+        'An engineer opened an emailed "statement" document. Shortly after, something unusual started happening on their workstation. Investigate the mailbox and the device to determine what happened.',
+      category: 'endpoint',
+      difficulty: 'advanced',
+      estimatedMinutes: 35,
+      requiredTechniques: ['T1566.001', 'T1204.002', 'T1071.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'endpoint',
+          difficulty: 'advanced',
+          estimated_minutes: 35,
+          narrative_summary:
+            'An attacker delivers a macro-enabled document disguised as a billing statement. When opened, the macro spawns PowerShell, which drops a payload to disk and establishes outbound command-and-control communication — the full kill chain from delivery, to execution, to persistence infrastructure, to C2.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'ENG-WKS-12', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 12, devices: 10 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.001',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'malicious_attachment_email_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'malware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1204.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_process_execution_v1',
+            relative_timestamp: '+2h15m',
+            correlation_group: 'malware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1071.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_c2_beacon_v1',
+            relative_timestamp: '+2h20m',
+            correlation_group: 'malware-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.05,
+          false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.001', 'T1204.002', 'T1071.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check the victim's mailbox for anything with an attachment received a few hours before the device activity." },
+          { unlock_cost_percent: 10, text: "In the Device Portal, look at this device's process tree — is there anything unusual about what launched what?" },
+          { unlock_cost_percent: 15, text: 'Once you find the suspicious process, check the Network tab for that device around the same time.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'billing-statements-delivery.example.org',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed malware delivery infrastructure',
+          context: 'Domain used to deliver macro-enabled documents that drop a PowerShell-based payload.',
+        },
+        {
+          indicatorType: 'ip',
+          value: '185.220.101.47',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed C2 infrastructure',
+          context: 'Observed as a command-and-control destination for outbound beacon traffic on port 443.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 6 scenarios.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 7 scenarios.`,
   );
 }
 

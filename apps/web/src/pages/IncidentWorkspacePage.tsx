@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { alertsApi, incidentsApi } from '../api/endpoints';
+import { alertsApi, incidentsApi, mitreApi } from '../api/endpoints';
 import type { Alert, AnalystNote, EvidenceItem, Incident, MitreTechniqueRef } from '../api/types';
 import { ApiError } from '../api/client';
 import { SessionNav } from '../components/Layout';
@@ -28,18 +28,21 @@ export function IncidentWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [pinningEventId, setPinningEventId] = useState<string | null>(null);
   const [justificationDraft, setJustificationDraft] = useState('');
+  const [allTechniques, setAllTechniques] = useState<MitreTechniqueRef[]>([]);
 
   async function load() {
     if (!sessionId || !incidentId) return;
-    const [inc, allAlerts, ev, allNotes] = await Promise.all([
+    const [inc, allAlerts, ev, allNotes, techniques] = await Promise.all([
       incidentsApi.get(sessionId, incidentId),
       alertsApi.list(sessionId),
       incidentsApi.listEvidence(sessionId, incidentId),
       incidentsApi.listNotes(sessionId, incidentId),
+      mitreApi.list(),
     ]);
     setIncident(inc);
     setEvidence(ev);
     setNotes(allNotes);
+    setAllTechniques(techniques);
 
     const linked = allAlerts.filter((a) => inc.linkedAlertIds.includes(a.id));
     setLinkedAlerts(linked);
@@ -57,9 +60,15 @@ export function IncidentWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, incidentId]);
 
-  const availableTechniques: MitreTechniqueRef[] = Array.from(
-    new Map(linkedAlerts.filter((a) => a.mitreTechnique).map((a) => [a.mitreTechnique!.id, a.mitreTechnique!])).values(),
-  );
+  // The full catalog (§6.8), not just what linked alerts happen to auto-tag — an alert's
+  // own technique is a mechanical hint, not necessarily the answer (§12.3). Techniques a
+  // linked alert already suggests are still surfaced first for convenience.
+  const suggestedTechniqueIds = new Set(linkedAlerts.filter((a) => a.mitreTechnique).map((a) => a.mitreTechnique!.id));
+  const availableTechniques: MitreTechniqueRef[] = [...allTechniques].sort((a, b) => {
+    const aSuggested = suggestedTechniqueIds.has(a.id) ? 0 : 1;
+    const bSuggested = suggestedTechniqueIds.has(b.id) ? 0 : 1;
+    return aSuggested - bSuggested || a.techniqueId.localeCompare(b.techniqueId);
+  });
 
   async function confirmPinEvidence(candidate: EvidenceCandidate) {
     if (justificationDraft.trim().length < 5) return;
@@ -201,18 +210,23 @@ export function IncidentWorkspacePage() {
               </label>
               <label>
                 MITRE Techniques
-                {availableTechniques.map((t) => (
-                  <div key={t.id}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={selectedTechniqueIds.has(t.id)}
-                        onChange={() => toggleTechnique(t.id)}
-                      />
-                      {t.techniqueId} — {t.name}
-                    </label>
-                  </div>
-                ))}
+                <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8, marginTop: 4 }}>
+                  {availableTechniques.map((t) => (
+                    <div key={t.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedTechniqueIds.has(t.id)}
+                          onChange={() => toggleTechnique(t.id)}
+                        />
+                        {t.techniqueId} — {t.name}
+                        {suggestedTechniqueIds.has(t.id) && (
+                          <span style={{ color: '#64748b', fontSize: 12 }}> (suggested by a linked alert)</span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </label>
               <textarea
                 placeholder="Summary of your findings (min 20 characters)"

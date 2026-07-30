@@ -86,6 +86,56 @@ export interface SignIn {
   impliedTravelSpeedKmh?: number | null;
 }
 
+export interface Device {
+  id: string;
+  hostname: string;
+  osPlatform: string;
+  osVersion: string;
+  primaryIdentityId: string | null;
+  riskLevel: string;
+  isolationStatus: 'not_isolated' | 'isolated';
+  lastSeenAt: string;
+}
+
+export interface ProcessEventNode {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  processGuid: string;
+  parentProcessGuid: string | null;
+  imagePath: string;
+  commandLine: string;
+  hashSha256: string;
+  parentImagePath: string | null;
+  integrityLevel: string;
+  identityId: string | null;
+  children: ProcessEventNode[];
+}
+
+export interface FileEvent {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  action: 'created' | 'modified' | 'deleted' | 'renamed' | 'encrypted';
+  filePath: string;
+  hashSha256: string | null;
+  processGuid: string | null;
+}
+
+export interface NetworkEvent {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  direction: 'inbound' | 'outbound';
+  protocol: string;
+  localPort: number;
+  remoteIp: string;
+  remotePort: number;
+  bytesSent: number;
+  bytesReceived: number;
+  processGuid: string | null;
+}
+
 export interface EmailAttachment {
   id: string;
   filename: string;

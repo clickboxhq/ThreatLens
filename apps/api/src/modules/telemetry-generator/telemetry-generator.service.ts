@@ -40,10 +40,13 @@ export class TelemetryGeneratorService {
       this.prisma.device.createMany({ data: telemetry.devices }),
     ]);
 
-    // Sign-in events and email messages reference identities/devices created above, so they
-    // run in a second transaction once those foreign keys exist.
+    // Sign-in, process, file, and network events all reference identities/devices created
+    // above, so they run in a second transaction once those foreign keys exist.
     await this.prisma.$transaction([
       this.prisma.signInEvent.createMany({ data: telemetry.signInEvents }),
+      this.prisma.processEvent.createMany({ data: telemetry.processEvents }),
+      this.prisma.fileEvent.createMany({ data: telemetry.fileEvents }),
+      this.prisma.networkEvent.createMany({ data: telemetry.networkEvents }),
       this.prisma.emailMessage.createMany({ data: telemetry.emailMessages }),
     ]);
 
@@ -57,7 +60,8 @@ export class TelemetryGeneratorService {
     this.logger.log(
       `Generated telemetry for session ${sessionId}: ${telemetry.identities.length} identities, ` +
         `${telemetry.devices.length} devices, ${telemetry.signInEvents.length} sign-ins, ` +
-        `${telemetry.emailMessages.length} emails.`,
+        `${telemetry.processEvents.length} process events, ${telemetry.fileEvents.length} file events, ` +
+        `${telemetry.networkEvents.length} network events, ${telemetry.emailMessages.length} emails.`,
     );
   }
 }

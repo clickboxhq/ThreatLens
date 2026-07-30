@@ -3,11 +3,16 @@ import type {
   Alert,
   AnalystNote,
   AuthUser,
+  Device,
   EmailMessage,
   EvidenceItem,
+  FileEvent,
   Identity,
   Incident,
   IncidentSummary,
+  MitreTechniqueRef,
+  NetworkEvent,
+  ProcessEventNode,
   ScenarioSummary,
   ScoreResult,
   SessionSummary,
@@ -72,6 +77,21 @@ export const identityPortalApi = {
   list: (sessionId: string) => api.get<Identity[]>(`/sessions/${sessionId}/identities`),
   getProfile: (sessionId: string, identityId: string) => api.get<Identity>(`/sessions/${sessionId}/identities/${identityId}`),
   getSignIns: (sessionId: string, identityId: string) => api.get<SignIn[]>(`/sessions/${sessionId}/identities/${identityId}/signins`),
+};
+
+export const mitreApi = {
+  list: () => api.get<MitreTechniqueRef[]>('/mitre-techniques'),
+};
+
+export const devicePortalApi = {
+  list: (sessionId: string) => api.get<Device[]>(`/sessions/${sessionId}/devices`),
+  getProfile: (sessionId: string, deviceId: string) => api.get<Device>(`/sessions/${sessionId}/devices/${deviceId}`),
+  getProcessTree: (sessionId: string, deviceId: string) =>
+    api.get<ProcessEventNode[]>(`/sessions/${sessionId}/devices/${deviceId}/process-tree`),
+  getFiles: (sessionId: string, deviceId: string) => api.get<FileEvent[]>(`/sessions/${sessionId}/devices/${deviceId}/files`),
+  getNetwork: (sessionId: string, deviceId: string) =>
+    api.get<NetworkEvent[]>(`/sessions/${sessionId}/devices/${deviceId}/network`),
+  isolate: (sessionId: string, deviceId: string) => api.post<Device>(`/sessions/${sessionId}/devices/${deviceId}/isolate`, {}),
 };
 
 export const emailPortalApi = {
