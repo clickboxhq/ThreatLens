@@ -17,6 +17,11 @@ export class SessionsController {
     return this.sessionsService.createSession(user, dto.scenarioId, dto.cohortAssignmentId);
   }
 
+  @Get()
+  async listMine(@CurrentUser() user: AuthenticatedUser) {
+    return this.sessionsService.listMine(user);
+  }
+
   @Get(':id')
   async get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.sessionsService.getSession(id, user);

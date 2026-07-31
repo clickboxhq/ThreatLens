@@ -33,6 +33,18 @@ export interface SessionSummary {
   expiresAt: string;
 }
 
+export interface SessionHistoryItem {
+  id: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  scenarioCategory: string;
+  status: 'active' | 'submitted' | 'scored' | 'abandoned';
+  overallPercent: number | null;
+  verdictCorrect: boolean | null;
+  startedAt: string;
+  submittedAt: string | null;
+}
+
 export interface MitreTechniqueRef {
   id: string;
   techniqueId: string;
@@ -211,6 +223,11 @@ export interface AnalystNote {
   createdAt: string;
 }
 
+export interface MissedEvidenceItem {
+  eventTable: string;
+  summary: string;
+}
+
 export interface RubricBreakdown {
   techniqueAccuracyPercent: number;
   evidencePrecisionPercent: number;
@@ -220,6 +237,8 @@ export interface RubricBreakdown {
   responsePercent: number;
   verdictCorrect: boolean;
   overallPercent: number;
+  missedTechniques: MitreTechniqueRef[];
+  missedEvidence: MissedEvidenceItem[];
 }
 
 export interface ScoreResult {
@@ -299,4 +318,31 @@ export interface InstructorFeedbackItem {
   comment: string | null;
   reopenedSession: boolean;
   createdAt: string;
+}
+
+// ---------- Leaderboard (§13.5) ----------
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  displayName: string;
+  points: number;
+  completions: number;
+  averagePercent: number;
+}
+
+export interface LeaderboardResult {
+  period: 'weekly' | 'monthly' | 'all_time';
+  scope: 'global' | 'cohort';
+  entries: LeaderboardEntry[];
+  myEntry: LeaderboardEntry | null;
+}
+
+// ---------- Hints (§12.5) ----------
+
+export interface HintItem {
+  index: number;
+  unlockCostPercent: number;
+  unlocked: boolean;
+  text: string | null;
 }

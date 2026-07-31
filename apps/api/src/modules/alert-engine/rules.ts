@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { Device, EmailAttachment, EmailMessage, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
+import type { Device, EmailAttachment, EmailMessage, FileEvent, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 
 // A detection firing, before it's turned into a persisted Alert row. Kept separate from
@@ -27,6 +27,9 @@ export const MFA_FATIGUE_RULE_NAME = 'Identity: MFA Fatigue Pattern Detected';
 export const IMPOSSIBLE_TRAVEL_RULE_NAME = 'Identity: Impossible Travel Detected';
 export const OUTBOUND_PERSONAL_EMAIL_RULE_NAME = 'Email: Outbound Message to Personal Webmail with Attachment';
 export const SUSPICIOUS_PROCESS_RULE_NAME = 'Device: Office Application Spawned a Script Interpreter';
+export const LATERAL_MOVEMENT_RULE_NAME = 'Device: Remote Service Execution Consistent with Lateral Movement';
+export const MASS_ENCRYPTION_RULE_NAME = 'Device: Mass File Encryption Detected';
+export const LEGACY_AUTH_BYPASS_RULE_NAME = 'Identity: Legacy Authentication Bypassed Enforced MFA';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
@@ -36,6 +39,9 @@ const IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH = 900;
 const PERSONAL_EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
 const OFFICE_APP_IMAGE_NAMES = ['WINWORD.EXE', 'EXCEL.EXE', 'OUTLOOK.EXE', 'POWERPNT.EXE'];
 const SCRIPT_INTERPRETER_IMAGE_NAMES = ['POWERSHELL.EXE', 'CMD.EXE', 'WSCRIPT.EXE', 'CSCRIPT.EXE', 'MSHTA.EXE'];
+const LATERAL_MOVEMENT_SERVICE_IMAGE_NAME = 'PSEXESVC.EXE';
+const MASS_ENCRYPTION_COUNT_THRESHOLD = 5;
+const MASS_ENCRYPTION_WINDOW_MINUTES = 15;
 
 function imageBaseName(imagePath: string): string {
   const parts = imagePath.split(/[\\/]/);
@@ -306,6 +312,138 @@ export function evaluateSuspiciousProcessRule(processEvents: ProcessEvent[], dev
       ],
       correlationId: child.correlationId,
       occurredAt: child.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fires when PSEXESVC.exe — the service binary PsExec installs on a target host to run a
+ * command remotely — appears in a device's process tree. Its mere presence is the
+ * detection signal (real admin tooling like PsExec is rarely used this way inside the
+ * scenarios' orgs), so this rule cites the service process itself plus its parent
+ * (normally services.exe, the Service Control Manager) and any children it spawned,
+ * without needing to know which device the connection originated from (§10.3, ransomware
+ * lateral-movement narrative).
+ */
+export function evaluateLateralMovementRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const byGuid = new Map(processEvents.map((p) => [p.processGuid, p]));
+  const childrenByParentGuid = new Map<string, ProcessEvent[]>();
+  for (const event of processEvents) {
+    if (!event.parentProcessGuid) continue;
+    const group = childrenByParentGuid.get(event.parentProcessGuid) ?? [];
+    group.push(event);
+    childrenByParentGuid.set(event.parentProcessGuid, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const event of processEvents) {
+    if (imageBaseName(event.imagePath) !== LATERAL_MOVEMENT_SERVICE_IMAGE_NAME) continue;
+    const device = deviceById.get(event.deviceId);
+    if (!device) continue;
+
+    const parent = event.parentProcessGuid ? byGuid.get(event.parentProcessGuid) : undefined;
+    const children = childrenByParentGuid.get(event.processGuid) ?? [];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: LATERAL_MOVEMENT_RULE_NAME,
+      title: `Remote service execution detected on ${device.hostname}`,
+      description: `"${event.imagePath}" was created on ${device.hostname}${parent ? ` by "${parent.imagePath}"` : ''} — the artifact PsExec-style tools leave when they run a command on a remote host using stolen credentials.`,
+      primaryEntityType: 'device' as const,
+      primaryEntityId: device.id,
+      evidenceRefs: [
+        ...(parent ? [{ eventTable: 'process_events', eventId: parent.id }] : []),
+        { eventTable: 'process_events', eventId: event.id },
+        ...children.map((c) => ({ eventTable: 'process_events', eventId: c.id })),
+      ],
+      correlationId: event.correlationId,
+      occurredAt: event.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fires when one device racks up several `encrypted` file-action events in a short window —
+ * the observable signature of ransomware working through a file share, independent of any
+ * single file's content (§10.5's `encrypted` action exists specifically for this).
+ */
+export function evaluateMassEncryptionRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const byDevice = new Map<string, FileEvent[]>();
+  for (const event of fileEvents) {
+    if (event.action !== 'encrypted') continue;
+    const group = byDevice.get(event.deviceId) ?? [];
+    group.push(event);
+    byDevice.set(event.deviceId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [deviceId, events] of byDevice) {
+    const device = deviceById.get(deviceId);
+    if (!device) continue;
+    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+
+    for (let i = 0; i < sorted.length; i++) {
+      const windowEnd = new Date(sorted[i].occurredAt.getTime() + MASS_ENCRYPTION_WINDOW_MINUTES * 60 * 1000);
+      const cluster = sorted.slice(i).filter((e) => e.occurredAt <= windowEnd);
+      if (cluster.length < MASS_ENCRYPTION_COUNT_THRESHOLD) continue;
+
+      const latest = cluster[cluster.length - 1];
+      candidates.push({
+        id: randomUUID(),
+        detectionRuleName: MASS_ENCRYPTION_RULE_NAME,
+        title: `Mass file encryption detected on ${device.hostname}`,
+        description: `${cluster.length} files were encrypted on ${device.hostname} within ${MASS_ENCRYPTION_WINDOW_MINUTES} minutes — consistent with ransomware working through a file share.`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device.id,
+        evidenceRefs: cluster.map((e) => ({ eventTable: 'file_events', eventId: e.id })),
+        correlationId: latest.correlationId,
+        occurredAt: latest.occurredAt,
+      });
+      break; // one alert per device is enough; the whole burst is already cited.
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Fires when a successful sign-in used a legacy authentication protocol (IMAP4, POP3, older
+ * ActiveSync clients) on an identity whose MFA is supposedly "enforced" — legacy protocols
+ * predate modern MFA challenges, so a Conditional Access policy that isn't explicitly
+ * configured to block them lets credentials alone through. Groups every such sign-in per
+ * identity into one alert, the same shape as the MFA-fatigue and password-spray rules,
+ * since a single bypass is rarely a one-off (§9's identity investigation surface).
+ */
+export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const byIdentity = new Map<string, SignInEvent[]>();
+  for (const event of signIns) {
+    if (event.result !== 'success' || !event.isLegacyAuth) continue;
+    const identity = identityById.get(event.identityId);
+    if (!identity || identity.mfaStatus !== 'enforced') continue;
+    const group = byIdentity.get(event.identityId) ?? [];
+    group.push(event);
+    byIdentity.set(event.identityId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [identityId, events] of byIdentity) {
+    const identity = identityById.get(identityId)!;
+    const latest = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: LEGACY_AUTH_BYPASS_RULE_NAME,
+      title: `${identity.displayName} authenticated via legacy protocol despite MFA enforcement`,
+      description: `${events.length} successful sign-in${events.length === 1 ? '' : 's'} to "${events[0].application}" via ${events[0].clientApp} bypassed this identity's enforced MFA policy — legacy authentication protocols don't support modern MFA challenges.`,
+      primaryEntityType: 'identity' as const,
+      primaryEntityId: identity.id,
+      evidenceRefs: events.map((e) => ({ eventTable: 'sign_in_events', eventId: e.id })),
+      correlationId: latest.correlationId,
+      occurredAt: latest.occurredAt,
     });
   }
   return candidates;

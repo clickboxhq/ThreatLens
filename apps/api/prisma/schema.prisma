@@ -298,6 +298,7 @@ model InvestigationSession {
   incidents            Incident[]
   investigationActions InvestigationAction[]
   score                Score?
+  hintUnlocks          HintUnlock[]
 
   @@index([userId, status])
   @@index([scenarioId])
@@ -827,6 +828,7 @@ enum InvestigationActionType {
   dismiss_alert
   escalate_to_incident
   submit_verdict
+  request_hint
 }
 
 model InvestigationAction {
@@ -868,4 +870,21 @@ model Score {
   session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("scores")
+}
+
+// §12.5: which of a scenario's authored hints (ground_truth_definition.hints, §12.1) a
+// session has unlocked. Hints aren't first-class rows anywhere else — they live inside the
+// JSONB ground-truth definition, addressed by array index — so this table is what lets a
+// hint accrue a real, session-scoped, non-reversible score penalty.
+model HintUnlock {
+  id                String   @id @default(uuid()) @db.Uuid
+  sessionId         String   @map("session_id") @db.Uuid
+  hintIndex         Int      @map("hint_index")
+  unlockCostPercent Decimal  @map("unlock_cost_percent") @db.Decimal(5, 2)
+  unlockedAt        DateTime @default(now()) @map("unlocked_at")
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, hintIndex])
+  @@map("hint_unlocks")
 }

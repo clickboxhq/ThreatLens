@@ -439,3 +439,169 @@ describe('generateTelemetry — insider data exfiltration scenario (§7.2, §8.2
     expect(candidates).toHaveLength(1);
   });
 });
+
+function buildRansomwareDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'compromised_admin', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+      ],
+      narrative_devices: [
+        { ref: 'patient_zero_device', attributes: { hostname: 'IT-WKS-04', os_platform: 'windows' } },
+        { ref: 'file_server_device', attributes: { hostname: 'FS-PROD-01', os_platform: 'windows' } },
+      ],
+      decoy_population_size: { identities: 3, devices: 3 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1021.002',
+        entity_ref: 'compromised_admin',
+        device_ref: 'patient_zero_device',
+        event_template_id: 'lateral_movement_source_connection_v1',
+        relative_timestamp: '+3h',
+        correlation_group: 'ransomware-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1021.002',
+        entity_ref: 'compromised_admin',
+        device_ref: 'file_server_device',
+        event_template_id: 'lateral_movement_remote_exec_v1',
+        relative_timestamp: '+3h5m',
+        correlation_group: 'ransomware-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1486',
+        entity_ref: 'compromised_admin',
+        device_ref: 'file_server_device',
+        event_template_id: 'mass_file_encryption_v1',
+        relative_timestamp: '+3h10m',
+        correlation_group: 'ransomware-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — ransomware lateral-movement scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1021.002', randomUUID()],
+    ['T1486', randomUUID()],
+  ]);
+
+  it('places the source connection on the first device and the remote execution + encryption on the second', () => {
+    const def = buildRansomwareDefinition();
+    const result = generateTelemetry(randomUUID(), 11n, def, techniqueIdBySlug);
+    const patientZero = result.devices.find((d) => d.hostname === 'IT-WKS-04')!;
+    const fileServer = result.devices.find((d) => d.hostname === 'FS-PROD-01')!;
+
+    expect(result.networkEvents.filter((n) => n.deviceId === patientZero.id)).toHaveLength(1);
+    expect(result.processEvents.filter((p) => p.deviceId === fileServer.id)).toHaveLength(3);
+    expect(result.fileEvents.filter((f) => f.deviceId === fileServer.id && f.action === 'encrypted').length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('shares one correlationId across the network hop, the remote execution, and the encryption burst', () => {
+    const def = buildRansomwareDefinition();
+    const result = generateTelemetry(randomUUID(), 11n, def, techniqueIdBySlug);
+    const networkEvent = result.networkEvents.find((n) => n.isGroundTruthEvidence)!;
+    const processEvent = result.processEvents.find((p) => p.isGroundTruthEvidence)!;
+    const fileEvent = result.fileEvents.find((f) => f.isGroundTruthEvidence)!;
+
+    expect(networkEvent.correlationId).toBeTruthy();
+    expect(networkEvent.correlationId).toEqual(processEvent.correlationId);
+    expect(networkEvent.correlationId).toEqual(fileEvent.correlationId);
+  });
+
+  it("feeds the Alert Engine's lateral-movement and mass-encryption rules correctly end-to-end", async () => {
+    const { evaluateLateralMovementRule, evaluateMassEncryptionRule } = await import('../alert-engine/rules');
+    const def = buildRansomwareDefinition();
+    const result = generateTelemetry(randomUUID(), 11n, def, techniqueIdBySlug);
+
+    const lateralMovementCandidates = evaluateLateralMovementRule(
+      result.processEvents as unknown as Parameters<typeof evaluateLateralMovementRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateLateralMovementRule>[1],
+    );
+    const massEncryptionCandidates = evaluateMassEncryptionRule(
+      result.fileEvents as unknown as Parameters<typeof evaluateMassEncryptionRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateMassEncryptionRule>[1],
+    );
+
+    expect(lateralMovementCandidates).toHaveLength(1);
+    expect(massEncryptionCandidates).toHaveLength(1);
+  });
+});
+
+function buildLegacyAuthDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Financial Analyst', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 4, devices: 0 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1078',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'legacy_auth_bypass_signin_v1',
+        relative_timestamp: '+4h',
+        correlation_group: 'legacy-auth-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1114.002',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'legacy_auth_mailbox_collection_v1',
+        relative_timestamp: '+4h10m',
+        correlation_group: 'legacy-auth-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [{ event_template_id: 'legacy_auth_benign_service_v1', count: 3 }] },
+  };
+}
+
+describe('generateTelemetry — legacy auth MFA bypass scenario (§7.2, §8.2, §9)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1078', randomUUID()],
+    ['T1114.002', randomUUID()],
+  ]);
+
+  it('marks the victim identity as MFA-enforced and produces a legacy successful bypass plus a mailbox-collection burst', () => {
+    const def = buildLegacyAuthDefinition();
+    const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
+    const victim = result.identities.find((i) => i.isGroundTruthActor)!;
+
+    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    expect(groundTruthSignIns.length).toBeGreaterThanOrEqual(5);
+    expect(groundTruthSignIns.every((s) => s.identityId === victim.id && s.isLegacyAuth && s.result === 'success')).toBe(true);
+  });
+
+  it("feeds the Alert Engine's legacy-auth-bypass rule correctly end-to-end", async () => {
+    const { evaluateLegacyAuthBypassRule } = await import('../alert-engine/rules');
+    const def = buildLegacyAuthDefinition();
+    const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
+
+    const candidates = evaluateLegacyAuthBypassRule(
+      result.signInEvents as unknown as Parameters<typeof evaluateLegacyAuthBypassRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateLegacyAuthBypassRule>[1],
+    );
+
+    const victim = result.identities.find((i) => i.isGroundTruthActor)!;
+    const victimCandidate = candidates.find((c) => c.primaryEntityId === victim.id);
+    expect(victimCandidate).toBeDefined();
+    expect(victimCandidate!.evidenceRefs.length).toBeGreaterThanOrEqual(5);
+  });
+});

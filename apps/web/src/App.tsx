@@ -16,6 +16,8 @@ import { CohortDetailPage } from './pages/CohortDetailPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
 import { SessionReviewPage } from './pages/SessionReviewPage';
 import { JoinCohortPage } from './pages/JoinCohortPage';
+import { ProgressPage } from './pages/ProgressPage';
+import { LeaderboardPage } from './pages/LeaderboardPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -50,6 +52,8 @@ export default function App() {
         }
       >
         <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/progress" element={<ProgressPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/sessions/:sessionId/dashboard" element={<SessionDashboardPage />} />
         <Route path="/sessions/:sessionId/identities" element={<IdentityPortalPage />} />
         <Route path="/sessions/:sessionId/devices" element={<DevicePortalPage />} />

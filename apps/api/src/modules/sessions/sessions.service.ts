@@ -61,6 +61,29 @@ export class SessionsService {
     return this.toSessionDto(sessionId);
   }
 
+  // §2.17/§13.2: a Student's own investigation history — every attempt across every
+  // scenario, newest first, so "did I get better" is answerable without re-deriving it
+  // from individual session/score lookups.
+  async listMine(user: AuthenticatedUser) {
+    const sessions = await this.prisma.investigationSession.findMany({
+      where: { userId: user.id },
+      include: { scenario: true, score: true },
+      orderBy: { startedAt: 'desc' },
+    });
+
+    return sessions.map((session) => ({
+      id: session.id,
+      scenarioId: session.scenarioId,
+      scenarioTitle: session.scenario.title,
+      scenarioCategory: session.scenario.category,
+      status: session.status,
+      overallPercent: session.score?.overallPercent ?? null,
+      verdictCorrect: session.score?.verdictCorrect ?? null,
+      startedAt: session.startedAt,
+      submittedAt: session.submittedAt,
+    }));
+  }
+
   async submitSession(sessionId: string, user: AuthenticatedUser, incidentIds: string[]) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
     if (session.status !== 'active') {

@@ -23,6 +23,9 @@ import { ScoringModule } from './modules/scoring/scoring.module';
 import { MitreModule } from './modules/mitre/mitre.module';
 import { CohortsModule } from './modules/cohorts/cohorts.module';
 import { InstructorModule } from './modules/instructor/instructor.module';
+import { HintsModule } from './modules/hints/hints.module';
+import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
+import { RealtimeModule } from './common/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -49,6 +52,9 @@ import { InstructorModule } from './modules/instructor/instructor.module';
     MitreModule,
     CohortsModule,
     InstructorModule,
+    HintsModule,
+    LeaderboardModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

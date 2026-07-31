@@ -7,6 +7,7 @@ import {
   EXEC_LOOKALIKE_DOMAIN,
   EXEC_NAME,
   EXEC_TITLE,
+  FILE_SERVER_IP,
   FIRST_NAMES,
   HOME_COUNTRIES,
   HOSTNAME_PREFIX,
@@ -18,8 +19,10 @@ import {
   MALWARE_DELIVERY_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
+  RANSOM_NOTE_FILENAME,
   RISKY_UNFAMILIAR_COUNTRIES,
   SENSITIVE_ATTACHMENT_FILENAMES,
+  SHARED_FILE_PATHS,
   TRAVEL_COUNTRIES,
 } from './templates';
 
@@ -764,6 +767,199 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
           processGuid: childGuid,
         });
       }
+      break;
+    }
+    case 'legacy_auth_bypass_signin_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'legacy-auth');
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'legacy_auth_bypass' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        sourceIp: attacker.ip,
+        sourceCountry: attacker.country,
+        sourceCity: attacker.city,
+        application: 'Exchange Online IMAP4',
+        result: 'success',
+        isLegacyAuth: true,
+        clientApp: 'IMAP4',
+      });
+      break;
+    }
+    case 'legacy_auth_mailbox_collection_v1': {
+      // Derived from the same correlation_id as legacy_auth_bypass_signin_v1 (§7.2 stage 4
+      // pattern) so the follow-on mailbox syncs agree with the initial bypass's attacker IP.
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'legacy-auth');
+      const syncCount = ctx.rng.intBetween(4, 6);
+      for (let i = 0; i < syncCount; i++) {
+        ctx.signInEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 8 * 60 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'legacy_auth_mailbox_sync' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          sourceIp: attacker.ip,
+          sourceCountry: attacker.country,
+          sourceCity: attacker.city,
+          application: 'Exchange Online IMAP4',
+          result: 'success',
+          isLegacyAuth: true,
+          clientApp: 'IMAP4',
+        });
+      }
+      break;
+    }
+    case 'legacy_auth_benign_service_v1': {
+      // False-positive bait (§8.6): a benign automated mailbox (e.g. a scanner/relay) that
+      // happens to use a legacy protocol on an MFA-enforced identity — the same observable
+      // shape as the real bypass, so the Student has to actually investigate rather than
+      // pattern-match on "legacy auth = compromise."
+      ctx.signInEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        raw: { source: 'noise', pattern: 'legacy_auth_benign_service' },
+        isGroundTruthEvidence: false,
+        identityId: ctx.identity.id,
+        sourceIp: syntheticIp(ctx.rng),
+        sourceCountry: (ctx.identity.homeCountry as string) ?? 'US',
+        sourceCity: 'Unknown',
+        application: 'Exchange Online SMTP',
+        result: 'success',
+        isLegacyAuth: true,
+        clientApp: 'SMTP Relay Service',
+      });
+      break;
+    }
+    case 'lateral_movement_source_connection_v1': {
+      if (!ctx.device) break;
+      ctx.networkEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lateral_movement_smb_connection' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        direction: 'outbound',
+        protocol: 'tcp',
+        localPort: ctx.rng.intBetween(49152, 65535),
+        remoteIp: FILE_SERVER_IP,
+        remotePort: 445,
+        bytesSent: ctx.rng.intBetween(4_000, 12_000),
+        bytesReceived: ctx.rng.intBetween(1_000, 4_000),
+        processGuid: null,
+      });
+      break;
+    }
+    case 'lateral_movement_remote_exec_v1': {
+      if (!ctx.device) break;
+      const scmGuid = deterministicUuidFromSeed(`${ctx.correlationId}:scm`);
+      const psexecGuid = deterministicUuidFromSeed(`${ctx.correlationId}:psexecsvc`);
+      const cmdGuid = deterministicUuidFromSeed(`${ctx.correlationId}:remote-cmd`);
+
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lateral_movement_scm' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: scmGuid,
+        parentProcessGuid: null,
+        imagePath: 'C:\\Windows\\System32\\services.exe',
+        commandLine: 'C:\\Windows\\System32\\services.exe',
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'System',
+        identityId: ctx.identity.id,
+      });
+
+      const psexecOccurredAt = new Date(ctx.occurredAt.getTime() + 5 * 1000);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: psexecOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lateral_movement_psexecsvc' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: psexecGuid,
+        parentProcessGuid: scmGuid,
+        imagePath: 'C:\\Windows\\PSEXESVC.exe',
+        commandLine: 'C:\\Windows\\PSEXESVC.exe',
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: 'C:\\Windows\\System32\\services.exe',
+        integrityLevel: 'System',
+        identityId: ctx.identity.id,
+      });
+
+      const cmdOccurredAt = new Date(psexecOccurredAt.getTime() + 5 * 1000);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: cmdOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lateral_movement_remote_cmd' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: cmdGuid,
+        parentProcessGuid: psexecGuid,
+        imagePath: 'C:\\Windows\\System32\\cmd.exe',
+        commandLine: 'cmd.exe /c whoami',
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: 'C:\\Windows\\PSEXESVC.exe',
+        integrityLevel: 'System',
+        identityId: ctx.identity.id,
+      });
+      break;
+    }
+    case 'mass_file_encryption_v1': {
+      if (!ctx.device) break;
+      const fileCount = ctx.rng.intBetween(6, 9);
+      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(fileCount, SHARED_FILE_PATHS.length));
+      paths.forEach((path, i) => {
+        ctx.fileEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 20 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'mass_encryption' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device!.id,
+          action: 'encrypted',
+          filePath: `${path}.locked`,
+          hashSha256: syntheticHash(ctx.rng),
+          processGuid: null,
+        });
+      });
+
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: new Date(ctx.occurredAt.getTime() + paths.length * 20 * 1000 + 10 * 1000),
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'ransom_note' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: `C:\\Shares\\${RANSOM_NOTE_FILENAME}`,
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: null,
+      });
       break;
     }
     default:

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
+import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { CloseIncidentDto, LinkAlertsDto, UpdateIncidentStatusDto } from './dto/incident.dto';
@@ -13,11 +14,13 @@ export class IncidentsService {
     private readonly prisma: PrismaService,
     private readonly sessionAccess: SessionAccessService,
     private readonly investigationActions: InvestigationActionsService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async create(sessionId: string, user: AuthenticatedUser, title: string) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const incident = await this.prisma.incident.create({ data: { sessionId, title } });
+    await this.publishStatusChanged(sessionId, incident.id, incident.status);
     return this.toDto(incident.id);
   }
 
@@ -85,6 +88,7 @@ export class IncidentsService {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getIncidentOrThrow(sessionId, incidentId);
     await this.prisma.incident.update({ where: { id: incidentId }, data: { status: dto.status } });
+    await this.publishStatusChanged(sessionId, incidentId, dto.status);
     return this.toDto(incidentId);
   }
 
@@ -132,7 +136,16 @@ export class IncidentsService {
       metadata: { verdict: dto.verdict },
     });
 
+    await this.publishStatusChanged(sessionId, incidentId, 'closed');
     return this.toDto(incidentId);
+  }
+
+  // §16.16: minimal `{ id, status }` payload, exactly the shape the doc specifies for
+  // incident.status_changed — unlike alert.new (which pushes the full DTO so a new row can
+  // render immediately), a status flip is cheap for the client to react to by just refetching
+  // incident detail over REST, keeping REST as the single place that DTO-shapes an incident.
+  private async publishStatusChanged(sessionId: string, incidentId: string, status: string): Promise<void> {
+    await this.realtimeEvents.publish(sessionId, { type: 'incident.status_changed', payload: { id: incidentId, status } });
   }
 
   private async getIncidentOrThrow(sessionId: string, incidentId: string) {

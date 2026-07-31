@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { alertsApi, incidentsApi, sessionApi } from '../api/endpoints';
-import type { Alert, SessionSummary } from '../api/types';
+import { alertsApi, hintsApi, incidentsApi, sessionApi } from '../api/endpoints';
+import { connectSessionSocket } from '../api/realtime';
+import type { Alert, HintItem, SessionSummary } from '../api/types';
 import { SeverityBadge } from '../components/SeverityBadge';
 import { SessionNav } from '../components/Layout';
 
-const POLL_INTERVAL_MS = 3000;
+// Still-active safety net for a missed/never-established WebSocket connection (§17.9) —
+// slower than before the socket existed, since alert.new/alert.updated pushes are now the
+// primary freshness signal, not the only one.
+const FALLBACK_POLL_INTERVAL_MS = 10_000;
 
 export function SessionDashboardPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -19,29 +23,67 @@ export function SessionDashboardPage() {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [dismissReason, setDismissReason] = useState('');
   const [dismissError, setDismissError] = useState<string | null>(null);
+  const [hints, setHints] = useState<HintItem[]>([]);
+  const [hintsOpen, setHintsOpen] = useState(false);
+  const [confirmingHintIndex, setConfirmingHintIndex] = useState<number | null>(null);
+  const [unlockingHintIndex, setUnlockingHintIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    async function poll() {
+    async function refresh() {
       const s = await sessionApi.get(sessionId!);
       if (cancelled) return;
       setSession(s);
       if (s.ready) {
-        const a = await alertsApi.list(sessionId!);
-        if (!cancelled) setAlerts(a);
-      } else {
-        timer = setTimeout(poll, POLL_INTERVAL_MS);
+        const [a, h] = await Promise.all([alertsApi.list(sessionId!), hintsApi.list(sessionId!)]);
+        if (!cancelled) {
+          setAlerts(a);
+          setHints(h);
+        }
       }
     }
+
+    async function poll() {
+      await refresh();
+      if (cancelled) return;
+      // Once ready, this keeps running as the §17.9 fallback in case the socket below
+      // never connects or drops silently — the socket is what makes it feel instant.
+      timer = setTimeout(poll, FALLBACK_POLL_INTERVAL_MS);
+    }
     poll();
+
+    // The Alert Engine publishes one alert.new per alert (§16.16), not one batched
+    // message — a scenario with a dozen alerts fires a dozen messages in the same burst,
+    // so debounce them into a single refetch instead of one REST round-trip per alert.
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const disconnect = connectSessionSocket(sessionId, (message) => {
+      if (message.type === 'alert.new' || message.type === 'alert.updated') {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(refresh, 300);
+      }
+    });
+
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearTimeout(debounceTimer);
+      disconnect();
     };
   }, [sessionId]);
+
+  async function confirmUnlockHint(index: number) {
+    setUnlockingHintIndex(index);
+    try {
+      const updated = await hintsApi.unlock(sessionId!, index);
+      setHints(updated);
+      setConfirmingHintIndex(null);
+    } finally {
+      setUnlockingHintIndex(null);
+    }
+  }
 
   function toggleSelected(alertId: string) {
     setSelected((prev) => {
@@ -114,6 +156,39 @@ export function SessionDashboardPage() {
           </button>
         </div>
       </div>
+
+      {hints.length > 0 && (
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: 10, marginTop: 12, marginBottom: 4 }}>
+          <button onClick={() => setHintsOpen((prev) => !prev)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600 }}>
+            {hintsOpen ? '▾' : '▸'} Hints{' '}
+            <span style={{ fontWeight: 400, color: '#64748b' }}>
+              (stuck? hints cost score, never access — {hints.filter((h) => h.unlocked).length}/{hints.length} unlocked)
+            </span>
+          </button>
+          {hintsOpen && (
+            <ul style={{ marginTop: 10, paddingLeft: 18 }}>
+              {hints.map((hint) => (
+                <li key={hint.index} style={{ marginBottom: 8 }}>
+                  {hint.unlocked ? (
+                    <span>{hint.text}</span>
+                  ) : confirmingHintIndex === hint.index ? (
+                    <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      Unlock this hint for a {hint.unlockCostPercent}% score penalty?
+                      <button disabled={unlockingHintIndex === hint.index} onClick={() => confirmUnlockHint(hint.index)}>
+                        {unlockingHintIndex === hint.index ? 'Unlocking...' : 'Confirm'}
+                      </button>
+                      <button onClick={() => setConfirmingHintIndex(null)}>Cancel</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setConfirmingHintIndex(hint.index)}>Unlock hint (-{hint.unlockCostPercent}%)</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>

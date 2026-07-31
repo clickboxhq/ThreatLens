@@ -10,10 +10,12 @@ import type {
   EmailMessage,
   EvidenceItem,
   FileEvent,
+  HintItem,
   Identity,
   Incident,
   IncidentSummary,
   InstructorFeedbackItem,
+  LeaderboardResult,
   MitreTechniqueRef,
   MyAssignment,
   NetworkEvent,
@@ -22,6 +24,7 @@ import type {
   RosterEntry,
   ScenarioSummary,
   ScoreResult,
+  SessionHistoryItem,
   SessionSummary,
   SignIn,
   TokenResponse,
@@ -47,6 +50,7 @@ export const scenarioApi = {
 export const sessionApi = {
   create: (scenarioId: string, cohortAssignmentId?: string) =>
     api.post<SessionSummary>('/sessions', { scenarioId, cohortAssignmentId }),
+  listMine: () => api.get<SessionHistoryItem[]>('/sessions'),
   get: (sessionId: string) => api.get<SessionSummary>(`/sessions/${sessionId}`),
   submit: (sessionId: string, incidentIds: string[]) =>
     api.post<{ scoringStatus: string }>(`/sessions/${sessionId}/submit`, { incidentIds }),
@@ -141,5 +145,17 @@ export const threatIntelApi = {
   lookup: (sessionId: string, type: string, value: string) =>
     api.get<{ value: string; type: string; reputation: string; actorAttribution: string | null; context: string | null }>(
       `/sessions/${sessionId}/threat-intel?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`,
+    ),
+};
+
+export const hintsApi = {
+  list: (sessionId: string) => api.get<HintItem[]>(`/sessions/${sessionId}/hints`),
+  unlock: (sessionId: string, index: number) => api.post<HintItem[]>(`/sessions/${sessionId}/hints/${index}/unlock`),
+};
+
+export const leaderboardApi = {
+  get: (period: 'weekly' | 'monthly' | 'all_time', scope: 'global' | 'cohort' = 'global', cohortId?: string) =>
+    api.get<LeaderboardResult>(
+      `/leaderboard?period=${period}&scope=${scope}${cohortId ? `&cohortId=${cohortId}` : ''}`,
     ),
 };

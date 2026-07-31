@@ -84,6 +84,30 @@ const MITRE_TECHNIQUES = [
       'Adversaries use common web protocols (typically HTTPS on port 443) for command-and-control traffic so it blends in with legitimate outbound traffic.',
     url: 'https://attack.mitre.org/techniques/T1071/001/',
   },
+  {
+    techniqueId: 'T1021.002',
+    name: 'Remote Services: SMB/Windows Admin Shares',
+    tactic: 'TA0008',
+    description:
+      'Adversaries use valid accounts to interact with a remote host using Windows admin shares over SMB, commonly to install and run a temporary service (e.g. PsExec) as a means of lateral movement.',
+    url: 'https://attack.mitre.org/techniques/T1021/002/',
+  },
+  {
+    techniqueId: 'T1486',
+    name: 'Data Encrypted for Impact',
+    tactic: 'TA0040',
+    description:
+      'Adversaries encrypt data on target systems to interrupt availability, typically as the final stage of a ransomware attack.',
+    url: 'https://attack.mitre.org/techniques/T1486/',
+  },
+  {
+    techniqueId: 'T1114.002',
+    name: 'Email Collection: Remote Email Collection',
+    tactic: 'TA0009',
+    description:
+      'Adversaries with valid credentials access a mailbox remotely (e.g. via IMAP) to collect email content, often using legacy protocols that fall outside modern authentication controls.',
+    url: 'https://attack.mitre.org/techniques/T1114/002/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -141,6 +165,27 @@ const DETECTION_RULES = [
     logicSummary: "parent process image IN (WINWORD.EXE, EXCEL.EXE, OUTLOOK.EXE, POWERPNT.EXE) AND child process image IN (powershell.exe, cmd.exe, wscript.exe, cscript.exe, mshta.exe).",
     defaultSeverity: 'critical' as const,
     mitreTechniqueSlug: 'T1204.002',
+  },
+  {
+    name: 'Device: Remote Service Execution Consistent with Lateral Movement',
+    description: 'Fires when PSEXESVC.exe — the artifact PsExec-style remote execution leaves on a target host — appears in a device process tree.',
+    logicSummary: 'process image_path ends with PSEXESVC.exe.',
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1021.002',
+  },
+  {
+    name: 'Device: Mass File Encryption Detected',
+    description: 'Fires when a device accumulates several file-encrypted events within a short window.',
+    logicSummary: 'count(file_events WHERE action = encrypted) grouped by device_id, occurring within a 15-minute rolling window >= 5.',
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1486',
+  },
+  {
+    name: 'Identity: Legacy Authentication Bypassed Enforced MFA',
+    description: 'Fires when a successful sign-in used a legacy authentication protocol on an identity whose MFA is enforced.',
+    logicSummary: "result = success AND is_legacy_auth = true AND identity.mfa_status = 'enforced', grouped by identity.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1078',
   },
 ];
 
@@ -803,8 +848,161 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'ransomware-lateral-movement-encryption',
+      title: 'Ransomware — Lateral Movement & Mass Encryption',
+      summary:
+        'An IT admin account was used to reach a file server it normally has no business touching. Shortly after, files on that server started disappearing behind a new extension. Investigate both devices to determine what happened.',
+      category: 'ransomware',
+      difficulty: 'advanced',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1021.002', 'T1486'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'ransomware',
+          difficulty: 'advanced',
+          estimated_minutes: 30,
+          narrative_summary:
+            'An attacker already holding a compromised IT admin credential uses it to connect over SMB to a file server, installs a temporary remote-execution service (PsExec-style) to run commands there, then encrypts a batch of shared files and drops a ransom note.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'compromised_admin', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+          ],
+          narrative_devices: [
+            { ref: 'patient_zero_device', attributes: { hostname: 'IT-WKS-04', os_platform: 'windows' } },
+            { ref: 'file_server_device', attributes: { hostname: 'FS-PROD-01', os_platform: 'windows' } },
+          ],
+          decoy_population_size: { identities: 10, devices: 10 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1021.002',
+            entity_ref: 'compromised_admin',
+            device_ref: 'patient_zero_device',
+            event_template_id: 'lateral_movement_source_connection_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'ransomware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1021.002',
+            entity_ref: 'compromised_admin',
+            device_ref: 'file_server_device',
+            event_template_id: 'lateral_movement_remote_exec_v1',
+            relative_timestamp: '+3h5m',
+            correlation_group: 'ransomware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1486',
+            entity_ref: 'compromised_admin',
+            device_ref: 'file_server_device',
+            event_template_id: 'mass_file_encryption_v1',
+            relative_timestamp: '+3h10m',
+            correlation_group: 'ransomware-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1021.002', 'T1486'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check the file server's process tree — is there anything there that shouldn't be, given no one logs into that machine directly?" },
+          { unlock_cost_percent: 10, text: 'PSEXESVC.exe is a well-known artifact of remote command execution tools. Where did the connection that led to it come from?' },
+          { unlock_cost_percent: 15, text: "Look at the file server's File Timeline around the same time — how many files changed, and how fast?" },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'legacy-auth-mfa-bypass',
+      title: 'Legacy Authentication Bypassing Enforced MFA',
+      summary:
+        "An account with MFA enforced kept signing in successfully through an old mail protocol that has never once prompted for a second factor. Determine whether that's a gap being exploited.",
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1078', 'T1114.002'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            'An attacker holding a compromised credential signs in via IMAP4 — a legacy protocol that predates modern MFA challenges — bypassing the identity\'s enforced MFA policy entirely, then repeatedly syncs the mailbox to collect its contents over the following hour.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Financial Analyst', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 14, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'legacy_auth_bypass_signin_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'legacy-auth-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1114.002',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'legacy_auth_mailbox_collection_v1',
+            relative_timestamp: '+4h10m',
+            correlation_group: 'legacy-auth-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legacy_auth_benign_service_v1', count: 3 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1078', 'T1114.002'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this identity's MFA status, then look at its sign-in timeline for anything using an old-sounding client app." },
+          { unlock_cost_percent: 10, text: 'A legacy protocol succeeding on an MFA-enforced account is the gap — Conditional Access policies have to explicitly block legacy auth, or it slips through.' },
+          { unlock_cost_percent: 15, text: 'How many times did it happen, and over what span? A single sync looks different from a sustained collection pattern.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 7 scenarios.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 9 scenarios.`,
   );
 }
 

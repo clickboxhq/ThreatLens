@@ -45,6 +45,18 @@ export const SENSITIVE_ATTACHMENT_FILENAMES = [
 export const MALWARE_DELIVERY_DOMAIN = 'billing-statements-delivery.example.org';
 export const MALWARE_C2_IP = '185.220.101.47';
 export const MALWARE_C2_DOMAIN = 'cdn-update-relay.example.net';
+export const RANSOM_NOTE_FILENAME = 'README_DECRYPT.txt';
+export const SHARED_FILE_PATHS = [
+  'C:\\Shares\\Finance\\Q3_Budget_Forecast.xlsx',
+  'C:\\Shares\\Finance\\Vendor_Contracts_2026.docx',
+  'C:\\Shares\\HR\\Employee_Records_Backup.xlsx',
+  'C:\\Shares\\Engineering\\Source_Archive.zip',
+  'C:\\Shares\\Legal\\NDA_Templates.docx',
+  'C:\\Shares\\Operations\\Inventory_Master.xlsx',
+  'C:\\Shares\\Sales\\Pipeline_Report_Q3.xlsx',
+  'C:\\Shares\\Marketing\\Campaign_Assets.pptx',
+];
+export const FILE_SERVER_IP = '10.20.30.15';
 
 export interface CountryCity {
   country: string;

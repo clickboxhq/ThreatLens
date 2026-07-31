@@ -61,12 +61,46 @@ export function ResultsPage() {
               <td style={{ padding: '8px 0', textAlign: 'right' }}>{value}%</td>
             </tr>
           ))}
+          {score.hintPenaltyPercent > 0 && (
+            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <td style={{ padding: '8px 0' }}>Hint Penalty</td>
+              <td style={{ padding: '8px 0', textAlign: 'right', color: '#dc2626' }}>-{score.hintPenaltyPercent}%</td>
+            </tr>
+          )}
         </tbody>
       </table>
       <p style={{ marginTop: 16, color: '#64748b' }}>
         False positives mishandled: {score.falsePositiveCount} · Time to resolution:{' '}
         {Math.round(score.timeToResolutionSeconds / 60)} minutes
       </p>
+
+      {score.rubricBreakdown.missedTechniques.length > 0 && (
+        <div style={{ marginTop: 24, padding: 12, border: '1px solid #fecaca', borderRadius: 6, background: '#fef2f2' }}>
+          <h3 style={{ margin: '0 0 8px' }}>Techniques You Missed</h3>
+          <ul style={{ margin: 0 }}>
+            {score.rubricBreakdown.missedTechniques.map((t) => (
+              <li key={t.id}>
+                {t.techniqueId} — {t.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {score.rubricBreakdown.missedEvidence.length > 0 && (
+        <div style={{ marginTop: 16, padding: 12, border: '1px solid #fecaca', borderRadius: 6, background: '#fef2f2' }}>
+          <h3 style={{ margin: '0 0 8px' }}>Evidence You Missed ({score.rubricBreakdown.missedEvidence.length})</h3>
+          <ul style={{ margin: 0 }}>
+            {score.rubricBreakdown.missedEvidence.map((e, i) => (
+              <li key={i}>{e.summary}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {score.rubricBreakdown.missedTechniques.length === 0 && score.rubricBreakdown.missedEvidence.length === 0 && (
+        <p style={{ marginTop: 16, color: '#16a34a' }}>You caught every required technique and every piece of ground-truth evidence.</p>
+      )}
     </div>
   );
 }

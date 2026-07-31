@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeScore, ScoringInput } from './scorer';
+import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
 
@@ -82,6 +83,10 @@ export class ScoringService {
       ? Math.round((session.submittedAt.getTime() - session.startedAt.getTime()) / 1000)
       : 0;
 
+    // §12.5: sum of every unlocked hint's authored unlock_cost_percent for this session.
+    const hintUnlocks = await this.prisma.hintUnlock.findMany({ where: { sessionId } });
+    const hintPenaltyPercent = hintUnlocks.reduce((sum, u) => sum + Number(u.unlockCostPercent), 0);
+
     const input: ScoringInput = {
       requiredTechniqueIds: rubric.required_techniques,
       taggedTechniqueIds,
@@ -95,11 +100,32 @@ export class ScoringService {
       containmentMetCount: 0,
       requiredVerdict: rubric.required_verdict,
       submittedVerdicts,
-      hintPenaltyPercent: 0,
+      hintPenaltyPercent,
       timeToResolutionSeconds,
     };
 
     const breakdown = computeScore(input);
+
+    // §2.12: "a Student needs to see specifically which evidence they missed and which
+    // technique tags were wrong to actually learn from an attempt, not just know they
+    // scored 61%." Computed once here (not recomputed on every results-screen read) and
+    // stored alongside the rubric breakdown, through the same Student-safe DTOs every other
+    // evidence display uses (§18.3) — never raw ground-truth rows.
+    const missedTechniqueSlugs = rubric.required_techniques.filter((t) => !taggedTechniqueIds.includes(t));
+    const missedTechniques = missedTechniqueSlugs.length
+      ? await this.prisma.mitreTechnique.findMany({ where: { techniqueId: { in: missedTechniqueSlugs } } })
+      : [];
+
+    const missedEvidenceRefs = await this.findMissedGroundTruthEvidence(sessionId, pinnedEventIds);
+    const missedEvidence = await Promise.all(
+      missedEvidenceRefs.map((ref) => summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId)),
+    );
+
+    const rubricBreakdown = {
+      ...breakdown,
+      missedTechniques: missedTechniques.map((t) => ({ id: t.id, techniqueId: t.techniqueId, name: t.name })),
+      missedEvidence: missedEvidence.map((e) => ({ eventTable: e.eventTable, summary: e.summary })),
+    };
 
     await this.prisma.$transaction([
       this.prisma.score.upsert({
@@ -117,7 +143,7 @@ export class ScoringService {
           hintPenaltyPercent: input.hintPenaltyPercent,
           timeToResolutionSeconds,
           verdictCorrect: breakdown.verdictCorrect,
-          rubricBreakdown: breakdown as unknown as object,
+          rubricBreakdown: rubricBreakdown as unknown as object,
         },
         update: {
           overallPercent: breakdown.overallPercent,
@@ -128,7 +154,7 @@ export class ScoringService {
           hintPenaltyPercent: input.hintPenaltyPercent,
           timeToResolutionSeconds,
           verdictCorrect: breakdown.verdictCorrect,
-          rubricBreakdown: breakdown as unknown as object,
+          rubricBreakdown: rubricBreakdown as unknown as object,
           scoredAt: new Date(),
         },
       }),
@@ -166,5 +192,60 @@ export class ScoringService {
     );
 
     return counts.reduce((sum, count) => sum + count, 0);
+  }
+
+  // Mirrors groundTruthCounters above — same "add a new table here too" maintenance note
+  // applies, since a missed table would silently vanish from the debrief instead of the
+  // recall score.
+  private readonly missedEvidenceFinders: Record<string, (sessionId: string, excludeIds: string[]) => Promise<string[]>> = {
+    email_messages: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.emailMessage.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    sign_in_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.signInEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    process_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.processEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    file_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.fileEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    network_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.networkEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+  };
+
+  private async findMissedGroundTruthEvidence(
+    sessionId: string,
+    pinnedEventIds: Set<string>,
+  ): Promise<{ eventTable: string; eventId: string }[]> {
+    const excludeIds = [...pinnedEventIds];
+    const results = await Promise.all(
+      Object.entries(this.missedEvidenceFinders).map(async ([eventTable, find]) => {
+        const ids = await find(sessionId, excludeIds);
+        return ids.map((eventId) => ({ eventTable, eventId }));
+      }),
+    );
+    return results.flat();
   }
 }

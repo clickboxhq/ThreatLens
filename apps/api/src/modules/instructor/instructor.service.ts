@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { CreateAssignmentDto, CreateCohortDto, SubmitInstructorFeedbackDto } from './dto/instructor.dto';
@@ -9,7 +10,10 @@ const JOIN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1 —
 
 @Injectable()
 export class InstructorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeEvents: RealtimeEventsService,
+  ) {}
 
   async createCohort(user: AuthenticatedUser, dto: CreateCohortDto) {
     const cohort = await this.prisma.cohort.create({
@@ -145,6 +149,16 @@ export class InstructorService {
           ]
         : []),
     ]);
+
+    if (reopenSession) {
+      // §16.16: the whole point of pushing this one — an instructor reopening an incident
+      // while the Student might be sitting on that exact page is the concrete scenario this
+      // feature exists for, not a hypothetical (§2.15's reopen action, §5.10).
+      await this.realtimeEvents.publish(incident.sessionId, {
+        type: 'incident.status_changed',
+        payload: { id: incidentId, status: 'reopened' },
+      });
+    }
 
     return this.listFeedback(incidentId);
   }

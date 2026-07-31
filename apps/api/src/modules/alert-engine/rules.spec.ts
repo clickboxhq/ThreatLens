@@ -1,8 +1,11 @@
 import { randomUUID } from 'crypto';
-import type { Device, EmailAttachment, EmailMessage, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
+import type { Device, EmailAttachment, EmailMessage, FileEvent, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import {
   correlateCandidates,
   evaluateImpossibleTravelRule,
+  evaluateLateralMovementRule,
+  evaluateLegacyAuthBypassRule,
+  evaluateMassEncryptionRule,
   evaluateMfaFatigueRule,
   evaluateNewCountryRule,
   evaluateOutboundPersonalEmailRule,
@@ -26,6 +29,7 @@ function identity(overrides: Partial<Identity> = {}): Identity {
     isPrivileged: false,
     homeCountry: 'US',
     isGroundTruthActor: true,
+    ...overrides,
   } as Identity;
 }
 
@@ -111,6 +115,24 @@ function processEvent(deviceId: string, overrides: Partial<ProcessEvent> = {}): 
     identityId: null,
     ...overrides,
   } as ProcessEvent;
+}
+
+function fileEvent(deviceId: string, overrides: Partial<FileEvent> = {}): FileEvent {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date(),
+    correlationId: null,
+    raw: {},
+    isGroundTruthEvidence: true,
+    mitreTechniqueId: null,
+    deviceId,
+    action: 'created',
+    filePath: 'C:\\Shares\\Finance\\report.xlsx',
+    hashSha256: 'a'.repeat(64),
+    processGuid: null,
+    ...overrides,
+  } as FileEvent;
 }
 
 function attachment(emailMessageId: string, overrides: Partial<EmailAttachment> = {}): EmailAttachment {
@@ -379,6 +401,116 @@ describe('evaluateSuspiciousProcessRule (§8.2, §10.3)', () => {
     const child = processEvent(dev.id, { parentProcessGuid: parentGuid, imagePath: 'C:\\Windows\\System32\\notepad.exe' });
 
     expect(evaluateSuspiciousProcessRule([parent, child], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateLateralMovementRule (§8.2, §10.3)', () => {
+  it('fires when PSEXESVC.exe appears, citing the parent and any children it spawned', () => {
+    const dev = device();
+    const scmGuid = randomUUID();
+    const psexecGuid = randomUUID();
+    const scm = processEvent(dev.id, { processGuid: scmGuid, imagePath: 'C:\\Windows\\System32\\services.exe' });
+    const psexecsvc = processEvent(dev.id, {
+      processGuid: psexecGuid,
+      parentProcessGuid: scmGuid,
+      imagePath: 'C:\\Windows\\PSEXESVC.exe',
+    });
+    const remoteCmd = processEvent(dev.id, {
+      parentProcessGuid: psexecGuid,
+      imagePath: 'C:\\Windows\\System32\\cmd.exe',
+      commandLine: 'cmd.exe /c whoami',
+    });
+
+    const candidates = evaluateLateralMovementRule([scm, psexecsvc, remoteCmd], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].primaryEntityId).toBe(dev.id);
+    expect(candidates[0].evidenceRefs).toHaveLength(3);
+  });
+
+  it('does not fire when no PSEXESVC.exe process exists', () => {
+    const dev = device();
+    const ordinary = processEvent(dev.id, { imagePath: 'C:\\Windows\\System32\\notepad.exe' });
+    expect(evaluateLateralMovementRule([ordinary], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateMassEncryptionRule (§8.2, §10.5)', () => {
+  it('fires once for a device with >= 5 encrypted files within the window, citing every file', () => {
+    const dev = device();
+    const base = new Date();
+    const events = Array.from({ length: 6 }, (_, i) =>
+      fileEvent(dev.id, { action: 'encrypted', occurredAt: new Date(base.getTime() + i * 20 * 1000) }),
+    );
+
+    const candidates = evaluateMassEncryptionRule(events, [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+  });
+
+  it('does not fire below the threshold', () => {
+    const dev = device();
+    const events = Array.from({ length: 3 }, () => fileEvent(dev.id, { action: 'encrypted' }));
+    expect(evaluateMassEncryptionRule(events, [dev])).toHaveLength(0);
+  });
+
+  it('does not fire when files are merely created, not encrypted', () => {
+    const dev = device();
+    const events = Array.from({ length: 6 }, () => fileEvent(dev.id, { action: 'created' }));
+    expect(evaluateMassEncryptionRule(events, [dev])).toHaveLength(0);
+  });
+
+  it('does not count encrypted files outside the rolling window toward the same cluster', () => {
+    const dev = device();
+    const base = new Date();
+    const cluster = Array.from({ length: 4 }, (_, i) =>
+      fileEvent(dev.id, { action: 'encrypted', occurredAt: new Date(base.getTime() + i * 20 * 1000) }),
+    );
+    const farLater = fileEvent(dev.id, {
+      action: 'encrypted',
+      occurredAt: new Date(base.getTime() + 60 * 60 * 1000),
+    });
+    expect(evaluateMassEncryptionRule([...cluster, farLater], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateLegacyAuthBypassRule (§8.2, §9)', () => {
+  it('fires on a successful legacy-auth sign-in for an MFA-enforced identity', () => {
+    const victim = identity({ mfaStatus: 'enforced' });
+    const bypass = signIn(victim.id, { isLegacyAuth: true, result: 'success', clientApp: 'IMAP4' });
+
+    const candidates = evaluateLegacyAuthBypassRule([bypass], [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityId).toBe(victim.id);
+    expect(candidates[0].evidenceRefs).toHaveLength(1);
+  });
+
+  it('groups multiple legacy-auth successes for the same identity into one alert', () => {
+    const victim = identity({ mfaStatus: 'enforced' });
+    const events = Array.from({ length: 5 }, () => signIn(victim.id, { isLegacyAuth: true, result: 'success' }));
+
+    const candidates = evaluateLegacyAuthBypassRule(events, [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs).toHaveLength(5);
+  });
+
+  it('does not fire when MFA is not enforced on the identity', () => {
+    const victim = identity({ mfaStatus: 'registered_not_enforced' });
+    const legacySignIn = signIn(victim.id, { isLegacyAuth: true, result: 'success' });
+    expect(evaluateLegacyAuthBypassRule([legacySignIn], [victim])).toHaveLength(0);
+  });
+
+  it('does not fire on a modern-auth sign-in even on an MFA-enforced identity', () => {
+    const victim = identity({ mfaStatus: 'enforced' });
+    const modernSignIn = signIn(victim.id, { isLegacyAuth: false, result: 'success' });
+    expect(evaluateLegacyAuthBypassRule([modernSignIn], [victim])).toHaveLength(0);
+  });
+
+  it('does not fire on a failed legacy-auth attempt', () => {
+    const victim = identity({ mfaStatus: 'enforced' });
+    const failedLegacy = signIn(victim.id, { isLegacyAuth: true, result: 'failure' });
+    expect(evaluateLegacyAuthBypassRule([failedLegacy], [victim])).toHaveLength(0);
   });
 });
 

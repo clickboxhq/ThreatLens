@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { alertsApi, incidentsApi, mitreApi } from '../api/endpoints';
+import { connectSessionSocket } from '../api/realtime';
 import type { Alert, AnalystNote, EvidenceItem, Incident, InstructorFeedbackItem, MitreTechniqueRef } from '../api/types';
 import { ApiError } from '../api/client';
 import { SessionNav } from '../components/Layout';
@@ -60,6 +61,19 @@ export function IncidentWorkspacePage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, incidentId]);
+
+  useEffect(() => {
+    if (!sessionId || !incidentId) return;
+    // §16.16: an instructor reopening this exact incident while the Student is sitting on
+    // this page is the concrete case this exists for — refetch rather than trust the
+    // pushed payload, so the UI picks up the new status, feedback, and re-openable form.
+    return connectSessionSocket(sessionId, (message) => {
+      if (message.type === 'incident.status_changed' && message.payload.id === incidentId) {
+        load();
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, incidentId]);
 

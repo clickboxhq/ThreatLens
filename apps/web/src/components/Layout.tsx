@@ -28,6 +28,12 @@ export function AppLayout() {
               <Link to="/catalog" style={{ color: '#334155' }}>
                 Catalog
               </Link>
+              <Link to="/progress" style={{ color: '#334155' }}>
+                Progress
+              </Link>
+              <Link to="/leaderboard" style={{ color: '#334155' }}>
+                Leaderboard
+              </Link>
               <Link to="/cohorts/join" style={{ color: '#334155' }}>
                 Join Cohort
               </Link>

@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
+import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { toStudentAlertDto } from '../../common/dto/alert.dto';
-import { toStudentEmailDto } from '../../common/dto/email.dto';
-import { toStudentSignInDto } from '../../common/dto/sign-in.dto';
+import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { UpdateAlertStatusDto } from './dto/dismiss-alert.dto';
 import type { AlertSeverity, AlertStatus, Prisma } from '@prisma/client';
@@ -16,6 +16,7 @@ export class AlertsService {
     private readonly prisma: PrismaService,
     private readonly sessionAccess: SessionAccessService,
     private readonly investigationActions: InvestigationActionsService,
+    private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
   async list(sessionId: string, user: AuthenticatedUser, filters: { severity?: AlertSeverity; status?: AlertStatus }) {
@@ -46,32 +47,7 @@ export class AlertsService {
     });
 
     const evidence = await Promise.all(
-      alert.evidenceRefs.map(async (ref) => {
-        if (ref.eventTable === 'email_messages') {
-          const email = await this.prisma.emailMessage.findUnique({
-            where: { id: ref.eventId },
-            include: { attachments: true, urls: true },
-          });
-          return {
-            eventTable: ref.eventTable,
-            eventId: ref.eventId,
-            occurredAt: email?.occurredAt,
-            summary: email ? `Email from "${email.senderAddress}": "${email.subject}"` : 'Event no longer available.',
-            detail: email ? toStudentEmailDto(email) : null,
-          };
-        }
-        if (ref.eventTable === 'sign_in_events') {
-          const event = await this.prisma.signInEvent.findUnique({ where: { id: ref.eventId } });
-          return {
-            eventTable: ref.eventTable,
-            eventId: ref.eventId,
-            occurredAt: event?.occurredAt,
-            summary: event ? `Sign-in from ${event.sourceCity}, ${event.sourceCountry} to "${event.application}"` : 'Event no longer available.',
-            detail: event ? toStudentSignInDto(event) : null,
-          };
-        }
-        return { eventTable: ref.eventTable, eventId: ref.eventId, summary: 'Unknown event type.', detail: null };
-      }),
+      alert.evidenceRefs.map((ref) => summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId)),
     );
 
     return { alertId, evidence };
@@ -100,6 +76,8 @@ export class AlertsService {
       metadata: dto.status === 'dismissed' ? { dismissalReason: dto.dismissalReason } : undefined,
     });
 
-    return toStudentAlertDto(updated);
+    const updatedDto = toStudentAlertDto(updated);
+    await this.realtimeEvents.publish(sessionId, { type: 'alert.updated', payload: updatedDto });
+    return updatedDto;
   }
 }
