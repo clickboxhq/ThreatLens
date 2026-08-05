@@ -13,8 +13,11 @@ import {
   evaluateNewCountryRule,
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
+  evaluatePersistenceArtifactRule,
   evaluateSpfFailRule,
+  evaluateSuspiciousCloudActionRule,
   evaluateSuspiciousProcessRule,
+  evaluateWebShellAccessRule,
   IMPOSSIBLE_TRAVEL_RULE_NAME,
   LATERAL_MOVEMENT_RULE_NAME,
   LEGACY_AUTH_BYPASS_RULE_NAME,
@@ -23,8 +26,11 @@ import {
   NEW_COUNTRY_RULE_NAME,
   OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
   PASSWORD_SPRAY_RULE_NAME,
+  PERSISTENCE_ARTIFACT_RULE_NAME,
   SPF_FAIL_RULE_NAME,
+  SUSPICIOUS_CLOUD_ACTION_RULE_NAME,
   SUSPICIOUS_PROCESS_RULE_NAME,
+  WEBSHELL_ACCESS_RULE_NAME,
 } from './rules';
 
 @Injectable()
@@ -51,6 +57,8 @@ export class AlertEngineService {
       identities,
       processEvents,
       fileEvents,
+      cloudEvents,
+      httpRequests,
       devices,
       spfRule,
       newCountryRule,
@@ -62,6 +70,9 @@ export class AlertEngineService {
       lateralMovementRule,
       massEncryptionRule,
       legacyAuthBypassRule,
+      suspiciousCloudActionRule,
+      webShellAccessRule,
+      persistenceArtifactRule,
     ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
       this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
@@ -69,6 +80,8 @@ export class AlertEngineService {
       this.prisma.identity.findMany({ where: { sessionId } }),
       this.prisma.processEvent.findMany({ where: { sessionId } }),
       this.prisma.fileEvent.findMany({ where: { sessionId } }),
+      this.prisma.cloudEvent.findMany({ where: { sessionId } }),
+      this.prisma.httpRequest.findMany({ where: { sessionId } }),
       this.prisma.device.findMany({ where: { sessionId } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SPF_FAIL_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: NEW_COUNTRY_RULE_NAME } }),
@@ -80,6 +93,9 @@ export class AlertEngineService {
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: LATERAL_MOVEMENT_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: MASS_ENCRYPTION_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: LEGACY_AUTH_BYPASS_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SUSPICIOUS_CLOUD_ACTION_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: WEBSHELL_ACCESS_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: PERSISTENCE_ARTIFACT_RULE_NAME } }),
     ]);
 
     const allCandidates: AlertCandidate[] = [
@@ -93,6 +109,9 @@ export class AlertEngineService {
       ...evaluateLateralMovementRule(processEvents, devices),
       ...evaluateMassEncryptionRule(fileEvents, devices),
       ...evaluateLegacyAuthBypassRule(signIns, identities),
+      ...evaluateSuspiciousCloudActionRule(cloudEvents, identities),
+      ...evaluateWebShellAccessRule(httpRequests, devices),
+      ...evaluatePersistenceArtifactRule(fileEvents, devices),
     ];
     const links = correlateCandidates(allCandidates);
 
@@ -107,6 +126,8 @@ export class AlertEngineService {
     for (const e of signIns) groundTruthByKey.set(`sign_in_events:${e.id}`, e.isGroundTruthEvidence);
     for (const e of processEvents) groundTruthByKey.set(`process_events:${e.id}`, e.isGroundTruthEvidence);
     for (const e of fileEvents) groundTruthByKey.set(`file_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of cloudEvents) groundTruthByKey.set(`cloud_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of httpRequests) groundTruthByKey.set(`http_requests:${e.id}`, e.isGroundTruthEvidence);
     const isFalsePositiveByDesign = (candidate: AlertCandidate) =>
       candidate.evidenceRefs.length > 0 &&
       candidate.evidenceRefs.every((ref) => groundTruthByKey.get(`${ref.eventTable}:${ref.eventId}`) === false);
@@ -122,6 +143,9 @@ export class AlertEngineService {
       [LATERAL_MOVEMENT_RULE_NAME, lateralMovementRule],
       [MASS_ENCRYPTION_RULE_NAME, massEncryptionRule],
       [LEGACY_AUTH_BYPASS_RULE_NAME, legacyAuthBypassRule],
+      [SUSPICIOUS_CLOUD_ACTION_RULE_NAME, suspiciousCloudActionRule],
+      [WEBSHELL_ACCESS_RULE_NAME, webShellAccessRule],
+      [PERSISTENCE_ARTIFACT_RULE_NAME, persistenceArtifactRule],
     ]);
 
     const createdAlerts = await this.prisma.$transaction(

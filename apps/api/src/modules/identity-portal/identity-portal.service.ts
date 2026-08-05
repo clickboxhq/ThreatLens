@@ -5,6 +5,7 @@ import { InvestigationActionsService } from '../session-core/investigation-actio
 import { AppException } from '../../common/exceptions/app-exception';
 import { toStudentIdentityDto } from '../../common/dto/identity.dto';
 import { toStudentSignInDto } from '../../common/dto/sign-in.dto';
+import { toStudentCloudEventDto } from '../../common/dto/cloud.dto';
 import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { IdentityRiskLevel, MfaStatus, Prisma, SignInResult } from '@prisma/client';
@@ -95,5 +96,17 @@ export class IdentityPortalService {
     });
 
     return filters.riskyOnly ? withDistance.filter((e) => riskyAlertEntityIds.has(e.id)) : withDistance;
+  }
+
+  async getCloudEvents(sessionId: string, identityId: string, user: AuthenticatedUser) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const identity = await this.prisma.identity.findFirst({ where: { id: identityId, sessionId } });
+    if (!identity) throw new AppException(404, 'NOT_FOUND', 'Identity not found.');
+
+    const events = await this.prisma.cloudEvent.findMany({
+      where: { sessionId, identityId },
+      orderBy: { occurredAt: 'asc' },
+    });
+    return events.map(toStudentCloudEventDto);
   }
 }

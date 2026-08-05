@@ -58,6 +58,25 @@ export const SHARED_FILE_PATHS = [
 ];
 export const FILE_SERVER_IP = '10.20.30.15';
 
+// ---------- Malware — fileless persistence (§1.8) ----------
+export const FILELESS_MALWARE_COMMAND_LINE =
+  'powershell.exe -NoProfile -WindowStyle Hidden -EncodedCommand JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBTAG8AYwBrAGUAdABzAC4AVABDAFAAQwBsAGkAZQBuAHQA';
+export const MALWARE_PERSISTENCE_STARTUP_PATH =
+  'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WinSvcHelper.lnk';
+export const LEGITIMATE_STARTUP_SHORTCUT_PATH =
+  'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive.lnk';
+
+// ---------- Cloud & Web (§1.8, §6.12.6, §6.12.8) ----------
+export const CLOUD_STORAGE_BUCKET = 'contoso-finance-prod-backups';
+export const CLOUD_CONSOLE_APPLICATION = 'AWS Management Console';
+export const CLOUD_LEGITIMATE_ACTION_NAMES = ['ConsoleLogin', 'DescribeInstances', 'ListBuckets', 'GetCallerIdentity'];
+export const WEB_SERVER_HOSTNAME = 'WEB-PROD-01';
+export const WEBSHELL_PATH = '/uploads/images/x7f2a9c.php';
+export const LEGITIMATE_SCRIPT_PATH = '/api/health-check.php';
+export const NON_BROWSER_USER_AGENTS = ['curl/7.88.1', 'python-requests/2.31.0', 'Wget/1.21.3'];
+export const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+export const MONITORING_USER_AGENT = 'curl/7.88.1';
+
 export interface CountryCity {
   country: string;
   city: string;

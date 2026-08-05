@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeScore, ScoringInput } from './scorer';
 import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
+import { CertificatesService } from '../learning/certificates.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
 
@@ -15,7 +16,10 @@ interface ScoringRubric {
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly certificatesService: CertificatesService,
+  ) {}
 
   /** §12.4: fetches the facts computeScore needs, scores the session, and persists it. */
   async scoreSession(sessionId: string): Promise<void> {
@@ -48,15 +52,31 @@ export class ScoringService {
     ];
     const submittedVerdicts = closedIncidents.map((i) => i.verdict).filter((v): v is IncidentVerdict => Boolean(v));
 
-    const [groundTruthEmails, groundTruthSignIns, groundTruthProcesses, groundTruthFiles, groundTruthNetwork] = await Promise.all([
+    const [
+      groundTruthEmails,
+      groundTruthSignIns,
+      groundTruthProcesses,
+      groundTruthFiles,
+      groundTruthNetwork,
+      groundTruthCloud,
+      groundTruthHttp,
+    ] = await Promise.all([
       this.prisma.emailMessage.count({ where: { sessionId, isGroundTruthEvidence: true } }),
       this.prisma.signInEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
       this.prisma.processEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
       this.prisma.fileEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
       this.prisma.networkEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.cloudEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.httpRequest.count({ where: { sessionId, isGroundTruthEvidence: true } }),
     ]);
     const totalGroundTruthEvidenceCount =
-      groundTruthEmails + groundTruthSignIns + groundTruthProcesses + groundTruthFiles + groundTruthNetwork;
+      groundTruthEmails +
+      groundTruthSignIns +
+      groundTruthProcesses +
+      groundTruthFiles +
+      groundTruthNetwork +
+      groundTruthCloud +
+      groundTruthHttp;
 
     const pinnedEvidence = closedIncidents.flatMap((i) => i.evidenceCollection);
     const pinnedTotalEvidenceCount = pinnedEvidence.length;
@@ -161,6 +181,11 @@ export class ScoringService {
       this.prisma.investigationSession.update({ where: { id: sessionId }, data: { status: 'scored' } }),
     ]);
 
+    // §13.4: after every scoring run, not just the first — a retry that finally clears a
+    // learning path's threshold should issue the certificate then, not only on the attempt
+    // that happened to be the one that pushed a scenario's best score over the bar.
+    await this.certificatesService.checkAndIssueForScenario(session.userId, session.scenarioId);
+
     this.logger.log(`Scored session ${sessionId}: ${breakdown.overallPercent}%`);
   }
 
@@ -174,6 +199,8 @@ export class ScoringService {
     process_events: (ids) => this.prisma.processEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
     file_events: (ids) => this.prisma.fileEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
     network_events: (ids) => this.prisma.networkEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    cloud_events: (ids) => this.prisma.cloudEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+    http_requests: (ids) => this.prisma.httpRequest.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
   };
 
   private async countGroundTruthAmong(pinnedEvidence: { eventTable: string; eventId: string }[]): Promise<number> {
@@ -229,6 +256,20 @@ export class ScoringService {
     network_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.networkEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    cloud_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.cloudEvent.findMany({
+          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    http_requests: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.httpRequest.findMany({
           where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
           select: { id: true },
         })

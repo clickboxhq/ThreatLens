@@ -46,19 +46,27 @@ model Organization {
 }
 
 model User {
-  id              String     @id @default(uuid()) @db.Uuid
-  orgId           String?    @map("org_id") @db.Uuid
-  email           String     @unique @db.Citext
-  passwordHash    String?    @map("password_hash")
-  role            UserRole   @default(student)
-  displayName     String     @map("display_name")
-  status          UserStatus @default(active)
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  sessionVersion  Int        @default(1) @map("session_version")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  deletedAt       DateTime?  @map("deleted_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  id                   String     @id @default(uuid()) @db.Uuid
+  orgId                String?    @map("org_id") @db.Uuid
+  email                String     @unique @db.Citext
+  passwordHash         String?    @map("password_hash")
+  role                 UserRole   @default(student)
+  displayName          String     @map("display_name")
+  status               UserStatus @default(active)
+  emailVerifiedAt      DateTime?  @map("email_verified_at")
+  sessionVersion       Int        @default(1) @map("session_version")
+  lastLoginAt          DateTime?  @map("last_login_at")
+  // §15.1: TOTP-based MFA. mfaSecret is written at /auth/mfa/setup (pending) and only takes
+  // effect once mfaEnabled flips true at /auth/mfa/enable. Recovery codes are stored hashed
+  // (sha256) and consumed one-time, same spirit as the recovery-code pattern used elsewhere
+  // (§15.3 scopes app-layer field encryption to sso_config/payment tokens, not this table,
+  // so mfaSecret relies on disk-level encryption like the rest of the schema).
+  mfaEnabled           Boolean    @default(false) @map("mfa_enabled")
+  mfaSecret            String?    @map("mfa_secret")
+  mfaRecoveryCodesHash String[]   @default([]) @map("mfa_recovery_codes_hash")
+  deletedAt            DateTime?  @map("deleted_at")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
   organization          Organization?              @relation(fields: [orgId], references: [id])
   refreshTokens         RefreshToken[]
@@ -72,6 +80,7 @@ model User {
   cohortEnrollments     CohortEnrollment[]         @relation("CohortEnrollments")
   createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
   instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
+  certificates          Certificate[]
 
   @@map("users")
 }
@@ -220,11 +229,12 @@ model AttackScenario {
   createdAt        DateTime           @default(now()) @map("created_at")
   updatedAt        DateTime           @updatedAt @map("updated_at")
 
-  author            User                       @relation("ScenarioAuthor", fields: [authorId], references: [id])
-  currentVersion    ScenarioVersion?           @relation("CurrentVersion", fields: [currentVersionId], references: [id])
-  versions          ScenarioVersion[]          @relation("ScenarioVersions")
-  sessions          InvestigationSession[]
-  cohortAssignments CohortScenarioAssignment[]
+  author                User                       @relation("ScenarioAuthor", fields: [authorId], references: [id])
+  currentVersion        ScenarioVersion?           @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions              ScenarioVersion[]          @relation("ScenarioVersions")
+  sessions              InvestigationSession[]
+  cohortAssignments     CohortScenarioAssignment[]
+  learningPathScenarios LearningPathScenario[]
 
   @@map("attack_scenarios")
 }
@@ -293,6 +303,8 @@ model InvestigationSession {
   processEvents        ProcessEvent[]
   fileEvents           FileEvent[]
   networkEvents        NetworkEvent[]
+  cloudEvents          CloudEvent[]
+  httpRequests         HttpRequest[]
   emailMessages        EmailMessage[]
   alerts               Alert[]
   incidents            Incident[]
@@ -349,6 +361,7 @@ model Identity {
   signInEvents           SignInEvent[]
   processEvents          ProcessEvent[]
   conditionalAccessEvals ConditionalAccessEvaluation[]
+  cloudEvents            CloudEvent[]
 
   @@index([sessionId])
   @@map("identities")
@@ -398,6 +411,7 @@ model Device {
   processEvents   ProcessEvent[]
   fileEvents      FileEvent[]
   networkEvents   NetworkEvent[]
+  httpRequests    HttpRequest[]
 
   @@index([sessionId])
   @@map("devices")
@@ -528,6 +542,63 @@ model NetworkEvent {
 
   @@index([sessionId, deviceId])
   @@map("network_events")
+}
+
+enum CloudProvider {
+  aws_style
+  azure_style
+  saas
+}
+
+// §6.12.8/§1.8: identity-scoped cloud control-plane activity (IAM/API-level actions), not
+// device-scoped — the same shape as sign_in_events but for cloud-provider API calls rather
+// than authentication events.
+model CloudEvent {
+  id                    String        @id @default(uuid()) @db.Uuid
+  sessionId             String        @map("session_id") @db.Uuid
+  occurredAt            DateTime      @map("occurred_at")
+  correlationId         String?       @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean       @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?       @map("mitre_technique_id") @db.Uuid
+  identityId            String        @map("identity_id") @db.Uuid
+  provider              CloudProvider
+  actionName            String        @map("action_name")
+  resourceId            String?       @map("resource_id")
+  sourceIp              String        @map("source_ip")
+
+  session  InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  identity Identity             @relation(fields: [identityId], references: [id])
+
+  @@index([sessionId, identityId])
+  @@map("cloud_events")
+}
+
+// §6.12.6/§1.8: device-scoped (the web server) HTTP access log, for webshell-access and
+// injection-attempt investigation narratives. `identityId` mirrors the doc's schema (a
+// request can also be attributable to an authenticated identity) but is unused by the
+// current scenario library — every http_request here is device-scoped only.
+model HttpRequest {
+  id                    String   @id @default(uuid()) @db.Uuid
+  sessionId             String   @map("session_id") @db.Uuid
+  occurredAt            DateTime @map("occurred_at")
+  correlationId         String?  @map("correlation_id") @db.Uuid
+  raw                   Json
+  isGroundTruthEvidence Boolean  @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?  @map("mitre_technique_id") @db.Uuid
+  deviceId              String?  @map("device_id") @db.Uuid
+  identityId            String?  @map("identity_id") @db.Uuid
+  method                String
+  url                   String
+  userAgent             String   @map("user_agent")
+  statusCode            Int      @map("status_code")
+  sourceIp              String   @map("source_ip")
+
+  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device  Device?              @relation(fields: [deviceId], references: [id])
+
+  @@index([sessionId, deviceId])
+  @@map("http_requests")
 }
 
 enum EmailDirection {
@@ -887,4 +958,72 @@ model HintUnlock {
 
   @@unique([sessionId, hintIndex])
   @@map("hint_unlocks")
+}
+
+// ---------- Learning Platform (§13, §6.18, §6.21) ----------
+
+enum CareerTrack {
+  soc_analyst
+  blue_team
+}
+
+model Course {
+  id          String      @id @default(uuid()) @db.Uuid
+  slug        String      @unique
+  title       String
+  description String
+  careerTrack CareerTrack @map("career_track")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  learningPaths LearningPath[]
+
+  @@map("courses")
+}
+
+model LearningPath {
+  id                   String   @id @default(uuid()) @db.Uuid
+  slug                 String   @unique
+  courseId             String   @map("course_id") @db.Uuid
+  title                String
+  passThresholdPercent Decimal  @map("pass_threshold_percent") @db.Decimal(5, 2)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  course       Course                 @relation(fields: [courseId], references: [id])
+  scenarios    LearningPathScenario[]
+  certificates Certificate[]
+
+  @@map("learning_paths")
+}
+
+model LearningPathScenario {
+  learningPathId String @map("learning_path_id") @db.Uuid
+  scenarioId     String @map("scenario_id") @db.Uuid
+  sortOrder      Int    @map("sort_order")
+
+  learningPath LearningPath   @relation(fields: [learningPathId], references: [id])
+  scenario     AttackScenario @relation(fields: [scenarioId], references: [id])
+
+  @@id([learningPathId, scenarioId])
+  @@map("learning_path_scenarios")
+}
+
+// §6.18/§2.18. Deliberately no `pdf_object_key`/object-storage pipeline here — the public
+// verification page (§16.15 `/public/verify/{id}`) itself is the shareable artifact; a
+// server-rendered downloadable PDF is a real but separable piece of work this scope skips
+// (would need a headless-browser rendering dependency with no other use in the codebase).
+model Certificate {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  learningPathId String    @map("learning_path_id") @db.Uuid
+  issuedAt       DateTime  @default(now()) @map("issued_at")
+  scoreSnapshot  Json      @map("score_snapshot")
+  revokedAt      DateTime? @map("revoked_at")
+
+  user         User         @relation(fields: [userId], references: [id])
+  learningPath LearningPath @relation(fields: [learningPathId], references: [id])
+
+  @@unique([userId, learningPathId])
+  @@map("certificates")
 }

@@ -56,6 +56,15 @@ export class DevicePortalController {
     return this.service.getNetwork(sessionId, id, user);
   }
 
+  @Get(':id/http-requests')
+  async getHttpRequests(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getHttpRequests(sessionId, id, user);
+  }
+
   @Get(':id/timeline')
   async getTimeline(
     @CurrentUser() user: AuthenticatedUser,

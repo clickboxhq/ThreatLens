@@ -7,6 +7,7 @@ import {
   StudentProcessEventDto,
   toStudentDeviceDto,
   toStudentFileEventDto,
+  toStudentHttpRequestDto,
   toStudentNetworkEventDto,
   toStudentProcessEventDto,
 } from '../../common/dto/device.dto';
@@ -97,19 +98,31 @@ export class DevicePortalService {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getDeviceOrThrow(sessionId, deviceId);
 
-    const [processes, files, network] = await Promise.all([
+    const [processes, files, network, http] = await Promise.all([
       this.prisma.processEvent.findMany({ where: { sessionId, deviceId } }),
       this.prisma.fileEvent.findMany({ where: { sessionId, deviceId } }),
       this.prisma.networkEvent.findMany({ where: { sessionId, deviceId } }),
+      this.prisma.httpRequest.findMany({ where: { sessionId, deviceId } }),
     ]);
 
     const timeline = [
       ...processes.map((e) => ({ entityType: 'process_event' as const, occurredAt: e.occurredAt, data: toStudentProcessEventDto(e) })),
       ...files.map((e) => ({ entityType: 'file_event' as const, occurredAt: e.occurredAt, data: toStudentFileEventDto(e) })),
       ...network.map((e) => ({ entityType: 'network_event' as const, occurredAt: e.occurredAt, data: toStudentNetworkEventDto(e) })),
+      ...http.map((e) => ({ entityType: 'http_request' as const, occurredAt: e.occurredAt, data: toStudentHttpRequestDto(e) })),
     ].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
 
     return { timeline };
+  }
+
+  async getHttpRequests(sessionId: string, deviceId: string, user: AuthenticatedUser) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    await this.getDeviceOrThrow(sessionId, deviceId);
+    const events = await this.prisma.httpRequest.findMany({
+      where: { sessionId, deviceId },
+      orderBy: { occurredAt: 'asc' },
+    });
+    return events.map(toStudentHttpRequestDto);
   }
 
   /** §2.20, §10.11: mutates device.isolationStatus within the same transaction as the action record. */

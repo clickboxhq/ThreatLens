@@ -18,6 +18,10 @@ import { SessionReviewPage } from './pages/SessionReviewPage';
 import { JoinCohortPage } from './pages/JoinCohortPage';
 import { ProgressPage } from './pages/ProgressPage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import { LearningPathsPage } from './pages/LearningPathsPage';
+import { LearningPathDetailPage } from './pages/LearningPathDetailPage';
+import { CertificateVerifyPage } from './pages/CertificateVerifyPage';
+import { SettingsPage } from './pages/SettingsPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -44,6 +48,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/verify/:certificateId" element={<CertificateVerifyPage />} />
       <Route
         element={
           <ProtectedRoute>
@@ -54,6 +59,8 @@ export default function App() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/progress" element={<ProgressPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/paths" element={<LearningPathsPage />} />
+        <Route path="/paths/:pathId" element={<LearningPathDetailPage />} />
         <Route path="/sessions/:sessionId/dashboard" element={<SessionDashboardPage />} />
         <Route path="/sessions/:sessionId/identities" element={<IdentityPortalPage />} />
         <Route path="/sessions/:sessionId/devices" element={<DevicePortalPage />} />
@@ -62,6 +69,7 @@ export default function App() {
         <Route path="/sessions/:sessionId/incidents/:incidentId" element={<IncidentWorkspacePage />} />
         <Route path="/sessions/:sessionId/results" element={<ResultsPage />} />
         <Route path="/cohorts/join" element={<JoinCohortPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/instructor"
           element={

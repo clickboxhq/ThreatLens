@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { Device, EmailAttachment, EmailMessage, FileEvent, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
+import type { CloudEvent, Device, EmailAttachment, EmailMessage, FileEvent, HttpRequest, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import {
   correlateCandidates,
   evaluateImpossibleTravelRule,
@@ -10,8 +10,11 @@ import {
   evaluateNewCountryRule,
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
+  evaluatePersistenceArtifactRule,
   evaluateSpfFailRule,
+  evaluateSuspiciousCloudActionRule,
   evaluateSuspiciousProcessRule,
+  evaluateWebShellAccessRule,
 } from './rules';
 
 function identity(overrides: Partial<Identity> = {}): Identity {
@@ -133,6 +136,44 @@ function fileEvent(deviceId: string, overrides: Partial<FileEvent> = {}): FileEv
     processGuid: null,
     ...overrides,
   } as FileEvent;
+}
+
+function cloudEvent(identityId: string, overrides: Partial<CloudEvent> = {}): CloudEvent {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date(),
+    correlationId: null,
+    raw: {},
+    isGroundTruthEvidence: true,
+    mitreTechniqueId: null,
+    identityId,
+    provider: 'aws_style',
+    actionName: 'CreateAccessKey',
+    resourceId: null,
+    sourceIp: '203.0.113.10',
+    ...overrides,
+  } as CloudEvent;
+}
+
+function httpRequest(deviceId: string, overrides: Partial<HttpRequest> = {}): HttpRequest {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date(),
+    correlationId: null,
+    raw: {},
+    isGroundTruthEvidence: true,
+    mitreTechniqueId: null,
+    deviceId,
+    identityId: null,
+    method: 'GET',
+    url: '/uploads/images/x7f2a9c.php',
+    userAgent: 'curl/7.88.1',
+    statusCode: 200,
+    sourceIp: '203.0.113.10',
+    ...overrides,
+  } as HttpRequest;
 }
 
 function attachment(emailMessageId: string, overrides: Partial<EmailAttachment> = {}): EmailAttachment {
@@ -511,6 +552,144 @@ describe('evaluateLegacyAuthBypassRule (§8.2, §9)', () => {
     const victim = identity({ mfaStatus: 'enforced' });
     const failedLegacy = signIn(victim.id, { isLegacyAuth: true, result: 'failure' });
     expect(evaluateLegacyAuthBypassRule([failedLegacy], [victim])).toHaveLength(0);
+  });
+});
+
+describe('evaluateSuspiciousCloudActionRule (§8.2)', () => {
+  it('fires on a sensitive cloud action', () => {
+    const victim = identity();
+    const event = cloudEvent(victim.id, { actionName: 'CreateAccessKey' });
+
+    const candidates = evaluateSuspiciousCloudActionRule([event], [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('identity');
+    expect(candidates[0].primaryEntityId).toBe(victim.id);
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'cloud_events', eventId: event.id }]);
+  });
+
+  it('does not fire on an ordinary, non-sensitive cloud action', () => {
+    const victim = identity();
+    const event = cloudEvent(victim.id, { actionName: 'ListBucket' });
+    expect(evaluateSuspiciousCloudActionRule([event], [victim])).toHaveLength(0);
+  });
+
+  it('fires once per matching event, even from a benign identity (§8.6)', () => {
+    const victim = identity();
+    const event = cloudEvent(victim.id, { actionName: 'PutBucketPolicy', isGroundTruthEvidence: false });
+    expect(evaluateSuspiciousCloudActionRule([event], [victim])).toHaveLength(1);
+  });
+});
+
+describe('evaluateWebShellAccessRule (§8.2, §10.3)', () => {
+  it('groups repeated non-browser requests to the same script path on a device into one alert', () => {
+    const dev = device({ hostname: 'WEB-PROD-01', osPlatform: 'linux' });
+    const initial = httpRequest(dev.id, { method: 'GET', userAgent: 'Wget/1.21.3' });
+    const burst = Array.from({ length: 5 }, () => httpRequest(dev.id, { method: 'POST', userAgent: 'curl/7.88.1' }));
+
+    const candidates = evaluateWebShellAccessRule([initial, ...burst], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].primaryEntityId).toBe(dev.id);
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+  });
+
+  it('does not fire for a browser client on the same path', () => {
+    const dev = device();
+    const event = httpRequest(dev.id, { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
+    expect(evaluateWebShellAccessRule([event], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire for a non-browser client on a non-script path', () => {
+    const dev = device();
+    const event = httpRequest(dev.id, { url: '/images/logo.png' });
+    expect(evaluateWebShellAccessRule([event], [dev])).toHaveLength(0);
+  });
+
+  it('fires for the same non-browser-client + script-path heuristic on legitimate monitoring traffic (§8.6)', () => {
+    const dev = device();
+    const monitoring = httpRequest(dev.id, {
+      method: 'GET',
+      url: '/api/health-check.php',
+      userAgent: 'curl/7.88.1',
+      isGroundTruthEvidence: false,
+    });
+    expect(evaluateWebShellAccessRule([monitoring], [dev])).toHaveLength(1);
+  });
+
+  it('keeps separate script paths on the same device as separate alerts', () => {
+    const dev = device();
+    const webshell = httpRequest(dev.id, { url: '/uploads/images/x7f2a9c.php' });
+    const monitoring = httpRequest(dev.id, { url: '/api/health-check.php' });
+
+    const candidates = evaluateWebShellAccessRule([webshell, monitoring], [dev]);
+    expect(candidates).toHaveLength(2);
+  });
+
+  it('ignores requests with no device association', () => {
+    const event = httpRequest('', { deviceId: null });
+    expect(evaluateWebShellAccessRule([event], [])).toHaveLength(0);
+  });
+});
+
+describe('evaluatePersistenceArtifactRule (§8.2)', () => {
+  it('fires when a file is created in a Startup-folder location', () => {
+    const dev = device();
+    const artifact = fileEvent(dev.id, {
+      action: 'created',
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WinSvcHelper.lnk',
+    });
+
+    const candidates = evaluatePersistenceArtifactRule([artifact], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].primaryEntityId).toBe(dev.id);
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'file_events', eventId: artifact.id }]);
+  });
+
+  it('fires on a legitimate startup shortcut too, even from a benign origin (§8.6)', () => {
+    const dev = device();
+    const legit = fileEvent(dev.id, {
+      action: 'created',
+      isGroundTruthEvidence: false,
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive.lnk',
+    });
+    expect(evaluatePersistenceArtifactRule([legit], [dev])).toHaveLength(1);
+  });
+
+  it('does not fire for a file created outside a Startup-folder location', () => {
+    const dev = device();
+    const ordinary = fileEvent(dev.id, { action: 'created', filePath: 'C:\\Shares\\Finance\\report.xlsx' });
+    expect(evaluatePersistenceArtifactRule([ordinary], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire for a non-create action in a Startup-folder location', () => {
+    const dev = device();
+    const deleted = fileEvent(dev.id, {
+      action: 'deleted',
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\old.lnk',
+    });
+    expect(evaluatePersistenceArtifactRule([deleted], [dev])).toHaveLength(0);
+  });
+
+  it('fires once per matching file, keeping separate startup artifacts as separate alerts', () => {
+    const dev = device();
+    const real = fileEvent(dev.id, {
+      action: 'created',
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WinSvcHelper.lnk',
+    });
+    const bait1 = fileEvent(dev.id, {
+      action: 'created',
+      isGroundTruthEvidence: false,
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive.lnk',
+    });
+    const bait2 = fileEvent(dev.id, {
+      action: 'created',
+      isGroundTruthEvidence: false,
+      filePath: 'C:\\Users\\Public\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OneDrive.lnk',
+    });
+
+    const candidates = evaluatePersistenceArtifactRule([real, bait1, bait2], [dev]);
+    expect(candidates).toHaveLength(3);
   });
 });
 

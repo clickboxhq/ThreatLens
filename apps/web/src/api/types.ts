@@ -13,6 +13,19 @@ export interface TokenResponse {
   expiresIn: number;
 }
 
+export type LoginResponse = (TokenResponse & { user: AuthUser }) | { mfaRequired: true; mfaChallengeId: string };
+
+export interface MfaStatus {
+  enabled: boolean;
+  mandatory: boolean;
+}
+
+export interface MfaSetup {
+  secret: string;
+  otpauthUrl: string;
+  qrCodeDataUrl: string;
+}
+
 export interface ScenarioSummary {
   id: string;
   slug: string;
@@ -146,6 +159,27 @@ export interface NetworkEvent {
   bytesSent: number;
   bytesReceived: number;
   processGuid: string | null;
+}
+
+export interface CloudEvent {
+  id: string;
+  occurredAt: string;
+  identityId: string;
+  provider: string;
+  actionName: string;
+  resourceId: string | null;
+  sourceIp: string;
+}
+
+export interface HttpRequest {
+  id: string;
+  occurredAt: string;
+  deviceId: string | null;
+  method: string;
+  url: string;
+  userAgent: string;
+  statusCode: number;
+  sourceIp: string;
 }
 
 export interface EmailAttachment {
@@ -318,6 +352,64 @@ export interface InstructorFeedbackItem {
   comment: string | null;
   reopenedSession: boolean;
   createdAt: string;
+}
+
+// ---------- Learning Platform (§13) ----------
+
+export interface LearningPathSummary {
+  id: string;
+  slug: string;
+  title: string;
+  scenarioCount: number;
+}
+
+export interface Course {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  careerTrack: string;
+  paths: LearningPathSummary[];
+}
+
+export interface LearningPathScenarioProgress {
+  scenarioId: string;
+  sortOrder: number;
+  title: string;
+  category: string;
+  difficulty: string;
+  estimatedMinutes: number;
+  bestPercent: number | null;
+  completed: boolean;
+}
+
+export interface LearningPathDetail {
+  id: string;
+  slug: string;
+  title: string;
+  courseTitle: string;
+  passThresholdPercent: number;
+  scenarios: LearningPathScenarioProgress[];
+  completedCount: number;
+  totalCount: number;
+  isComplete: boolean;
+  certificateId: string | null;
+}
+
+export interface MyCertificate {
+  id: string;
+  learningPathId: string;
+  learningPathTitle: string;
+  issuedAt: string;
+  revoked: boolean;
+}
+
+export interface CertificateVerification {
+  id: string;
+  learnerDisplayName: string;
+  learningPathTitle: string;
+  issuedAt: string;
+  valid: boolean;
 }
 
 // ---------- Leaderboard (§13.5) ----------

@@ -1,4 +1,4 @@
-import type { Device, FileEvent, NetworkEvent, ProcessEvent } from '@prisma/client';
+import type { Device, FileEvent, HttpRequest, NetworkEvent, ProcessEvent } from '@prisma/client';
 
 // §18.3: excludes isGroundTruthActor.
 export interface StudentDeviceDto {
@@ -105,5 +105,29 @@ export function toStudentNetworkEventDto(event: NetworkEvent): StudentNetworkEve
     bytesSent: event.bytesSent,
     bytesReceived: event.bytesReceived,
     processGuid: event.processGuid,
+  };
+}
+
+export interface StudentHttpRequestDto {
+  id: string;
+  occurredAt: Date;
+  deviceId: string | null;
+  method: string;
+  url: string;
+  userAgent: string;
+  statusCode: number;
+  sourceIp: string;
+}
+
+export function toStudentHttpRequestDto(event: HttpRequest): StudentHttpRequestDto {
+  return {
+    id: event.id,
+    occurredAt: event.occurredAt,
+    deviceId: event.deviceId,
+    method: event.method,
+    url: event.url,
+    userAgent: event.userAgent,
+    statusCode: event.statusCode,
+    sourceIp: event.sourceIp,
   };
 }

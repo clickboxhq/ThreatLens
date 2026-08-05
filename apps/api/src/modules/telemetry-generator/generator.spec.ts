@@ -605,3 +605,280 @@ describe('generateTelemetry — legacy auth MFA bypass scenario (§7.2, §8.2, �
     expect(victimCandidate!.evidenceRefs.length).toBeGreaterThanOrEqual(5);
   });
 });
+
+function buildCloudTakeoverDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 6, devices: 0 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1098.001',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'cloud_malicious_access_key_creation_v1',
+        relative_timestamp: '+3h',
+        correlation_group: 'cloud-takeover-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1530',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'cloud_bucket_enumeration_v1',
+        relative_timestamp: '+3h10m',
+        correlation_group: 'cloud-takeover-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — cloud account takeover scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1098.001', randomUUID()],
+    ['T1530', randomUUID()],
+  ]);
+
+  it('produces one CreateAccessKey event and a burst of bucket enumeration events for the victim identity', () => {
+    const def = buildCloudTakeoverDefinition();
+    const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
+    const victim = result.identities.find((i) => i.isGroundTruthActor)!;
+    const groundTruth = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+
+    const keyCreation = groundTruth.filter((c) => c.actionName === 'CreateAccessKey');
+    const enumeration = groundTruth.filter((c) => c.actionName !== 'CreateAccessKey');
+    expect(keyCreation).toHaveLength(1);
+    expect(enumeration.length).toBeGreaterThanOrEqual(6);
+    expect(groundTruth.every((c) => c.identityId === victim.id)).toBe(true);
+  });
+
+  it('shares one correlationId and one attacker IP across the key creation and the enumeration burst', () => {
+    const def = buildCloudTakeoverDefinition();
+    const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
+    const groundTruth = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+
+    expect(new Set(groundTruth.map((c) => c.correlationId)).size).toBe(1);
+    expect(new Set(groundTruth.map((c) => c.sourceIp)).size).toBe(1);
+  });
+
+  it("feeds the Alert Engine's suspicious-cloud-action rule correctly end-to-end", async () => {
+    const { evaluateSuspiciousCloudActionRule } = await import('../alert-engine/rules');
+    const def = buildCloudTakeoverDefinition();
+    const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
+
+    const candidates = evaluateSuspiciousCloudActionRule(
+      result.cloudEvents as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[1],
+    );
+
+    // only CreateAccessKey is a "sensitive" action — bucket enumeration (ListBucket/GetObject) is a
+    // real gap in this rule's coverage, deliberately left for the student to find via evidence review.
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].title).toContain('CreateAccessKey');
+  });
+});
+
+function buildWebShellDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-01', os_platform: 'linux' } }],
+      decoy_population_size: { identities: 4, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1505.003',
+        entity_ref: 'web_server_service_account',
+        device_ref: 'web_server_device',
+        event_template_id: 'web_webshell_initial_access_v1',
+        relative_timestamp: '+4h',
+        correlation_group: 'webshell-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1505.003',
+        entity_ref: 'web_server_service_account',
+        device_ref: 'web_server_device',
+        event_template_id: 'web_webshell_command_burst_v1',
+        relative_timestamp: '+4h5m',
+        correlation_group: 'webshell-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: {
+      false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 4, device_ref: 'web_server_device' }],
+    },
+  };
+}
+
+describe('generateTelemetry — web shell scenario (§7.2, §8.2, §10.3)', () => {
+  const techniqueIdBySlug = new Map([['T1505.003', randomUUID()]]);
+
+  it('produces one initial-access GET and a burst of POST commands, all on the web server device', () => {
+    const def = buildWebShellDefinition();
+    const result = generateTelemetry(randomUUID(), 31n, def, techniqueIdBySlug);
+    const webServer = result.devices.find((d) => d.hostname === 'WEB-PROD-01')!;
+    const groundTruth = result.httpRequests.filter((h) => h.isGroundTruthEvidence);
+
+    expect(groundTruth.every((h) => h.deviceId === webServer.id)).toBe(true);
+    expect(groundTruth.filter((h) => h.method === 'GET')).toHaveLength(1);
+    expect(groundTruth.filter((h) => h.method === 'POST').length).toBeGreaterThanOrEqual(5);
+    expect(new Set(groundTruth.map((h) => h.url)).size).toBe(1);
+  });
+
+  it('generates the configured false-positive monitoring bait on the same device, unmarked as ground truth', () => {
+    const def = buildWebShellDefinition();
+    const result = generateTelemetry(randomUUID(), 31n, def, techniqueIdBySlug);
+    const webServer = result.devices.find((d) => d.hostname === 'WEB-PROD-01')!;
+
+    const noise = result.httpRequests.filter((h) => !h.isGroundTruthEvidence);
+    expect(noise).toHaveLength(4);
+    expect(noise.every((h) => h.deviceId === webServer.id && h.url === '/api/health-check.php')).toBe(true);
+  });
+
+  it("feeds the Alert Engine's web-shell-access rule, firing on both the attack and the ambiguous monitoring bait (§8.6)", async () => {
+    const { evaluateWebShellAccessRule } = await import('../alert-engine/rules');
+    const def = buildWebShellDefinition();
+    const result = generateTelemetry(randomUUID(), 31n, def, techniqueIdBySlug);
+
+    const candidates = evaluateWebShellAccessRule(
+      result.httpRequests as unknown as Parameters<typeof evaluateWebShellAccessRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateWebShellAccessRule>[1],
+    );
+
+    expect(candidates).toHaveLength(2);
+    const webshellCandidate = candidates.find((c) => c.title.includes('x7f2a9c.php'));
+    const monitoringCandidate = candidates.find((c) => c.title.includes('health-check.php'));
+    expect(webshellCandidate).toBeDefined();
+    expect(monitoringCandidate).toBeDefined();
+    expect(webshellCandidate!.evidenceRefs.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+function buildFilelessMalwareDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 6, devices: 6 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1059.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'fileless_powershell_backdoor_v1',
+        relative_timestamp: '+2h',
+        correlation_group: 'fileless-malware-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1547.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'malware_startup_persistence_v1',
+        relative_timestamp: '+2h5m',
+        correlation_group: 'fileless-malware-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1071.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'malicious_c2_beacon_v1',
+        relative_timestamp: '+2h10m',
+        correlation_group: 'fileless-malware-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: {
+      false_positive_bait: [{ event_template_id: 'legitimate_startup_shortcut_v1', count: 2, device_ref: 'victim_device_1' }],
+    },
+  };
+}
+
+describe('generateTelemetry — fileless malware scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1059.001', randomUUID()],
+    ['T1547.001', randomUUID()],
+    ['T1071.001', randomUUID()],
+  ]);
+
+  it('produces one PowerShell process, one persistence file event, and a C2 beacon burst, all on the victim device', () => {
+    const def = buildFilelessMalwareDefinition();
+    const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
+
+    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
+    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+
+    expect(groundTruthProcesses).toHaveLength(1);
+    expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
+    expect(groundTruthProcesses[0].imagePath.toLowerCase()).toContain('powershell.exe');
+
+    expect(groundTruthFiles).toHaveLength(1);
+    expect(groundTruthFiles[0].deviceId).toBe(victimDevice.id);
+    expect(groundTruthFiles[0].filePath).toContain('\\Start Menu\\Programs\\Startup\\');
+
+    expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
+    expect(groundTruthNetwork.every((n) => n.deviceId === victimDevice.id)).toBe(true);
+  });
+
+  it('threads the same processGuid through the PowerShell process and the C2 beacon (correlatable in the Device Portal)', () => {
+    const def = buildFilelessMalwareDefinition();
+    const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
+    const process = result.processEvents.find((p) => p.isGroundTruthEvidence)!;
+    const beacons = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+
+    expect(beacons.every((b) => b.processGuid === process.processGuid)).toBe(true);
+  });
+
+  it('generates the configured false-positive Startup-shortcut bait on the same device, unmarked as ground truth', () => {
+    const def = buildFilelessMalwareDefinition();
+    const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
+
+    const noise = result.fileEvents.filter((f) => !f.isGroundTruthEvidence);
+    expect(noise).toHaveLength(2);
+    expect(noise.every((f) => f.deviceId === victimDevice.id && f.filePath.includes('\\Start Menu\\Programs\\Startup\\'))).toBe(true);
+  });
+
+  it("feeds the Alert Engine's persistence-artifact rule, firing on both the real backdoor and the benign bait (§8.6)", async () => {
+    const { evaluatePersistenceArtifactRule } = await import('../alert-engine/rules');
+    const def = buildFilelessMalwareDefinition();
+    const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
+
+    const candidates = evaluatePersistenceArtifactRule(
+      result.fileEvents as unknown as Parameters<typeof evaluatePersistenceArtifactRule>[0],
+      result.devices as unknown as Parameters<typeof evaluatePersistenceArtifactRule>[1],
+    );
+
+    expect(candidates).toHaveLength(3);
+    const realCandidate = candidates.find((c) => c.title.includes('WinSvcHelper.lnk'));
+    const baitCandidates = candidates.filter((c) => c.title.includes('OneDrive.lnk'));
+    expect(realCandidate).toBeDefined();
+    expect(baitCandidates).toHaveLength(2);
+  });
+});

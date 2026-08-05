@@ -3,20 +3,27 @@ import { Prisma } from '@prisma/client';
 import { SeededRng } from './rng';
 import {
   APPLICATIONS,
+  CLOUD_STORAGE_BUCKET,
   DEPARTMENTS,
   EXEC_LOOKALIKE_DOMAIN,
   EXEC_NAME,
   EXEC_TITLE,
   FILE_SERVER_IP,
+  FILELESS_MALWARE_COMMAND_LINE,
   FIRST_NAMES,
   HOME_COUNTRIES,
   HOSTNAME_PREFIX,
   JOB_TITLES,
   LAST_NAMES,
+  LEGITIMATE_SCRIPT_PATH,
+  LEGITIMATE_STARTUP_SHORTCUT_PATH,
   LOOKALIKE_INTERNAL_DOMAIN,
   MALICIOUS_DOMAIN,
   MALWARE_C2_IP,
   MALWARE_DELIVERY_DOMAIN,
+  MALWARE_PERSISTENCE_STARTUP_PATH,
+  MONITORING_USER_AGENT,
+  NON_BROWSER_USER_AGENTS,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
   RANSOM_NOTE_FILENAME,
@@ -24,6 +31,7 @@ import {
   SENSITIVE_ATTACHMENT_FILENAMES,
   SHARED_FILE_PATHS,
   TRAVEL_COUNTRIES,
+  WEBSHELL_PATH,
 } from './templates';
 
 // The §12.1 ground-truth-definition schema, narrowed to what the generator reads.
@@ -48,7 +56,9 @@ export interface GroundTruthDefinition {
     is_required_for_full_credit: boolean;
   }[];
   noise_profile: {
-    false_positive_bait: { event_template_id: string; count: number }[];
+    // device_ref: only needed for device-scoped bait templates (e.g. a benign automated
+    // client hitting a web server) — event, sign-in, and email bait don't set it.
+    false_positive_bait: { event_template_id: string; count: number; device_ref?: string }[];
   };
 }
 
@@ -59,6 +69,8 @@ export interface GeneratedTelemetry {
   processEvents: Prisma.ProcessEventCreateManyInput[];
   fileEvents: Prisma.FileEventCreateManyInput[];
   networkEvents: Prisma.NetworkEventCreateManyInput[];
+  cloudEvents: Prisma.CloudEventCreateManyInput[];
+  httpRequests: Prisma.HttpRequestCreateManyInput[];
   emailMessages: Prisma.EmailMessageCreateManyInput[];
   emailAttachments: Prisma.EmailAttachmentCreateManyInput[];
   emailUrls: Prisma.EmailUrlCreateManyInput[];
@@ -98,6 +110,8 @@ export function generateTelemetry(
   const processEvents: Prisma.ProcessEventCreateManyInput[] = [];
   const fileEvents: Prisma.FileEventCreateManyInput[] = [];
   const networkEvents: Prisma.NetworkEventCreateManyInput[] = [];
+  const cloudEvents: Prisma.CloudEventCreateManyInput[] = [];
+  const httpRequests: Prisma.HttpRequestCreateManyInput[] = [];
   const emailMessages: Prisma.EmailMessageCreateManyInput[] = [];
   const emailAttachments: Prisma.EmailAttachmentCreateManyInput[] = [];
   const emailUrls: Prisma.EmailUrlCreateManyInput[] = [];
@@ -243,6 +257,8 @@ export function generateTelemetry(
       processEvents,
       fileEvents,
       networkEvents,
+      cloudEvents,
+      httpRequests,
       emailMessages,
       emailAttachments,
       emailUrls,
@@ -254,11 +270,12 @@ export function generateTelemetry(
     for (let i = 0; i < bait.count; i++) {
       const decoyIdentity = rng.pick(decoyIdentities);
       const occurredAt = new Date(worldStart.getTime() + rng.intBetween(0, def.population.world_time_window_hours * 60) * 60 * 1000);
+      const device = bait.device_ref ? deviceByRef.get(bait.device_ref) : undefined;
       applyEventTemplate(bait.event_template_id, {
         rng,
         sessionId,
         identity: decoyIdentity,
-        device: undefined,
+        device,
         decoyIdentities,
         occurredAt,
         correlationId: null,
@@ -268,6 +285,8 @@ export function generateTelemetry(
         processEvents,
         fileEvents,
         networkEvents,
+        cloudEvents,
+        httpRequests,
         emailMessages,
         emailAttachments,
         emailUrls,
@@ -282,6 +301,8 @@ export function generateTelemetry(
     processEvents,
     fileEvents,
     networkEvents,
+    cloudEvents,
+    httpRequests,
     emailMessages,
     emailAttachments,
     emailUrls,
@@ -295,6 +316,8 @@ interface TemplateContext {
   processEvents: Prisma.ProcessEventCreateManyInput[];
   fileEvents: Prisma.FileEventCreateManyInput[];
   networkEvents: Prisma.NetworkEventCreateManyInput[];
+  cloudEvents: Prisma.CloudEventCreateManyInput[];
+  httpRequests: Prisma.HttpRequestCreateManyInput[];
   identity: Prisma.IdentityCreateManyInput & { id: string };
   decoyIdentities: (Prisma.IdentityCreateManyInput & { id: string })[];
   occurredAt: Date;
@@ -957,6 +980,166 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         deviceId: ctx.device.id,
         action: 'created',
         filePath: `C:\\Shares\\${RANSOM_NOTE_FILENAME}`,
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: null,
+      });
+      break;
+    }
+    case 'cloud_malicious_access_key_creation_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'cloud-takeover');
+      ctx.cloudEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'malicious_access_key_creation' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        provider: 'aws_style',
+        actionName: 'CreateAccessKey',
+        resourceId: ctx.identity.userPrincipalName as string,
+        sourceIp: attacker.ip,
+      });
+      break;
+    }
+    case 'cloud_bucket_enumeration_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'cloud-takeover');
+      const actionCount = ctx.rng.intBetween(6, 9);
+      for (let i = 0; i < actionCount; i++) {
+        ctx.cloudEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 15 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'bucket_enumeration' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          provider: 'aws_style',
+          actionName: i === 0 ? 'ListBucket' : 'GetObject',
+          resourceId: CLOUD_STORAGE_BUCKET,
+          sourceIp: attacker.ip,
+        });
+      }
+      break;
+    }
+    case 'web_webshell_initial_access_v1': {
+      if (!ctx.device) break;
+      ctx.httpRequests.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'webshell_initial_access' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        method: 'GET',
+        url: WEBSHELL_PATH,
+        userAgent: ctx.rng.pick(NON_BROWSER_USER_AGENTS),
+        statusCode: 200,
+        sourceIp: syntheticIp(ctx.rng),
+      });
+      break;
+    }
+    case 'web_webshell_command_burst_v1': {
+      if (!ctx.device) break;
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'webshell');
+      const commandCount = ctx.rng.intBetween(5, 8);
+      for (let i = 0; i < commandCount; i++) {
+        ctx.httpRequests.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 10 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'webshell_command' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          method: 'POST',
+          url: WEBSHELL_PATH,
+          userAgent: ctx.rng.pick(NON_BROWSER_USER_AGENTS),
+          statusCode: 200,
+          sourceIp: attacker.ip,
+        });
+      }
+      break;
+    }
+    case 'web_legitimate_monitoring_v1': {
+      // False-positive bait (§8.6): a legitimate uptime/health-check bot also looks like a
+      // non-browser client posting to a script path — the same observable shape as the real
+      // webshell access, so the Student has to look at the target path, not just the client.
+      if (!ctx.device) break;
+      ctx.httpRequests.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        raw: { source: 'noise', pattern: 'legitimate_monitoring' },
+        isGroundTruthEvidence: false,
+        deviceId: ctx.device.id,
+        method: 'GET',
+        url: LEGITIMATE_SCRIPT_PATH,
+        userAgent: MONITORING_USER_AGENT,
+        statusCode: 200,
+        sourceIp: syntheticIp(ctx.rng),
+      });
+      break;
+    }
+    case 'fileless_powershell_backdoor_v1': {
+      if (!ctx.device) break;
+      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:child`);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'fileless_powershell_backdoor' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid,
+        parentProcessGuid: null,
+        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        commandLine: FILELESS_MALWARE_COMMAND_LINE,
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+      break;
+    }
+    case 'malware_startup_persistence_v1': {
+      if (!ctx.device) break;
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'startup_persistence' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: MALWARE_PERSISTENCE_STARTUP_PATH,
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:child`),
+      });
+      break;
+    }
+    case 'legitimate_startup_shortcut_v1': {
+      // False-positive bait (§8.6): a legitimate app (e.g. a cloud-sync client) also drops a
+      // shortcut into the Startup folder on first install — same location, benign intent — so
+      // the Student has to look at what the artifact actually is, not just where it landed.
+      if (!ctx.device) break;
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        raw: { source: 'noise', pattern: 'legitimate_startup_shortcut' },
+        isGroundTruthEvidence: false,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: LEGITIMATE_STARTUP_SHORTCUT_PATH,
         hashSha256: syntheticHash(ctx.rng),
         processGuid: null,
       });

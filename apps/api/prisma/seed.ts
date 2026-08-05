@@ -108,6 +108,45 @@ const MITRE_TECHNIQUES = [
       'Adversaries with valid credentials access a mailbox remotely (e.g. via IMAP) to collect email content, often using legacy protocols that fall outside modern authentication controls.',
     url: 'https://attack.mitre.org/techniques/T1114/002/',
   },
+  {
+    techniqueId: 'T1098.001',
+    name: 'Account Manipulation: Additional Cloud Credentials',
+    tactic: 'TA0003',
+    description:
+      'Adversaries with control-plane access to a cloud account add a new set of credentials (e.g. an access key) to maintain access independent of the credential originally used.',
+    url: 'https://attack.mitre.org/techniques/T1098/001/',
+  },
+  {
+    techniqueId: 'T1530',
+    name: 'Data from Cloud Storage Object',
+    tactic: 'TA0009',
+    description: 'Adversaries enumerate and access objects stored in cloud storage services to collect sensitive data.',
+    url: 'https://attack.mitre.org/techniques/T1530/',
+  },
+  {
+    techniqueId: 'T1505.003',
+    name: 'Server Software Component: Web Shell',
+    tactic: 'TA0003',
+    description:
+      'Adversaries upload a script to a publicly accessible web server that grants remote command execution, surviving as a durable backdoor into the server.',
+    url: 'https://attack.mitre.org/techniques/T1505/003/',
+  },
+  {
+    techniqueId: 'T1059.001',
+    name: 'Command and Scripting Interpreter: PowerShell',
+    tactic: 'TA0002',
+    description:
+      'Adversaries abuse PowerShell to execute commands and scripts, often with an obfuscated or Base64-encoded payload, without ever writing a traditional executable to disk.',
+    url: 'https://attack.mitre.org/techniques/T1059/001/',
+  },
+  {
+    techniqueId: 'T1547.001',
+    name: 'Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder',
+    tactic: 'TA0003',
+    description:
+      'Adversaries add a program to a startup location — such as the Startup folder or a registry Run key — so it executes automatically at every user logon, a simple and durable persistence mechanism.',
+    url: 'https://attack.mitre.org/techniques/T1547/001/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -186,6 +225,27 @@ const DETECTION_RULES = [
     logicSummary: "result = success AND is_legacy_auth = true AND identity.mfa_status = 'enforced', grouped by identity.",
     defaultSeverity: 'high' as const,
     mitreTechniqueSlug: 'T1078',
+  },
+  {
+    name: 'Cloud: Sensitive API Action Detected',
+    description: 'Fires when a cloud control-plane action from a sensitive, high-privilege set is observed.',
+    logicSummary: "action_name IN (CreateAccessKey, PutBucketPolicy, DeleteTrail, DisableKey).",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1098.001',
+  },
+  {
+    name: 'Web: Non-Browser Client Accessed a Script Path',
+    description: 'Fires when a non-browser HTTP client repeatedly requests a script-extension path on a web server.',
+    logicSummary: "user_agent starts with a known non-browser marker (curl/, python-requests/, Wget/, PowerShell/) AND url path ends with a script extension (.php, .asp, .aspx, .jsp), grouped by (device_id, url).",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1505.003',
+  },
+  {
+    name: 'Device: Persistence Artifact Written to Startup Location',
+    description: 'Fires when a file is created in a Startup-folder auto-run location on a device.',
+    logicSummary: "action = created AND file_path contains '\\Start Menu\\Programs\\Startup\\'.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1547.001',
   },
 ];
 
@@ -1001,9 +1061,309 @@ async function main() {
     techniqueBySlug,
   );
 
-  console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 9 scenarios.`,
+  await seedScenario(
+    {
+      slug: 'cloud-account-takeover-access-key',
+      title: 'Cloud Account Takeover — Malicious Access Key Creation',
+      summary:
+        'A cloud identity that has never touched the console before suddenly created a new access key, then enumerated a sensitive storage bucket. Determine whether this account is compromised.',
+      category: 'cloud',
+      difficulty: 'intermediate',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1098.001', 'T1530'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'cloud',
+          difficulty: 'intermediate',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker holding a compromised cloud identity credential creates a new access key to establish durable, independent access to the account, then uses it to enumerate and read objects out of a sensitive storage bucket.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1098.001',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'cloud_malicious_access_key_creation_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'cloud-takeover-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1530',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'cloud_bucket_enumeration_v1',
+            relative_timestamp: '+3h10m',
+            correlation_group: 'cloud-takeover-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1098.001', 'T1530'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Check the Identity Portal for this account\'s cloud activity — has it ever created an access key before?' },
+          { unlock_cost_percent: 10, text: 'A new access key on its own is suspicious but not conclusive. What did that key get used for afterward?' },
+          { unlock_cost_percent: 15, text: 'Look at which storage bucket was accessed and how many objects were touched in a short span.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
   );
+
+  await seedScenario(
+    {
+      slug: 'web-shell-public-facing-server',
+      title: 'Web Shell Access on Public-Facing Server',
+      summary:
+        'A public web server started receiving scripted requests to a file no developer remembers deploying. Determine whether this is a web shell and what the attacker did with it.',
+      category: 'web',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1505.003'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker uploads a small PHP web shell to a public-facing web server (likely via an unpatched upload feature, outside this scenario\'s telemetry), then accesses it directly with a scripted, non-browser HTTP client — first to confirm it works, then to issue a burst of commands.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-01', os_platform: 'linux' } }],
+          decoy_population_size: { identities: 8, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1505.003',
+            entity_ref: 'web_server_service_account',
+            device_ref: 'web_server_device',
+            event_template_id: 'web_webshell_initial_access_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'webshell-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1505.003',
+            entity_ref: 'web_server_service_account',
+            device_ref: 'web_server_device',
+            event_template_id: 'web_webshell_command_burst_v1',
+            relative_timestamp: '+4h5m',
+            correlation_group: 'webshell-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 4, device_ref: 'web_server_device' }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1505.003'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Check this server\'s HTTP requests for anything hitting a path that looks out of place for the application.' },
+          { unlock_cost_percent: 10, text: 'A monitoring script also uses a non-browser client here — look at the specific path being requested, not just the user agent.' },
+          { unlock_cost_percent: 15, text: 'Once you find the suspicious path, how many requests hit it, and were any of them POSTs?' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'fileless-malware-startup-persistence',
+      title: 'Fileless Malware — Startup Persistence Backdoor',
+      summary:
+        'An IT workstation ran an obfuscated PowerShell command with no matching download or email trigger, then a new shortcut appeared in its Startup folder. Investigate the device to determine what happened.',
+      category: 'malware',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1059.001', 'T1547.001', 'T1071.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'malware',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker with brief access to an IT workstation (the initial foothold happened outside this scenario\'s telemetry) runs a heavily obfuscated, Base64-encoded PowerShell command with no dropped executable — fileless execution that leaves no file-based artifact for traditional antivirus to catch. It then establishes persistence by writing a shortcut to the Startup folder, so the backdoor survives a reboot, and begins beaconing out to a remote command-and-control server.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1059.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'fileless_powershell_backdoor_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'fileless-malware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1547.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malware_startup_persistence_v1',
+            relative_timestamp: '+2h5m',
+            correlation_group: 'fileless-malware-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1071.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_c2_beacon_v1',
+            relative_timestamp: '+2h10m',
+            correlation_group: 'fileless-malware-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [{ event_template_id: 'legitimate_startup_shortcut_v1', count: 2, device_ref: 'victim_device_1' }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1059.001', 'T1547.001', 'T1071.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's Process Tree — is there anything unusual, even without an obvious email or download trigger?" },
+          { unlock_cost_percent: 10, text: 'PowerShell with an -EncodedCommand argument hides its real behavior from a casual glance — that obfuscation is itself a signal.' },
+          {
+            unlock_cost_percent: 15,
+            text: 'Check the File Timeline for anything written to a Startup folder, then the Network tab for outbound traffic around the same time — a legitimate app can also drop a Startup shortcut, so look at what the file actually is.',
+          },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'ip',
+          value: '185.220.101.47',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed C2 infrastructure',
+          context: 'Observed as a command-and-control destination for outbound beacon traffic on port 443.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedLearningPlatform();
+
+  console.log(
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 12 scenarios, learning platform content.`,
+  );
+}
+
+// §13.6: one course grouping the existing scenario library into two learning paths by
+// theme, rather than inventing placeholder content — every scenario referenced here is a
+// real, previously-seeded scenario.
+async function seedLearningPlatform(): Promise<void> {
+  const scenarios = await prisma.attackScenario.findMany({ select: { id: true, slug: true } });
+  const scenarioIdBySlug = new Map(scenarios.map((s) => [s.slug, s.id]));
+
+  const course = await prisma.course.upsert({
+    where: { slug: 'soc-analyst-fundamentals' },
+    update: {},
+    create: {
+      slug: 'soc-analyst-fundamentals',
+      title: 'SOC Analyst Fundamentals',
+      description:
+        'A breadth-first introduction to SOC investigation across identity, email, endpoint, insider-threat, and ransomware scenarios.',
+      careerTrack: 'soc_analyst',
+    },
+  });
+
+  const paths = [
+    {
+      slug: 'identity-threat-investigation',
+      title: 'Identity Threat Investigation',
+      passThresholdPercent: 70,
+      scenarioSlugs: ['impossible-travel', 'password-spraying-campaign', 'mfa-fatigue-push-bombing', 'legacy-auth-mfa-bypass'],
+    },
+    {
+      slug: 'email-endpoint-insider-threats',
+      title: 'Email, Endpoint & Insider Threats',
+      passThresholdPercent: 70,
+      scenarioSlugs: [
+        'phishing-stolen-credentials',
+        'bec-wire-transfer-fraud',
+        'insider-data-exfiltration',
+        'malware-execution-via-attachment',
+        'ransomware-lateral-movement-encryption',
+      ],
+    },
+  ];
+
+  for (const pathSeed of paths) {
+    const path = await prisma.learningPath.upsert({
+      where: { slug: pathSeed.slug },
+      update: {},
+      create: {
+        slug: pathSeed.slug,
+        courseId: course.id,
+        title: pathSeed.title,
+        passThresholdPercent: pathSeed.passThresholdPercent,
+      },
+    });
+
+    for (const [index, scenarioSlug] of pathSeed.scenarioSlugs.entries()) {
+      const scenarioId = scenarioIdBySlug.get(scenarioSlug);
+      if (!scenarioId) throw new Error(`seedLearningPlatform: unknown scenario slug "${scenarioSlug}"`);
+      await prisma.learningPathScenario.upsert({
+        where: { learningPathId_scenarioId: { learningPathId: path.id, scenarioId } },
+        update: { sortOrder: index },
+        create: { learningPathId: path.id, scenarioId, sortOrder: index },
+      });
+    }
+
+    console.log(`  learning path "${path.slug}" (${pathSeed.scenarioSlugs.length} scenarios)`);
+  }
 }
 
 main()

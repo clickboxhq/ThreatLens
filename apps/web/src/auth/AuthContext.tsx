@@ -1,13 +1,16 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
-import { authApi } from '../api/endpoints';
+import { authApi, mfaApi } from '../api/endpoints';
 import { getAccessToken, setTokens } from '../api/client';
 import type { AuthUser } from '../api/types';
+
+type LoginOutcome = { mfaRequired: false; user: AuthUser } | { mfaRequired: true; mfaChallengeId: string };
 
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string) => Promise<LoginOutcome>;
+  completeMfaLogin: (mfaChallengeId: string, code: string) => Promise<AuthUser>;
   signup: (email: string, password: string, displayName: string, role?: 'student' | 'instructor') => Promise<void>;
   logout: () => void;
 }
@@ -20,11 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? (JSON.parse(stored) as AuthUser) : null;
   });
 
-  async function login(email: string, password: string) {
-    const result = await authApi.login(email, password);
+  function applySession(result: { accessToken: string; refreshToken: string; expiresIn: number; user: AuthUser }) {
     setTokens(result);
     setUser(result.user);
     localStorage.setItem('socverse_user', JSON.stringify(result.user));
+  }
+
+  async function login(email: string, password: string): Promise<LoginOutcome> {
+    const result = await authApi.login(email, password);
+    if ('mfaRequired' in result) {
+      return { mfaRequired: true, mfaChallengeId: result.mfaChallengeId };
+    }
+    applySession(result);
+    return { mfaRequired: false, user: result.user };
+  }
+
+  async function completeMfaLogin(mfaChallengeId: string, code: string): Promise<AuthUser> {
+    const result = await mfaApi.verify(mfaChallengeId, code);
+    applySession(result);
     return result.user;
   }
 
@@ -40,7 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: Boolean(user && getAccessToken()), login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated: Boolean(user && getAccessToken()), login, completeMfaLogin, signup, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

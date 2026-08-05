@@ -41,4 +41,13 @@ export class IdentityPortalController {
   ) {
     return this.service.getSignIns(sessionId, id, user, { result, riskyOnly: riskyOnly === 'true' });
   }
+
+  @Get(':id/cloud-events')
+  async getCloudEvents(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getCloudEvents(sessionId, id, user);
+  }
 }

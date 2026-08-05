@@ -3,21 +3,30 @@ import type {
   Alert,
   AnalystNote,
   AuthUser,
+  CertificateVerification,
+  CloudEvent,
   Cohort,
   CohortAssignment,
   CohortMembership,
+  Course,
   Device,
   EmailMessage,
   EvidenceItem,
   FileEvent,
   HintItem,
+  HttpRequest,
   Identity,
   Incident,
   IncidentSummary,
   InstructorFeedbackItem,
   LeaderboardResult,
+  LearningPathDetail,
+  LoginResponse,
+  MfaSetup,
+  MfaStatus,
   MitreTechniqueRef,
   MyAssignment,
+  MyCertificate,
   NetworkEvent,
   ProcessEventNode,
   ReviewQueueItem,
@@ -38,9 +47,17 @@ export const authApi = {
       displayName,
       role,
     }),
-  login: (email: string, password: string) =>
-    api.post<TokenResponse & { user: AuthUser }>('/auth/login', { email, password }),
+  login: (email: string, password: string) => api.post<LoginResponse>('/auth/login', { email, password }),
   logout: (refreshToken: string) => api.post<void>('/auth/logout', { refreshToken }),
+};
+
+export const mfaApi = {
+  status: () => api.get<MfaStatus>('/auth/mfa/status'),
+  setup: () => api.post<MfaSetup>('/auth/mfa/setup'),
+  enable: (code: string) => api.post<{ recoveryCodes: string[] }>('/auth/mfa/enable', { code }),
+  disable: (password: string) => api.post<void>('/auth/mfa/disable', { password }),
+  verify: (mfaChallengeId: string, code: string) =>
+    api.post<TokenResponse & { user: AuthUser }>('/auth/mfa/verify', { mfaChallengeId, code }),
 };
 
 export const scenarioApi = {
@@ -119,6 +136,8 @@ export const identityPortalApi = {
   list: (sessionId: string) => api.get<Identity[]>(`/sessions/${sessionId}/identities`),
   getProfile: (sessionId: string, identityId: string) => api.get<Identity>(`/sessions/${sessionId}/identities/${identityId}`),
   getSignIns: (sessionId: string, identityId: string) => api.get<SignIn[]>(`/sessions/${sessionId}/identities/${identityId}/signins`),
+  getCloudEvents: (sessionId: string, identityId: string) =>
+    api.get<CloudEvent[]>(`/sessions/${sessionId}/identities/${identityId}/cloud-events`),
 };
 
 export const mitreApi = {
@@ -133,6 +152,8 @@ export const devicePortalApi = {
   getFiles: (sessionId: string, deviceId: string) => api.get<FileEvent[]>(`/sessions/${sessionId}/devices/${deviceId}/files`),
   getNetwork: (sessionId: string, deviceId: string) =>
     api.get<NetworkEvent[]>(`/sessions/${sessionId}/devices/${deviceId}/network`),
+  getHttpRequests: (sessionId: string, deviceId: string) =>
+    api.get<HttpRequest[]>(`/sessions/${sessionId}/devices/${deviceId}/http-requests`),
   isolate: (sessionId: string, deviceId: string) => api.post<Device>(`/sessions/${sessionId}/devices/${deviceId}/isolate`, {}),
 };
 
@@ -158,4 +179,14 @@ export const leaderboardApi = {
     api.get<LeaderboardResult>(
       `/leaderboard?period=${period}&scope=${scope}${cohortId ? `&cohortId=${cohortId}` : ''}`,
     ),
+};
+
+export const learningApi = {
+  listCourses: () => api.get<Course[]>('/learning/courses'),
+  getPath: (pathId: string) => api.get<LearningPathDetail>(`/learning/paths/${pathId}`),
+  myCertificates: () => api.get<MyCertificate[]>('/learning/certificates/mine'),
+};
+
+export const certificateApi = {
+  verify: (certificateId: string) => api.get<CertificateVerification>(`/learning/public/verify/${certificateId}`),
 };

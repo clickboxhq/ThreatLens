@@ -1,7 +1,8 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { toStudentEmailDto } from './email.dto';
 import { toStudentSignInDto } from './sign-in.dto';
-import { toStudentProcessEventDto, toStudentFileEventDto, toStudentNetworkEventDto } from './device.dto';
+import { toStudentProcessEventDto, toStudentFileEventDto, toStudentNetworkEventDto, toStudentHttpRequestDto } from './device.dto';
+import { toStudentCloudEventDto } from './cloud.dto';
 
 export interface EvidenceRefSummary {
   eventTable: string;
@@ -78,6 +79,33 @@ export async function summarizeEvidenceRef(
         ? `${event.direction} connection on ${device?.hostname ?? 'a device'} to ${event.remoteIp}:${event.remotePort}`
         : 'Event no longer available.',
       detail: event ? toStudentNetworkEventDto(event) : null,
+    };
+  }
+
+  if (eventTable === 'cloud_events') {
+    const event = await prisma.cloudEvent.findUnique({ where: { id: eventId }, include: { identity: true } });
+    return {
+      eventTable,
+      eventId,
+      occurredAt: event?.occurredAt ?? null,
+      summary: event
+        ? `Cloud action "${event.actionName}" by ${event.identity.displayName} on "${event.resourceId ?? 'unknown resource'}"`
+        : 'Event no longer available.',
+      detail: event ? toStudentCloudEventDto(event) : null,
+    };
+  }
+
+  if (eventTable === 'http_requests') {
+    const event = await prisma.httpRequest.findUnique({ where: { id: eventId } });
+    const device = event?.deviceId ? await prisma.device.findUnique({ where: { id: event.deviceId } }) : null;
+    return {
+      eventTable,
+      eventId,
+      occurredAt: event?.occurredAt ?? null,
+      summary: event
+        ? `${event.method} ${event.url} on ${device?.hostname ?? 'a server'} (${event.userAgent})`
+        : 'Event no longer available.',
+      detail: event ? toStudentHttpRequestDto(event) : null,
     };
   }
 

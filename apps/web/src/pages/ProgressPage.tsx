@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { sessionApi } from '../api/endpoints';
-import type { SessionHistoryItem } from '../api/types';
+import { learningApi, sessionApi } from '../api/endpoints';
+import type { MyCertificate, SessionHistoryItem } from '../api/types';
 
 interface ScenarioSummary {
   scenarioId: string;
@@ -39,12 +39,15 @@ function summarizeByScenario(sessions: SessionHistoryItem[]): ScenarioSummary[] 
 
 export function ProgressPage() {
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
+  const [certificates, setCertificates] = useState<MyCertificate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    sessionApi
-      .listMine()
-      .then(setSessions)
+    Promise.all([sessionApi.listMine(), learningApi.myCertificates()])
+      .then(([s, c]) => {
+        setSessions(s);
+        setCertificates(c);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -65,6 +68,21 @@ export function ProgressPage() {
   return (
     <div>
       <h1>My Progress</h1>
+
+      {certificates.length > 0 && (
+        <>
+          <h3>My Certificates</h3>
+          <ul style={{ marginBottom: 32 }}>
+            {certificates.map((c) => (
+              <li key={c.id}>
+                <Link to={`/verify/${c.id}`}>{c.learningPathTitle}</Link> — issued{' '}
+                {new Date(c.issuedAt).toLocaleDateString()}
+                {c.revoked && ' (revoked)'}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h3>By Scenario</h3>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 32 }}>

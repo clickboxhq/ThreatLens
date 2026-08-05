@@ -1,5 +1,15 @@
 import { randomUUID } from 'crypto';
-import type { Device, EmailAttachment, EmailMessage, FileEvent, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
+import type {
+  CloudEvent,
+  Device,
+  EmailAttachment,
+  EmailMessage,
+  FileEvent,
+  HttpRequest,
+  Identity,
+  ProcessEvent,
+  SignInEvent,
+} from '@prisma/client';
 import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
 
 // A detection firing, before it's turned into a persisted Alert row. Kept separate from
@@ -30,6 +40,9 @@ export const SUSPICIOUS_PROCESS_RULE_NAME = 'Device: Office Application Spawned 
 export const LATERAL_MOVEMENT_RULE_NAME = 'Device: Remote Service Execution Consistent with Lateral Movement';
 export const MASS_ENCRYPTION_RULE_NAME = 'Device: Mass File Encryption Detected';
 export const LEGACY_AUTH_BYPASS_RULE_NAME = 'Identity: Legacy Authentication Bypassed Enforced MFA';
+export const SUSPICIOUS_CLOUD_ACTION_RULE_NAME = 'Cloud: Sensitive API Action Detected';
+export const WEBSHELL_ACCESS_RULE_NAME = 'Web: Non-Browser Client Accessed a Script Path';
+export const PERSISTENCE_ARTIFACT_RULE_NAME = 'Device: Persistence Artifact Written to Startup Location';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
@@ -42,6 +55,12 @@ const SCRIPT_INTERPRETER_IMAGE_NAMES = ['POWERSHELL.EXE', 'CMD.EXE', 'WSCRIPT.EX
 const LATERAL_MOVEMENT_SERVICE_IMAGE_NAME = 'PSEXESVC.EXE';
 const MASS_ENCRYPTION_COUNT_THRESHOLD = 5;
 const MASS_ENCRYPTION_WINDOW_MINUTES = 15;
+// A curated, deliberately narrow list — real cloud detection content typically ships a much
+// larger sensitive-action catalog, but this is enough to be a realistic, single-signal rule.
+const SENSITIVE_CLOUD_ACTION_NAMES = ['CreateAccessKey', 'PutBucketPolicy', 'DeleteTrail', 'DisableKey'];
+const NON_BROWSER_CLIENT_MARKERS = ['curl/', 'python-requests/', 'Wget/', 'PowerShell/'];
+const STARTUP_LOCATION_MARKER = '\\Start Menu\\Programs\\Startup\\';
+const SCRIPT_PATH_EXTENSIONS = ['.php', '.asp', '.aspx', '.jsp'];
 
 function imageBaseName(imagePath: string): string {
   const parts = imagePath.split(/[\\/]/);
@@ -447,6 +466,103 @@ export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities:
     });
   }
   return candidates;
+}
+
+/**
+ * Fires when a cloud API call matches a curated, small list of sensitive actions — creating
+ * a new access key, changing a bucket's public policy, deleting an audit trail — regardless
+ * of who called it or from where. Real cloud-security tooling flags these the same way: the
+ * action itself is rare and consequential enough to warrant review on its own (§8.2, §1.8).
+ */
+export function evaluateSuspiciousCloudActionRule(cloudEvents: CloudEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+
+  return cloudEvents
+    .filter((event) => SENSITIVE_CLOUD_ACTION_NAMES.includes(event.actionName))
+    .map((event) => {
+      const identity = identityById.get(event.identityId);
+      return {
+        id: randomUUID(),
+        detectionRuleName: SUSPICIOUS_CLOUD_ACTION_RULE_NAME,
+        title: `Sensitive cloud action "${event.actionName}" performed by ${identity?.displayName ?? 'an unknown identity'}`,
+        description: `"${event.actionName}" was called against resource "${event.resourceId ?? 'unknown'}" from ${event.sourceIp}.`,
+        primaryEntityType: 'identity' as const,
+        primaryEntityId: identity?.id ?? event.identityId,
+        evidenceRefs: [{ eventTable: 'cloud_events', eventId: event.id }],
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      };
+    });
+}
+
+/**
+ * Fires when a non-browser HTTP client (curl, a Python/PowerShell script, Wget — the
+ * automation tools an interactive command-and-control channel over HTTP would use) requests
+ * a server-side script path. Groups every matching request to the same (device, path) pair
+ * into one alert, the same shape as the mass-encryption/password-spray rules, since a real
+ * webshell interaction is a burst of requests, not a single hit (§8.2, §10.3).
+ */
+export function evaluateWebShellAccessRule(httpRequests: HttpRequest[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const isNonBrowserClient = (userAgent: string) => NON_BROWSER_CLIENT_MARKERS.some((marker) => userAgent.startsWith(marker));
+  const isScriptPath = (url: string) => SCRIPT_PATH_EXTENSIONS.some((ext) => url.split('?')[0].endsWith(ext));
+
+  const grouped = new Map<string, HttpRequest[]>();
+  for (const request of httpRequests) {
+    if (!request.deviceId || !isNonBrowserClient(request.userAgent) || !isScriptPath(request.url)) continue;
+    const key = `${request.deviceId}::${request.url}`;
+    const group = grouped.get(key) ?? [];
+    group.push(request);
+    grouped.set(key, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const requests of grouped.values()) {
+    const device = deviceById.get(requests[0].deviceId!);
+    if (!device) continue;
+    const latest = [...requests].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: WEBSHELL_ACCESS_RULE_NAME,
+      title: `Non-browser client accessed "${requests[0].url}" on ${device.hostname}`,
+      description: `${requests.length} request${requests.length === 1 ? '' : 's'} from a scripted client ("${requests[0].userAgent}") targeted "${requests[0].url}" on ${device.hostname} — consistent with web shell interaction.`,
+      primaryEntityType: 'device' as const,
+      primaryEntityId: device.id,
+      evidenceRefs: requests.map((r) => ({ eventTable: 'http_requests', eventId: r.id })),
+      correlationId: latest.correlationId,
+      occurredAt: latest.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fires when a file is written to a Startup-folder location — an auto-run location that
+ * fires at every logon, and a common, simple persistence technique (T1547.001). Deliberately
+ * a single-signal, path-based heuristic (§8.6): a legitimate app's install shortcut lands in
+ * the same location, so the rule alone can't distinguish the two — the Student has to look at
+ * what the artifact actually is.
+ */
+export function evaluatePersistenceArtifactRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  return fileEvents
+    .filter((event) => event.action === 'created' && event.filePath.includes(STARTUP_LOCATION_MARKER))
+    .map((event) => {
+      const device = deviceById.get(event.deviceId);
+      const filename = event.filePath.split('\\').pop();
+      return {
+        id: randomUUID(),
+        detectionRuleName: PERSISTENCE_ARTIFACT_RULE_NAME,
+        title: `New Startup-folder entry "${filename}" on ${device?.hostname ?? 'a device'}`,
+        description: `A file was written to a Startup folder location on ${device?.hostname ?? 'a device'} ("${event.filePath}") — this location runs automatically at every logon and is a common persistence technique.`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device?.id ?? event.deviceId,
+        evidenceRefs: [{ eventTable: 'file_events', eventId: event.id }],
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      };
+    });
 }
 
 /**

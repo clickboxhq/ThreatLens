@@ -26,6 +26,7 @@ import { InstructorModule } from './modules/instructor/instructor.module';
 import { HintsModule } from './modules/hints/hints.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { RealtimeModule } from './common/realtime/realtime.module';
+import { LearningModule } from './modules/learning/learning.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { RealtimeModule } from './common/realtime/realtime.module';
     HintsModule,
     LeaderboardModule,
     RealtimeModule,
+    LearningModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

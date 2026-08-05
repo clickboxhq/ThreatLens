@@ -1,9 +1,10 @@
-import type { Alert, Device, EmailMessage, FileEvent, Identity, MitreTechnique, NetworkEvent, ProcessEvent, SignInEvent } from '@prisma/client';
+import type { Alert, CloudEvent, Device, EmailMessage, FileEvent, HttpRequest, Identity, MitreTechnique, NetworkEvent, ProcessEvent, SignInEvent } from '@prisma/client';
 import { toStudentIdentityDto } from './identity.dto';
 import { toStudentSignInDto } from './sign-in.dto';
 import { toStudentEmailDto } from './email.dto';
 import { toStudentAlertDto } from './alert.dto';
-import { toStudentDeviceDto, toStudentFileEventDto, toStudentNetworkEventDto, toStudentProcessEventDto } from './device.dto';
+import { toStudentDeviceDto, toStudentFileEventDto, toStudentHttpRequestDto, toStudentNetworkEventDto, toStudentProcessEventDto } from './device.dto';
+import { toStudentCloudEventDto } from './cloud.dto';
 
 const FORBIDDEN_SUBSTRINGS = ['isGroundTruthEvidence', 'isGroundTruthActor', 'isFalsePositiveByDesign', 'correlationId'];
 
@@ -202,5 +203,49 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
     } as NetworkEvent;
 
     assertNoForbiddenFields(toStudentNetworkEventDto(event));
+  });
+
+  it('strips ground-truth fields from a cloud event', () => {
+    const event = {
+      id: 'c-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: 'technique-1',
+      correlationId: 'corr-1',
+      raw: { source: 'ground_truth' },
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      identityId: 'id-1',
+      provider: 'aws_style',
+      actionName: 'CreateAccessKey',
+      resourceId: 'sofia.garcia@contoso-finance.example.com',
+      sourceIp: '203.0.113.10',
+    } as CloudEvent;
+
+    const dto = toStudentCloudEventDto(event);
+    assertNoForbiddenFields(dto);
+    expect(JSON.parse(JSON.stringify(dto)).raw).toBeUndefined();
+  });
+
+  it('strips ground-truth fields from an http request', () => {
+    const event = {
+      id: 'h-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: 'technique-1',
+      correlationId: 'corr-1',
+      raw: { source: 'ground_truth' },
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      deviceId: 'd-1',
+      identityId: null,
+      method: 'POST',
+      url: '/uploads/images/x7f2a9c.php',
+      userAgent: 'curl/7.88.1',
+      statusCode: 200,
+      sourceIp: '203.0.113.10',
+    } as HttpRequest;
+
+    const dto = toStudentHttpRequestDto(event);
+    assertNoForbiddenFields(dto);
+    expect(JSON.parse(JSON.stringify(dto)).raw).toBeUndefined();
   });
 });

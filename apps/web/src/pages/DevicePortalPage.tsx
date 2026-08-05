@@ -1,58 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { devicePortalApi, incidentsApi } from '../api/endpoints';
-import type { Device, FileEvent, IncidentSummary, NetworkEvent, ProcessEventNode } from '../api/types';
+import type { Device, FileEvent, HttpRequest, IncidentSummary, NetworkEvent, ProcessEventNode } from '../api/types';
 import { SessionNav } from '../components/Layout';
+import { PinEvidenceButton } from '../components/PinEvidenceButton';
 
-interface PinButtonProps {
-  eventKey: string;
-  eventTable: string;
-  eventId: string;
-  incidentId: string | null;
+interface ProcessTreeViewProps {
+  nodes: ProcessEventNode[];
+  depth?: number;
+  targetIncidentId: string | null;
   pinnedKeys: Set<string>;
   onPinned: (key: string) => void;
 }
 
-function PinEvidenceButton({ eventKey, eventTable, eventId, incidentId, pinnedKeys, onPinned }: PinButtonProps) {
-  const { sessionId } = useParams<{ sessionId: string }>();
-  const [pinning, setPinning] = useState(false);
-  const [justification, setJustification] = useState('');
-
-  if (pinnedKeys.has(eventKey)) return <span style={{ fontSize: 12, color: '#64748b' }}>Pinned</span>;
-
-  if (!pinning) {
-    return (
-      <button disabled={!incidentId} onClick={() => setPinning(true)}>
-        Pin as Evidence
-      </button>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <input
-        aria-label="Evidence justification"
-        placeholder="Why is this relevant? (5+ characters)"
-        value={justification}
-        onChange={(e) => setJustification(e.target.value)}
-        style={{ minWidth: 200 }}
-        autoFocus
-      />
-      <button
-        disabled={justification.trim().length < 5}
-        onClick={async () => {
-          await incidentsApi.pinEvidence(sessionId!, incidentId!, eventTable, eventId, justification.trim());
-          onPinned(eventKey);
-        }}
-      >
-        Confirm
-      </button>
-      <button onClick={() => setPinning(false)}>Cancel</button>
-    </div>
-  );
-}
-
-function ProcessTreeView({ nodes, depth = 0 }: { nodes: ProcessEventNode[]; depth?: number }) {
+function ProcessTreeView({ nodes, depth = 0, targetIncidentId, pinnedKeys, onPinned }: ProcessTreeViewProps) {
   return (
     <ul style={{ listStyle: 'none', margin: 0, paddingLeft: depth === 0 ? 0 : 20 }}>
       {nodes.map((node) => (
@@ -64,8 +25,26 @@ function ProcessTreeView({ nodes, depth = 0 }: { nodes: ProcessEventNode[]; dept
               {new Date(node.occurredAt).toLocaleTimeString()} · integrity: {node.integrityLevel} · sha256:{' '}
               {node.hashSha256.slice(0, 12)}…
             </div>
+            <div style={{ marginTop: 6 }}>
+              <PinEvidenceButton
+                eventKey={`process_events:${node.id}`}
+                eventTable="process_events"
+                eventId={node.id}
+                incidentId={targetIncidentId}
+                pinnedKeys={pinnedKeys}
+                onPinned={onPinned}
+              />
+            </div>
           </div>
-          {node.children.length > 0 && <ProcessTreeView nodes={node.children} depth={depth + 1} />}
+          {node.children.length > 0 && (
+            <ProcessTreeView
+              nodes={node.children}
+              depth={depth + 1}
+              targetIncidentId={targetIncidentId}
+              pinnedKeys={pinnedKeys}
+              onPinned={onPinned}
+            />
+          )}
         </li>
       ))}
     </ul>
@@ -79,6 +58,7 @@ export function DevicePortalPage() {
   const [processTree, setProcessTree] = useState<ProcessEventNode[]>([]);
   const [files, setFiles] = useState<FileEvent[]>([]);
   const [network, setNetwork] = useState<NetworkEvent[]>([]);
+  const [httpRequests, setHttpRequests] = useState<HttpRequest[]>([]);
   const [isolating, setIsolating] = useState(false);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [targetIncidentId, setTargetIncidentId] = useState<string>('');
@@ -100,14 +80,16 @@ export function DevicePortalPage() {
 
   async function select(device: Device) {
     setSelected(device);
-    const [tree, fileEvents, networkEvents] = await Promise.all([
+    const [tree, fileEvents, networkEvents, httpEvents] = await Promise.all([
       devicePortalApi.getProcessTree(sessionId!, device.id),
       devicePortalApi.getFiles(sessionId!, device.id),
       devicePortalApi.getNetwork(sessionId!, device.id),
+      devicePortalApi.getHttpRequests(sessionId!, device.id),
     ]);
     setProcessTree(tree);
     setFiles(fileEvents);
     setNetwork(networkEvents);
+    setHttpRequests(httpEvents);
   }
 
   async function isolate() {
@@ -164,7 +146,16 @@ export function DevicePortalPage() {
               </p>
 
               <h3>Process Tree</h3>
-              {processTree.length > 0 ? <ProcessTreeView nodes={processTree} /> : <p>No process activity recorded.</p>}
+              {processTree.length > 0 ? (
+                <ProcessTreeView
+                  nodes={processTree}
+                  targetIncidentId={targetIncidentId || null}
+                  pinnedKeys={pinnedKeys}
+                  onPinned={markPinned}
+                />
+              ) : (
+                <p>No process activity recorded.</p>
+              )}
 
               {incidents.length > 0 && (
                 <label style={{ display: 'block', fontSize: 13, margin: '12px 0' }}>
@@ -253,6 +244,47 @@ export function DevicePortalPage() {
                 </table>
               ) : (
                 <p>No network activity recorded.</p>
+              )}
+
+              <h3>HTTP Requests</h3>
+              {httpRequests.length > 0 ? (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                      <th>Time</th>
+                      <th>Method</th>
+                      <th>URL</th>
+                      <th>Status</th>
+                      <th>User Agent</th>
+                      <th>Source IP</th>
+                      <th>Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {httpRequests.map((h) => (
+                      <tr key={h.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td>{new Date(h.occurredAt).toLocaleTimeString()}</td>
+                        <td>{h.method}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{h.url}</td>
+                        <td>{h.statusCode}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{h.userAgent}</td>
+                        <td>{h.sourceIp}</td>
+                        <td>
+                          <PinEvidenceButton
+                            eventKey={`http_requests:${h.id}`}
+                            eventTable="http_requests"
+                            eventId={h.id}
+                            incidentId={targetIncidentId || null}
+                            pinnedKeys={pinnedKeys}
+                            onPinned={markPinned}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p>No HTTP request activity recorded.</p>
               )}
             </>
           ) : (

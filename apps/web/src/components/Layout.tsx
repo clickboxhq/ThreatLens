@@ -28,6 +28,9 @@ export function AppLayout() {
               <Link to="/catalog" style={{ color: '#334155' }}>
                 Catalog
               </Link>
+              <Link to="/paths" style={{ color: '#334155' }}>
+                Learning Paths
+              </Link>
               <Link to="/progress" style={{ color: '#334155' }}>
                 Progress
               </Link>
@@ -43,6 +46,9 @@ export function AppLayout() {
         {user && (
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <span>{user.displayName}</span>
+            <Link to="/settings" style={{ color: '#334155' }}>
+              Settings
+            </Link>
             <button onClick={logout}>Log out</button>
           </div>
         )}
