@@ -22,6 +22,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = exception.getStatus();
       code = exception.code;
       message = exception.message;
+      if (exception.headers) {
+        for (const [key, value] of Object.entries(exception.headers)) {
+          response.set(key, value);
+        }
+      }
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const body = exception.getResponse();

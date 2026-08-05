@@ -7,6 +7,9 @@ export class AppException extends HttpException {
     status: number,
     public readonly code: string,
     message: string,
+    // §15.5: rate-limit/lockout responses carry a `Retry-After` header — applied by
+    // AllExceptionsFilter, since that's the one place every thrown error passes through.
+    public readonly headers?: Record<string, string>,
   ) {
     super(message, status);
   }

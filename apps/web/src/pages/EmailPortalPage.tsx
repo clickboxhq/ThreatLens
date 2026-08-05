@@ -1,19 +1,32 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { emailPortalApi } from '../api/endpoints';
-import type { EmailMessage } from '../api/types';
+import { emailPortalApi, incidentsApi } from '../api/endpoints';
+import type { EmailMessage, IncidentSummary } from '../api/types';
 import { SessionNav } from '../components/Layout';
+import { PinEvidenceButton } from '../components/PinEvidenceButton';
 
 export function EmailPortalPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [emails, setEmails] = useState<EmailMessage[]>([]);
   const [selected, setSelected] = useState<EmailMessage | null>(null);
   const [showHeaders, setShowHeaders] = useState(false);
+  const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
+  const [targetIncidentId, setTargetIncidentId] = useState<string>('');
+  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!sessionId) return;
     emailPortalApi.list(sessionId).then(setEmails);
+    incidentsApi.list(sessionId).then((list) => {
+      setIncidents(list);
+      const openIncident = list.find((i) => i.status !== 'closed');
+      if (openIncident) setTargetIncidentId(openIncident.id);
+    });
   }, [sessionId]);
+
+  function markPinned(key: string) {
+    setPinnedKeys((prev) => new Set(prev).add(key));
+  }
 
   return (
     <div>
@@ -60,6 +73,30 @@ export function EmailPortalPage() {
                   SPF: {selected.spfResult} · DKIM: {selected.dkimResult} · DMARC: {selected.dmarcResult}
                 </p>
               </div>
+
+              {incidents.length > 0 && (
+                <label style={{ display: 'block', fontSize: 13, marginBottom: 12 }}>
+                  Pin evidence to incident:{' '}
+                  <select value={targetIncidentId} onChange={(e) => setTargetIncidentId(e.target.value)}>
+                    {incidents.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.title} ({i.status})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div style={{ marginBottom: 12 }}>
+                <PinEvidenceButton
+                  eventKey={`email_messages:${selected.id}`}
+                  eventTable="email_messages"
+                  eventId={selected.id}
+                  incidentId={targetIncidentId || null}
+                  pinnedKeys={pinnedKeys}
+                  onPinned={markPinned}
+                />
+              </div>
+
               <button onClick={() => setShowHeaders((v) => !v)}>{showHeaders ? 'Hide raw headers' : 'View source'}</button>
               {showHeaders && (
                 <pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 12, borderRadius: 8, overflowX: 'auto' }}>

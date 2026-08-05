@@ -33,6 +33,8 @@ import type {
   RosterEntry,
   ScenarioSummary,
   ScoreResult,
+  SearchFilter,
+  SearchResult,
   SessionHistoryItem,
   SessionSummary,
   SignIn,
@@ -49,6 +51,9 @@ export const authApi = {
     }),
   login: (email: string, password: string) => api.post<LoginResponse>('/auth/login', { email, password }),
   logout: (refreshToken: string) => api.post<void>('/auth/logout', { refreshToken }),
+  requestPasswordReset: (email: string) => api.post<void>('/auth/password-reset/request', { email }),
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    api.post<void>('/auth/password-reset/confirm', { token, newPassword }),
 };
 
 export const mfaApi = {
@@ -167,6 +172,11 @@ export const threatIntelApi = {
     api.get<{ value: string; type: string; reputation: string; actorAttribution: string | null; context: string | null }>(
       `/sessions/${sessionId}/threat-intel?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`,
     ),
+};
+
+export const searchApi = {
+  search: (sessionId: string, filters: SearchFilter[], freetext?: string) =>
+    api.post<{ results: SearchResult[] }>(`/sessions/${sessionId}/search`, { filters, freetext }),
 };
 
 export const hintsApi = {

@@ -8,6 +8,7 @@ import { SessionDashboardPage } from './pages/SessionDashboardPage';
 import { IdentityPortalPage } from './pages/IdentityPortalPage';
 import { DevicePortalPage } from './pages/DevicePortalPage';
 import { EmailPortalPage } from './pages/EmailPortalPage';
+import { SearchPage } from './pages/SearchPage';
 import { IncidentsListPage } from './pages/IncidentsListPage';
 import { IncidentWorkspacePage } from './pages/IncidentWorkspacePage';
 import { ResultsPage } from './pages/ResultsPage';
@@ -22,6 +23,8 @@ import { LearningPathsPage } from './pages/LearningPathsPage';
 import { LearningPathDetailPage } from './pages/LearningPathDetailPage';
 import { CertificateVerifyPage } from './pages/CertificateVerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import type { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -48,6 +51,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify/:certificateId" element={<CertificateVerifyPage />} />
       <Route
         element={
@@ -65,6 +70,7 @@ export default function App() {
         <Route path="/sessions/:sessionId/identities" element={<IdentityPortalPage />} />
         <Route path="/sessions/:sessionId/devices" element={<DevicePortalPage />} />
         <Route path="/sessions/:sessionId/emails" element={<EmailPortalPage />} />
+        <Route path="/sessions/:sessionId/search" element={<SearchPage />} />
         <Route path="/sessions/:sessionId/incidents" element={<IncidentsListPage />} />
         <Route path="/sessions/:sessionId/incidents/:incidentId" element={<IncidentWorkspacePage />} />
         <Route path="/sessions/:sessionId/results" element={<ResultsPage />} />

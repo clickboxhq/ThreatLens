@@ -1,9 +1,14 @@
 import { randomUUID } from 'crypto';
 import { generateSecret, generate as generateTotp } from 'otplib';
+import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { MfaChallengeStore } from './mfa-challenge.store';
+import { PasswordResetTokenStore } from './password-reset-token.store';
+import { LoginAttemptTracker, computeLockoutSeconds } from './login-attempt-tracker.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { User } from '@prisma/client';
+
+const TEST_IP = '203.0.113.10';
 
 function user(overrides: Partial<User> = {}): User {
   return {
@@ -46,6 +51,47 @@ class FakeMfaChallengeStore {
   }
 }
 
+// Same rationale as FakeMfaChallengeStore — deliberately not extending PasswordResetTokenStore.
+class FakePasswordResetTokenStore {
+  private readonly byToken = new Map<string, string>();
+
+  async create(userId: string): Promise<string> {
+    const token = randomUUID();
+    this.byToken.set(token, userId);
+    return token;
+  }
+
+  async consume(token: string): Promise<string | null> {
+    const userId = this.byToken.get(token) ?? null;
+    this.byToken.delete(token);
+    return userId;
+  }
+}
+
+// Same rationale again — reuses the real computeLockoutSeconds math (already covered by its
+// own pure-function tests) but keeps everything in memory instead of a live Redis connection.
+class FakeLoginAttemptTracker {
+  private readonly counts = new Map<string, number>();
+
+  private key(email: string, sourceIp: string): string {
+    return `${email.toLowerCase()}:${sourceIp}`;
+  }
+
+  async lockoutSecondsRemaining(email: string, sourceIp: string): Promise<number> {
+    const count = this.counts.get(this.key(email, sourceIp)) ?? 0;
+    return computeLockoutSeconds(count);
+  }
+
+  async recordFailure(email: string, sourceIp: string): Promise<void> {
+    const key = this.key(email, sourceIp);
+    this.counts.set(key, (this.counts.get(key) ?? 0) + 1);
+  }
+
+  async clear(email: string, sourceIp: string): Promise<void> {
+    this.counts.delete(this.key(email, sourceIp));
+  }
+}
+
 function buildService(users: Map<string, User>) {
   const prisma = {
     user: {
@@ -70,15 +116,26 @@ function buildService(users: Map<string, User>) {
     refreshToken: {
       create: jest.fn(async () => ({ id: randomUUID() })),
       update: jest.fn(async () => ({})),
+      updateMany: jest.fn(async () => ({ count: 0 })),
     },
+    $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
 
   const jwt = { sign: jest.fn(() => 'signed.jwt.token') };
   const config = { get: jest.fn(() => undefined) };
   const mfaChallenges = new FakeMfaChallengeStore();
+  const passwordResetTokens = new FakePasswordResetTokenStore();
+  const loginAttempts = new FakeLoginAttemptTracker();
 
-  const service = new AuthService(prisma as never, jwt as never, config as never, mfaChallenges as unknown as MfaChallengeStore);
-  return { service, prisma, mfaChallenges };
+  const service = new AuthService(
+    prisma as never,
+    jwt as never,
+    config as never,
+    mfaChallenges as unknown as MfaChallengeStore,
+    passwordResetTokens as unknown as PasswordResetTokenStore,
+    loginAttempts as unknown as LoginAttemptTracker,
+  );
+  return { service, prisma, mfaChallenges, passwordResetTokens, loginAttempts };
 }
 
 describe('AuthService MFA (§15.1, §16.2)', () => {
@@ -89,7 +146,7 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     const users = new Map([[enrolled.id, enrolled]]);
     const { service } = buildService(users);
 
-    const result = await service.login({ email: enrolled.email, password: 'correct horse battery staple' });
+    const result = await service.login({ email: enrolled.email, password: 'correct horse battery staple' }, TEST_IP);
     expect('mfaRequired' in result && result.mfaRequired).toBe(true);
   });
 
@@ -100,7 +157,7 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     const users = new Map([[plain.id, plain]]);
     const { service } = buildService(users);
 
-    const result = await service.login({ email: plain.email, password: 'correct horse battery staple' });
+    const result = await service.login({ email: plain.email, password: 'correct horse battery staple' }, TEST_IP);
     expect('mfaRequired' in result).toBe(false);
     expect('accessToken' in result && result.accessToken).toBeTruthy();
   });
@@ -214,5 +271,160 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
 
     await expect(service.mfaDisable(enrolled.id, 'wrong password')).rejects.toThrow(AppException);
     expect(users.get(enrolled.id)!.mfaEnabled).toBe(true);
+  });
+});
+
+describe('AuthService password reset (§15.1, §16.2)', () => {
+  it('requestPasswordReset() creates a token for a known, active account with a password', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const { service, passwordResetTokens } = buildService(users);
+    const createSpy = jest.spyOn(passwordResetTokens, 'create');
+
+    await service.requestPasswordReset(target.email);
+    expect(createSpy).toHaveBeenCalledWith(target.id);
+  });
+
+  it('requestPasswordReset() resolves without creating a token for an unknown email (no user enumeration)', async () => {
+    const users = new Map<string, User>();
+    const { service, passwordResetTokens } = buildService(users);
+    const createSpy = jest.spyOn(passwordResetTokens, 'create');
+
+    await expect(service.requestPasswordReset('nobody@example.com')).resolves.toBeUndefined();
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('requestPasswordReset() does not create a token for a suspended account', async () => {
+    const suspended = user({ status: 'suspended' });
+    const users = new Map([[suspended.id, suspended]]);
+    const { service, passwordResetTokens } = buildService(users);
+    const createSpy = jest.spyOn(passwordResetTokens, 'create');
+
+    await service.requestPasswordReset(suspended.email);
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('requestPasswordReset() does not create a token for an account with no password set', async () => {
+    const ssoOnly = user({ passwordHash: null });
+    const users = new Map([[ssoOnly.id, ssoOnly]]);
+    const { service, passwordResetTokens } = buildService(users);
+    const createSpy = jest.spyOn(passwordResetTokens, 'create');
+
+    await service.requestPasswordReset(ssoOnly.email);
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('confirmPasswordReset() sets a new password, invalidates the old one, and revokes other sessions', async () => {
+    const oldPasswordHash = await argon2.hash('old password 123', { type: argon2.argon2id });
+    const target = user({ passwordHash: oldPasswordHash });
+    const users = new Map([[target.id, target]]);
+    const { service, prisma, passwordResetTokens } = buildService(users);
+
+    const token = await passwordResetTokens.create(target.id);
+    await service.confirmPasswordReset(token, 'brand new password 456');
+
+    const updated = users.get(target.id)!;
+    expect(await argon2.verify(updated.passwordHash!, 'brand new password 456')).toBe(true);
+    expect(await argon2.verify(oldPasswordHash, 'old password 123')).toBe(true); // sanity: old hash itself still verifies its own password
+    expect(updated.sessionVersion).toBe(target.sessionVersion + 1);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: target.id, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('confirmPasswordReset() rejects an invalid or unknown token', async () => {
+    const users = new Map<string, User>();
+    const { service } = buildService(users);
+
+    await expect(service.confirmPasswordReset('not-a-real-token', 'brand new password 456')).rejects.toThrow(AppException);
+  });
+
+  it('confirmPasswordReset() rejects a token that was already used (one-time use)', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const { service, passwordResetTokens } = buildService(users);
+
+    const token = await passwordResetTokens.create(target.id);
+    await service.confirmPasswordReset(token, 'brand new password 456');
+
+    await expect(service.confirmPasswordReset(token, 'yet another password 789')).rejects.toThrow(AppException);
+  });
+});
+
+describe('AuthService login lockout (§15.1)', () => {
+  it('locks out the (account, IP) pair after enough failed attempts, before the threshold is reached nothing is blocked', async () => {
+    const argon2Mod = await import('argon2');
+    const passwordHash = await argon2Mod.hash('correct horse battery staple', { type: argon2Mod.argon2id });
+    const target = user({ passwordHash });
+    const users = new Map([[target.id, target]]);
+    const { service } = buildService(users);
+
+    for (let i = 0; i < 4; i++) {
+      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+    }
+
+    // Still under threshold — a correct password should still work.
+    const result = await service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP);
+    expect('mfaRequired' in result).toBe(false);
+  });
+
+  it('rejects even a correct password once the (account, IP) pair is locked out', async () => {
+    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const target = user({ passwordHash });
+    const users = new Map([[target.id, target]]);
+    const { service } = buildService(users);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+    }
+
+    await expect(service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP)).rejects.toMatchObject({
+      code: 'ACCOUNT_LOCKED',
+    });
+  });
+
+  it('does not lock out attempts against the same account from a different source IP', async () => {
+    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const target = user({ passwordHash });
+    const users = new Map([[target.id, target]]);
+    const { service } = buildService(users);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+    }
+
+    const result = await service.login({ email: target.email, password: 'correct horse battery staple' }, '198.51.100.99');
+    expect('mfaRequired' in result).toBe(false);
+  });
+
+  it('clears the failure count on a successful login, so a later mistake does not inherit prior attempts', async () => {
+    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const target = user({ passwordHash });
+    const users = new Map([[target.id, target]]);
+    const { service } = buildService(users);
+
+    for (let i = 0; i < 3; i++) {
+      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+    }
+    await service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP);
+
+    // Only 1 failure since the successful login — nowhere near the threshold.
+    await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toMatchObject({
+      code: 'INVALID_CREDENTIALS',
+    });
+  });
+
+  it('applies the same lockout mechanics to a nonexistent email, so account existence cannot be inferred by lockout behavior', async () => {
+    const users = new Map<string, User>();
+    const { service } = buildService(users);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(service.login({ email: 'nobody@example.com', password: 'irrelevant' }, TEST_IP)).rejects.toThrow(AppException);
+    }
+
+    await expect(service.login({ email: 'nobody@example.com', password: 'irrelevant' }, TEST_IP)).rejects.toMatchObject({
+      code: 'ACCOUNT_LOCKED',
+    });
   });
 });

@@ -86,6 +86,9 @@ export function SessionNav() {
       <NavLink to={`/sessions/${sessionId}/emails`} style={linkStyle}>
         Emails
       </NavLink>
+      <NavLink to={`/sessions/${sessionId}/search`} style={linkStyle}>
+        Search
+      </NavLink>
     </nav>
   );
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -8,6 +8,8 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { MfaChallengeStore } from './mfa-challenge.store';
+import { PasswordResetTokenStore } from './password-reset-token.store';
+import { LoginAttemptTracker } from './login-attempt-tracker.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import type { User } from '@prisma/client';
@@ -44,11 +46,15 @@ async function verifyTotpCode(code: string, secret: string): Promise<boolean> {
 // is a distinct, tested path, since auth is the highest-consequence code in the service.
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mfaChallenges: MfaChallengeStore,
+    private readonly passwordResetTokens: PasswordResetTokenStore,
+    private readonly loginAttempts: LoginAttemptTracker,
   ) {}
 
   async signup(dto: SignupDto) {
@@ -77,20 +83,36 @@ export class AuthService {
     return { userId: user.id, emailVerificationRequired: false };
   }
 
-  async login(dto: LoginDto): Promise<LoginResult> {
+  async login(dto: LoginDto, sourceIp: string): Promise<LoginResult> {
+    // §15.1: checked before touching the password at all — a locked-out (account, IP) pair
+    // gets rejected outright, so a lockout can't be probed away by simply retrying faster.
+    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(dto.email, sourceIp);
+    if (lockoutSeconds > 0) {
+      throw new AppException(
+        423,
+        'ACCOUNT_LOCKED',
+        `Too many failed attempts. Try again in ${lockoutSeconds} seconds.`,
+        { 'Retry-After': String(lockoutSeconds) },
+      );
+    }
+
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user || !user.passwordHash) {
+      await this.loginAttempts.recordFailure(dto.email, sourceIp);
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
     const passwordValid = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordValid) {
+      await this.loginAttempts.recordFailure(dto.email, sourceIp);
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
     if (user.status !== 'active') {
       throw new AppException(403, 'ACCOUNT_NOT_ACTIVE', 'This account is not active.');
     }
+
+    await this.loginAttempts.clear(dto.email, sourceIp);
 
     // §15.1: MFA is enforced at login, not just offered — the password alone never completes
     // authentication for an MFA-enrolled account. Tokens are issued only from mfaVerify().
@@ -195,6 +217,47 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
     return { enabled: user.mfaEnabled, mandatory: MFA_MANDATORY_ROLES.has(user.role) };
+  }
+
+  /**
+   * §16.2 `POST /auth/password-reset/request`. Always resolves the same way regardless of
+   * whether the email matches an account — a distinguishable response here is a user-
+   * enumeration vector, which matters as much for a reset flow as it does for login (§15.1).
+   *
+   * No transactional email provider is wired up yet (§5.9's `email` queue is a later
+   * milestone, same gap noted on `signup`'s auto-verification) — the reset link is logged
+   * server-side as a stand-in for the email that would otherwise deliver it.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash || user.status !== 'active') {
+      return;
+    }
+
+    const token = await this.passwordResetTokens.create(user.id);
+    const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password?token=${token}`;
+    this.logger.log(`Password reset requested for ${user.email}. Link (stands in for an emailed link): ${resetUrl}`);
+  }
+
+  /** §16.2 `POST /auth/password-reset/confirm`. Consumes the token and revokes every other active session. */
+  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+    const userId = await this.passwordResetTokens.consume(token);
+    if (!userId) {
+      throw new AppException(401, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired.');
+    }
+
+    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash, sessionVersion: { increment: 1 } },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 
   private async tryConsumeRecoveryCode(user: User, code: string): Promise<boolean> {

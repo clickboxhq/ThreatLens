@@ -217,6 +217,15 @@ export interface EmailMessage {
   urls: EmailUrl[];
 }
 
+export interface SearchFilter {
+  field: string;
+  value: string;
+}
+
+export type SearchResult =
+  | { entityType: 'sign_in_event'; occurredAt: string; data: SignIn }
+  | { entityType: 'email_message'; occurredAt: string; data: EmailMessage };
+
 // Returned by GET /incidents (§16.6 list) — deliberately lighter than the full detail shape.
 export interface IncidentSummary {
   id: string;
