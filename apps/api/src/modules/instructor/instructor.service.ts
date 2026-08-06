@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
+import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { CreateAssignmentDto, CreateCohortDto, SubmitInstructorFeedbackDto } from './dto/instructor.dto';
@@ -13,6 +14,7 @@ export class InstructorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async createCohort(user: AuthenticatedUser, dto: CreateCohortDto) {
@@ -24,6 +26,14 @@ export class InstructorService {
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
       },
+    });
+    // §6.22: `cohort_created` is one of the doc's own named example actions.
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'cohort_created',
+      targetType: 'cohort',
+      targetId: cohort.id,
+      metadata: { name: dto.name },
     });
     return this.toCohortDto(cohort.id);
   }

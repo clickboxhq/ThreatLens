@@ -18,6 +18,13 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 const AUTH_RATE_LIMIT = 10;
 const AUTH_RATE_LIMIT_WINDOW_SECONDS = 60;
 
+// §5.2: every request carries a correlation ID (CorrelationIdMiddleware); audit_logs rows
+// tie back to it (§6.22) so a security-relevant DB row can be traced to the request/log line
+// that produced it.
+function correlationIdOf(req: Request): string | undefined {
+  return (req as Request & { correlationId?: string }).correlationId;
+}
+
 // Matches docs/SOCVerse-Architecture.md §16.2.
 @Controller('auth')
 export class AuthController {
@@ -36,7 +43,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: Request) {
     await this.rateLimiter.enforce(`login:${req.ip}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
-    return this.authService.login(dto, req.ip ?? 'unknown');
+    return this.authService.login(dto, req.ip ?? 'unknown', correlationIdOf(req));
   }
 
   @Post('refresh')
@@ -54,14 +61,14 @@ export class AuthController {
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logoutAll(@CurrentUser() user: AuthenticatedUser) {
-    await this.authService.logoutAll(user.id);
+  async logoutAll(@CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    await this.authService.logoutAll(user.id, req.ip, correlationIdOf(req));
   }
 
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
-  async mfaVerify(@Body() dto: MfaVerifyDto) {
-    return this.authService.mfaVerify(dto.mfaChallengeId, dto.code);
+  async mfaVerify(@Body() dto: MfaVerifyDto, @Req() req: Request) {
+    return this.authService.mfaVerify(dto.mfaChallengeId, dto.code, req.ip, correlationIdOf(req));
   }
 
   @Get('mfa/status')
@@ -78,15 +85,15 @@ export class AuthController {
 
   @Post('mfa/enable')
   @UseGuards(JwtAuthGuard)
-  async mfaEnable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaEnableDto) {
-    return this.authService.mfaEnable(user.id, dto.code);
+  async mfaEnable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaEnableDto, @Req() req: Request) {
+    return this.authService.mfaEnable(user.id, dto.code, req.ip, correlationIdOf(req));
   }
 
   @Post('mfa/disable')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async mfaDisable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaDisableDto) {
-    await this.authService.mfaDisable(user.id, dto.password);
+  async mfaDisable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaDisableDto, @Req() req: Request) {
+    await this.authService.mfaDisable(user.id, dto.password, req.ip, correlationIdOf(req));
   }
 
   @Post('password-reset/request')
@@ -98,7 +105,7 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async confirmPasswordReset(@Body() dto: PasswordResetConfirmDto) {
-    await this.authService.confirmPasswordReset(dto.token, dto.newPassword);
+  async confirmPasswordReset(@Body() dto: PasswordResetConfirmDto, @Req() req: Request) {
+    await this.authService.confirmPasswordReset(dto.token, dto.newPassword, req.ip, correlationIdOf(req));
   }
 }

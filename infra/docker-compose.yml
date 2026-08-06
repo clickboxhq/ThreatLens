@@ -56,7 +56,10 @@ services:
     env_file:
       - ../.env
     environment:
-      DATABASE_URL: postgresql://socverse:socverse_dev_password@postgres:5432/socverse
+      # §15.9: the running app connects as the least-privilege `socverse_app` role, not the
+      # `socverse` superuser — see prisma/migrations/20260806001500_add_least_privilege_app_role.
+      DATABASE_URL: postgresql://socverse_app:socverse_app_dev_password@postgres:5432/socverse
+      MIGRATE_DATABASE_URL: postgresql://socverse:socverse_dev_password@postgres:5432/socverse
       REDIS_URL: redis://redis:6379
       OBJECT_STORAGE_ENDPOINT: minio
       OBJECT_STORAGE_PORT: "9000"

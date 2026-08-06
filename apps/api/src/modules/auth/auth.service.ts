@@ -10,6 +10,7 @@ import { AppException } from '../../common/exceptions/app-exception';
 import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
 import { LoginAttemptTracker } from './login-attempt-tracker.service';
+import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import type { User } from '@prisma/client';
@@ -55,6 +56,7 @@ export class AuthService {
     private readonly mfaChallenges: MfaChallengeStore,
     private readonly passwordResetTokens: PasswordResetTokenStore,
     private readonly loginAttempts: LoginAttemptTracker,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async signup(dto: SignupDto) {
@@ -83,7 +85,7 @@ export class AuthService {
     return { userId: user.id, emailVerificationRequired: false };
   }
 
-  async login(dto: LoginDto, sourceIp: string): Promise<LoginResult> {
+  async login(dto: LoginDto, sourceIp: string, correlationId?: string): Promise<LoginResult> {
     // §15.1: checked before touching the password at all — a locked-out (account, IP) pair
     // gets rejected outright, so a lockout can't be probed away by simply retrying faster.
     const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(dto.email, sourceIp);
@@ -98,13 +100,13 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user || !user.passwordHash) {
-      await this.loginAttempts.recordFailure(dto.email, sourceIp);
+      await this.recordLoginFailure(dto.email, sourceIp, correlationId, null);
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
     const passwordValid = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordValid) {
-      await this.loginAttempts.recordFailure(dto.email, sourceIp);
+      await this.recordLoginFailure(dto.email, sourceIp, correlationId, user.id);
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
@@ -115,20 +117,66 @@ export class AuthService {
     await this.loginAttempts.clear(dto.email, sourceIp);
 
     // §15.1: MFA is enforced at login, not just offered — the password alone never completes
-    // authentication for an MFA-enrolled account. Tokens are issued only from mfaVerify().
+    // authentication for an MFA-enrolled account. Tokens are issued only from mfaVerify(),
+    // which is also where the completed-login audit entry is recorded for this path.
     if (user.mfaEnabled) {
       const mfaChallengeId = await this.mfaChallenges.create(user.id);
       return { mfaRequired: true, mfaChallengeId };
     }
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.auditLog.record({
+      actorUserId: user.id,
+      actorIp: sourceIp,
+      action: 'login',
+      targetType: 'user',
+      targetId: user.id,
+      correlationId,
+    });
 
     const tokens = await this.issueTokenPair(user);
     return { ...tokens, user: { id: user.id, displayName: user.displayName, role: user.role } };
   }
 
+  /**
+   * §15.1: "an audit_logs `login_failed` entry per attempt, for anomaly review." Also detects
+   * whether this specific failure is the one that pushed the (account, IP) pair into a fresh
+   * lockout (it wasn't locked when `login()` checked moments ago, so if it's locked now, this
+   * attempt caused it) and records a distinct `account_locked` entry for that case.
+   */
+  private async recordLoginFailure(email: string, sourceIp: string, correlationId: string | undefined, userId: string | null): Promise<void> {
+    await this.loginAttempts.recordFailure(email, sourceIp);
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'login_failed',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { email },
+      correlationId,
+    });
+
+    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(email, sourceIp);
+    if (lockoutSeconds > 0) {
+      await this.auditLog.record({
+        actorUserId: userId,
+        actorIp: sourceIp,
+        action: 'account_locked',
+        targetType: 'user',
+        targetId: userId,
+        metadata: { email, lockoutSeconds },
+        correlationId,
+      });
+    }
+  }
+
   /** Completes login for an MFA-enrolled account (§16.2 `POST /auth/mfa/verify`). */
-  async mfaVerify(mfaChallengeId: string, code: string): Promise<TokenPair & { user: { id: string; displayName: string; role: string } }> {
+  async mfaVerify(
+    mfaChallengeId: string,
+    code: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<TokenPair & { user: { id: string; displayName: string; role: string } }> {
     const userId = await this.mfaChallenges.consume(mfaChallengeId);
     if (!userId) {
       throw new AppException(401, 'MFA_CHALLENGE_EXPIRED', 'This MFA challenge has expired or was already used. Please log in again.');
@@ -145,6 +193,15 @@ export class AuthService {
     }
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.auditLog.record({
+      actorUserId: user.id,
+      actorIp: sourceIp,
+      action: 'login',
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { viaRecoveryCode: usedRecoveryCode },
+      correlationId,
+    });
 
     const tokens = await this.issueTokenPair(user);
     return { ...tokens, user: { id: user.id, displayName: user.displayName, role: user.role } };
@@ -164,7 +221,7 @@ export class AuthService {
   }
 
   /** §16.2 `POST /auth/mfa/enable`: verifies the pending secret and turns MFA on, issuing one-time recovery codes. */
-  async mfaEnable(userId: string, code: string): Promise<{ recoveryCodes: string[] }> {
+  async mfaEnable(userId: string, code: string, sourceIp?: string, correlationId?: string): Promise<{ recoveryCodes: string[] }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.mfaSecret) {
       throw new AppException(400, 'MFA_NOT_SET_UP', 'Call /auth/mfa/setup first.');
@@ -185,12 +242,20 @@ export class AuthService {
         sessionVersion: { increment: 1 }, // §15.7: MFA change invalidates other active sessions.
       },
     });
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'mfa_enabled',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
 
     return { recoveryCodes };
   }
 
   /** §16.2 `POST /auth/mfa/disable`. Blocked for the roles §15.1 makes MFA mandatory for. */
-  async mfaDisable(userId: string, password: string): Promise<void> {
+  async mfaDisable(userId: string, password: string, sourceIp?: string, correlationId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.passwordHash) {
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid password.');
@@ -210,6 +275,14 @@ export class AuthService {
         mfaRecoveryCodesHash: [],
         sessionVersion: { increment: 1 },
       },
+    });
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'mfa_disabled',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
     });
   }
 
@@ -240,7 +313,7 @@ export class AuthService {
   }
 
   /** §16.2 `POST /auth/password-reset/confirm`. Consumes the token and revokes every other active session. */
-  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  async confirmPasswordReset(token: string, newPassword: string, sourceIp?: string, correlationId?: string): Promise<void> {
     const userId = await this.passwordResetTokens.consume(token);
     if (!userId) {
       throw new AppException(401, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired.');
@@ -258,6 +331,15 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+    // §6.22: `password_reset` is one of the doc's own named example actions.
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'password_reset',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
   }
 
   private async tryConsumeRecoveryCode(user: User, code: string): Promise<boolean> {
@@ -308,7 +390,7 @@ export class AuthService {
     });
   }
 
-  async logoutAll(userId: string): Promise<void> {
+  async logoutAll(userId: string, sourceIp?: string, correlationId?: string): Promise<void> {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
@@ -319,6 +401,14 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'logout_all',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
   }
 
   private async issueTokenPair(user: User, replacesTokenId?: string): Promise<TokenPair> {

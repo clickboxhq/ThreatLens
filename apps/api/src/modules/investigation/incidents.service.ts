@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
+import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { CloseIncidentDto, LinkAlertsDto, UpdateIncidentStatusDto } from './dto/incident.dto';
@@ -15,6 +16,7 @@ export class IncidentsService {
     private readonly sessionAccess: SessionAccessService,
     private readonly investigationActions: InvestigationActionsService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async create(sessionId: string, user: AuthenticatedUser, title: string) {
@@ -134,6 +136,16 @@ export class IncidentsService {
       targetType: 'incident',
       targetId: incidentId,
       metadata: { verdict: dto.verdict },
+    });
+    // §6.22: `verdict_submitted` is one of the doc's own named example actions — a Student's
+    // graded verdict is a grading-relevant, security-adjacent action, not just pedagogical
+    // replay data (which is what investigationActions.record above covers).
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'verdict_submitted',
+      targetType: 'incident',
+      targetId: incidentId,
+      metadata: { verdict: dto.verdict, sessionId },
     });
 
     await this.publishStatusChanged(sessionId, incidentId, 'closed');

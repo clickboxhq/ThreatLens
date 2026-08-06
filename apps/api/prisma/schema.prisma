@@ -11,6 +11,10 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
+  // §15.9 defense-in-depth: the running app connects as a least-privilege role (`url`).
+  // `prisma migrate`/`db push` instead use `directUrl`, which points at the DB owner role that
+  // actually has DDL rights — see 20260806_add_least_privilege_app_role for why this split exists.
+  directUrl  = env("MIGRATE_DATABASE_URL")
   extensions = [citext]
 }
 
@@ -81,8 +85,36 @@ model User {
   createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
   instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
   certificates          Certificate[]
+  auditLogs             AuditLog[]
 
   @@map("users")
+}
+
+// ---------- Audit Logging (§6.22, §15.9) ----------
+
+// Platform-wide, security/compliance-relevant action log — distinct in *purpose* from
+// InvestigationAction (§6.13, pedagogical/replay data scoped to a session) even though both
+// are append-only. Rows are never updated or deleted by application code; the migration that
+// creates this table additionally revokes UPDATE/DELETE grants on it from the app's own DB
+// role (§15.11) as defense-in-depth against a compromised app server tampering with its own
+// audit trail — so nothing in this codebase should ever call `.update()`/`.delete()` on it.
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  actorUserId   String?  @map("actor_user_id") @db.Uuid
+  actorIp       String?  @map("actor_ip")
+  action        String
+  targetType    String?  @map("target_type")
+  targetId      String?  @map("target_id") @db.Uuid
+  metadata      Json?
+  correlationId String?  @map("correlation_id") @db.Uuid
+  occurredAt    DateTime @default(now()) @map("occurred_at")
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([occurredAt])
+  @@map("audit_logs")
 }
 
 // ---------- Instructor Mode (§2.15, §6.5, §6.6, §6.20) ----------

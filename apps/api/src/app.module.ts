@@ -27,6 +27,8 @@ import { HintsModule } from './modules/hints/hints.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { RealtimeModule } from './common/realtime/realtime.module';
 import { LearningModule } from './modules/learning/learning.module';
+import { AuditLogModule } from './common/audit-log/audit-log.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -57,6 +59,8 @@ import { LearningModule } from './modules/learning/learning.module';
     LeaderboardModule,
     RealtimeModule,
     LearningModule,
+    AuditLogModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
