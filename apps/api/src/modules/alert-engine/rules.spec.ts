@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { CloudEvent, Device, EmailAttachment, EmailMessage, FileEvent, HttpRequest, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
 import {
   correlateCandidates,
+  evaluateCredentialDumpingRule,
   evaluateImpossibleTravelRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
@@ -11,7 +12,10 @@ import {
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluatePersistenceArtifactRule,
+  evaluateRemovableMediaCopyRule,
+  evaluateScheduledTaskPersistenceRule,
   evaluateSpfFailRule,
+  evaluateSqlInjectionRule,
   evaluateSuspiciousCloudActionRule,
   evaluateSuspiciousProcessRule,
   evaluateWebShellAccessRule,
@@ -713,5 +717,139 @@ describe('correlateCandidates (§8.3)', () => {
     const email1 = email({ correlationId: null }, victim.userPrincipalName);
     const candidates = evaluateSpfFailRule([email1], [victim]);
     expect(correlateCandidates(candidates)).toHaveLength(0);
+  });
+});
+
+describe('evaluateCredentialDumpingRule (§8.2)', () => {
+  it('fires when a command line references both comsvcs.dll and MiniDump', () => {
+    const dev = device();
+    const dump = processEvent(dev.id, {
+      imagePath: 'C:\\Windows\\System32\\rundll32.exe',
+      commandLine: 'rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump 812 C:\\Windows\\Temp\\lsass_dbg.dmp full',
+    });
+
+    const candidates = evaluateCredentialDumpingRule([dump], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].primaryEntityId).toBe(dev.id);
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'process_events', eventId: dump.id }]);
+  });
+
+  it('is case-insensitive on the command-line markers', () => {
+    const dev = device();
+    const dump = processEvent(dev.id, { commandLine: 'RUNDLL32.EXE COMSVCS.DLL, MINIDUMP 812 C:\\dump.dmp FULL' });
+    expect(evaluateCredentialDumpingRule([dump], [dev])).toHaveLength(1);
+  });
+
+  it('does not fire for an unrelated rundll32 invocation', () => {
+    const dev = device();
+    const benign = processEvent(dev.id, { commandLine: 'rundll32.exe shell32.dll,Control_RunDLL' });
+    expect(evaluateCredentialDumpingRule([benign], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire when only one of the two markers is present', () => {
+    const dev = device();
+    const partial = processEvent(dev.id, { commandLine: 'rundll32.exe comsvcs.dll, SomeOtherExport' });
+    expect(evaluateCredentialDumpingRule([partial], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateRemovableMediaCopyRule (§8.2)', () => {
+  it('fires once a device accumulates >= 5 file-created events on a removable drive within the window', () => {
+    const dev = device();
+    const copies = Array.from({ length: 5 }, (_, i) =>
+      fileEvent(dev.id, { action: 'created', filePath: `E:\\Backup\\file${i}.xlsx`, occurredAt: new Date(Date.now() + i * 1000) }),
+    );
+
+    const candidates = evaluateRemovableMediaCopyRule(copies, [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toHaveLength(5);
+  });
+
+  it('does not fire below the threshold', () => {
+    const dev = device();
+    const copies = Array.from({ length: 4 }, (_, i) => fileEvent(dev.id, { action: 'created', filePath: `E:\\Backup\\file${i}.xlsx` }));
+    expect(evaluateRemovableMediaCopyRule(copies, [dev])).toHaveLength(0);
+  });
+
+  it('ignores non-removable-drive paths even in high volume', () => {
+    const dev = device();
+    const copies = Array.from({ length: 6 }, (_, i) => fileEvent(dev.id, { action: 'created', filePath: `C:\\Shares\\Finance\\file${i}.xlsx` }));
+    expect(evaluateRemovableMediaCopyRule(copies, [dev])).toHaveLength(0);
+  });
+
+  it('ignores non-create actions on a removable drive', () => {
+    const dev = device();
+    const deletions = Array.from({ length: 6 }, (_, i) => fileEvent(dev.id, { action: 'deleted', filePath: `E:\\Backup\\file${i}.xlsx` }));
+    expect(evaluateRemovableMediaCopyRule(deletions, [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateSqlInjectionRule (§8.2)', () => {
+  it('fires on a boolean-tautology SQLi payload in the URL', () => {
+    const dev = device();
+    const probe = httpRequest(dev.id, { url: "/api/customers?id=1' OR '1'='1", userAgent: 'python-requests/2.31.0' });
+
+    const candidates = evaluateSqlInjectionRule([probe], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'http_requests', eventId: probe.id }]);
+  });
+
+  it('fires on a UNION SELECT payload', () => {
+    const dev = device();
+    const exfil = httpRequest(dev.id, { url: '/api/customers?id=1%27%20UNION%20SELECT%20username,password_hash%20FROM%20customers--' });
+    expect(evaluateSqlInjectionRule([exfil], [dev])).toHaveLength(1);
+  });
+
+  it('does not fire on an ordinary request', () => {
+    const dev = device();
+    const ordinary = httpRequest(dev.id, { url: '/api/customers?id=42' });
+    expect(evaluateSqlInjectionRule([ordinary], [dev])).toHaveLength(0);
+  });
+
+  it('groups every matching request on the same device into one alert', () => {
+    const dev = device();
+    const probe1 = httpRequest(dev.id, { url: "/api/customers?id=1' OR '1'='1" });
+    const probe2 = httpRequest(dev.id, { url: "/api/customers?id=1' OR SLEEP(5)--" });
+    const exfil = httpRequest(dev.id, { url: '/api/customers?id=1%27%20UNION%20SELECT%20x--' });
+
+    const candidates = evaluateSqlInjectionRule([probe1, probe2, exfil], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs).toHaveLength(3);
+  });
+
+  it('ignores requests with no device association', () => {
+    const request = httpRequest('', { deviceId: null, url: "1' OR '1'='1" });
+    expect(evaluateSqlInjectionRule([request], [])).toHaveLength(0);
+  });
+});
+
+describe('evaluateScheduledTaskPersistenceRule (§8.2)', () => {
+  it('fires when schtasks.exe runs with a /create argument', () => {
+    const dev = device();
+    const task = processEvent(dev.id, {
+      imagePath: 'C:\\Windows\\System32\\schtasks.exe',
+      commandLine: 'schtasks.exe /create /tn "MicrosoftEdgeUpdateTaskMachine" /tr "C:\\svc_helper.exe" /sc onlogon /ru SYSTEM',
+    });
+
+    const candidates = evaluateScheduledTaskPersistenceRule([task], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'process_events', eventId: task.id }]);
+  });
+
+  it('does not fire for schtasks.exe queries or deletions', () => {
+    const dev = device();
+    const query = processEvent(dev.id, { imagePath: 'C:\\Windows\\System32\\schtasks.exe', commandLine: 'schtasks.exe /query' });
+    const deletion = processEvent(dev.id, { imagePath: 'C:\\Windows\\System32\\schtasks.exe', commandLine: 'schtasks.exe /delete /tn "Foo"' });
+    expect(evaluateScheduledTaskPersistenceRule([query, deletion], [dev])).toHaveLength(0);
+  });
+
+  it('does not fire for an unrelated process with /create in its command line', () => {
+    const dev = device();
+    const unrelated = processEvent(dev.id, { imagePath: 'C:\\Windows\\System32\\notepad.exe', commandLine: 'notepad.exe /create' });
+    expect(evaluateScheduledTaskPersistenceRule([unrelated], [dev])).toHaveLength(0);
   });
 });

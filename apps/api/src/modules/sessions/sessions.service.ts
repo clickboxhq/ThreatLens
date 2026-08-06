@@ -24,6 +24,20 @@ export class SessionsService {
   ) {}
 
   async createSession(user: AuthenticatedUser, scenarioId: string, cohortAssignmentId?: string) {
+    // §15.1: "email verification required before a self-serve account can start a scored
+    // session." Every session in this app feeds the Scoring Engine and leaderboard/certificate
+    // eligibility (there's no separate free-tier/unscored session type), so this is the one
+    // gating point. Checked fresh against the DB, not a JWT claim, so verifying takes effect
+    // immediately without requiring the Student to log in again.
+    const requester = await this.prisma.user.findUnique({ where: { id: user.id }, select: { emailVerifiedAt: true } });
+    if (!requester?.emailVerifiedAt) {
+      throw new AppException(
+        403,
+        'EMAIL_VERIFICATION_REQUIRED',
+        'Please verify your email address before starting a scenario.',
+      );
+    }
+
     const scenario = await this.prisma.attackScenario.findUnique({ where: { id: scenarioId } });
     if (!scenario || scenario.status !== 'published' || !scenario.currentVersionId) {
       throw new AppException(404, 'SCENARIO_NOT_FOUND', 'Scenario not found or not published.');

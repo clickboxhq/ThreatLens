@@ -1,13 +1,50 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cohortsApi, scenarioApi, sessionApi } from '../api/endpoints';
+import { useAuth } from '../auth/AuthContext';
+import { authApi, cohortsApi, scenarioApi, sessionApi } from '../api/endpoints';
+import { ApiError } from '../api/client';
 import type { MyAssignment, ScenarioSummary } from '../api/types';
 
+function VerificationBanner() {
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function resend() {
+    setError(null);
+    setSending(true);
+    try {
+      await authApi.requestEmailVerification();
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not resend the verification email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div style={{ background: '#fefce8', border: '1px solid #fde047', borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
+      <strong>Verify your email</strong> — you'll need to confirm your email address before starting a scenario.
+      {sent ? (
+        <span style={{ marginLeft: 8, color: '#64748b' }}>A new verification link has been sent.</span>
+      ) : (
+        <button onClick={resend} disabled={sending} style={{ marginLeft: 12 }}>
+          {sending ? 'Sending...' : 'Resend verification email'}
+        </button>
+      )}
+      {error && <div style={{ color: '#dc2626', marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
 export function CatalogPage() {
+  const { user } = useAuth();
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [assignments, setAssignments] = useState<MyAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,15 +57,23 @@ export function CatalogPage() {
   }, []);
 
   async function startScenario(scenarioId: string, cohortAssignmentId?: string) {
+    setStartError(null);
     setStartingId(cohortAssignmentId ?? scenarioId);
-    const session = await sessionApi.create(scenarioId, cohortAssignmentId);
-    navigate(`/sessions/${session.id}/dashboard`);
+    try {
+      const session = await sessionApi.create(scenarioId, cohortAssignmentId);
+      navigate(`/sessions/${session.id}/dashboard`);
+    } catch (err) {
+      setStartError(err instanceof ApiError ? err.message : 'Could not start this scenario.');
+      setStartingId(null);
+    }
   }
 
   if (loading) return <p>Loading scenarios...</p>;
 
   return (
     <div>
+      {!user?.emailVerified && <VerificationBanner />}
+      {startError && <div style={{ color: '#dc2626', marginBottom: 20 }}>{startError}</div>}
       {assignments.length > 0 && (
         <>
           <h1>My Assignments</h1>

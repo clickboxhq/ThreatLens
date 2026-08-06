@@ -104,3 +104,34 @@ export const RISKY_UNFAMILIAR_COUNTRIES: CountryCity[] = [
 ];
 
 export const APPLICATIONS = ['Office 365 Exchange Online', 'Salesforce', 'Workday', 'Slack'];
+
+// ---------- Endpoint — credential dumping (§1.8) ----------
+export const LSASS_DUMP_COMMAND_LINE_TEMPLATE = (pid: number, dumpPath: string) =>
+  `rundll32.exe C:\\Windows\\System32\\rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump ${pid} ${dumpPath} full`;
+export const LSASS_DUMP_FILE_PATH = 'C:\\Windows\\Temp\\lsass_dbg.dmp';
+
+// ---------- Insider threat — bulk copy to removable media (§1.8) ----------
+export const REMOVABLE_MEDIA_DRIVE = 'E:\\Backup\\';
+
+// ---------- Cloud — public bucket exposure (§1.8) ----------
+export const CLOUD_STORAGE_BUCKET_CUSTOMER_EXPORTS = 'contoso-finance-customer-exports';
+
+// ---------- Web — SQL injection (§1.8) ----------
+export const WEB_SQLI_ENDPOINT_PATH = '/api/customers';
+export const SQLI_PROBE_PAYLOADS = [
+  "1' OR '1'='1",
+  "1' OR SLEEP(5)--",
+  "1'; DROP TABLE customers--",
+  "1' AND 1=CONVERT(int, (SELECT @@version))--",
+];
+export const SQLI_UNION_EXFIL_PAYLOAD = "1' UNION SELECT username,password_hash,ssn FROM customers--";
+
+// ---------- Ransomware — double-extortion data staging (§1.8) ----------
+export const RANSOMWARE_EXFIL_IP = '193.106.31.98';
+
+// ---------- Malware — trojanized installer + scheduled task persistence (§1.8) ----------
+export const TROJAN_INSTALLER_FILENAME = 'Adobe_Reader_Update_Setup.exe';
+export const TROJAN_DROPPED_PAYLOAD_PATH = 'C:\\Users\\Public\\AppData\\Local\\Temp\\svc_helper.exe';
+export const SCHEDULED_TASK_NAME = 'MicrosoftEdgeUpdateTaskMachine';
+export const SCHEDULED_TASK_COMMAND_LINE =
+  `schtasks.exe /create /tn "MicrosoftEdgeUpdateTaskMachine" /tr "${'C:\\Users\\Public\\AppData\\Local\\Temp\\svc_helper.exe'}" /sc onlogon /ru SYSTEM`;

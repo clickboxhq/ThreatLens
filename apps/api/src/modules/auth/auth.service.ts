@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
+import { EmailVerificationTokenStore } from './email-verification-token.store';
 import { LoginAttemptTracker } from './login-attempt-tracker.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { SignupDto } from './dto/signup.dto';
@@ -22,7 +23,7 @@ export interface TokenPair {
 }
 
 export type LoginResult =
-  | (TokenPair & { user: { id: string; displayName: string; role: string } })
+  | (TokenPair & { user: { id: string; displayName: string; role: string; emailVerified: boolean } })
   | { mfaRequired: true; mfaChallengeId: string };
 
 const MFA_ISSUER = 'SOCVerse';
@@ -55,6 +56,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mfaChallenges: MfaChallengeStore,
     private readonly passwordResetTokens: PasswordResetTokenStore,
+    private readonly emailVerificationTokens: EmailVerificationTokenStore,
     private readonly loginAttempts: LoginAttemptTracker,
     private readonly auditLog: AuditLogService,
   ) {}
@@ -74,15 +76,55 @@ export class AuthService {
         displayName: dto.displayName,
         role: dto.role ?? 'student',
         status: 'active',
-        // Skeleton scope: no transactional email provider is wired up yet (§5.9's `email`
-        // queue is a later milestone), so accounts are auto-verified rather than left in
-        // `pending_verification` with no way to complete verification. Revisit once email
-        // delivery exists, per §15.1's documented requirement.
-        emailVerifiedAt: new Date(),
+        // §15.1: unverified accounts can still log in and explore (checked only at
+        // session-start, in SessionsService.createSession), so leaving this unset here
+        // doesn't lock the Student out of anything but starting a scored scenario.
+        emailVerifiedAt: null,
       },
     });
 
-    return { userId: user.id, emailVerificationRequired: false };
+    await this.sendVerificationEmail(user.id, user.email);
+
+    return { userId: user.id, emailVerificationRequired: true };
+  }
+
+  /**
+   * No transactional email provider is wired up yet (§5.9's `email` queue is a later
+   * milestone, same gap noted on password reset) — the verification link is logged
+   * server-side as a stand-in for the email that would otherwise deliver it.
+   */
+  private async sendVerificationEmail(userId: string, email: string): Promise<void> {
+    const token = await this.emailVerificationTokens.create(userId);
+    const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email?token=${token}`;
+    this.logger.log(`Email verification requested for ${email}. Link (stands in for an emailed link): ${verifyUrl}`);
+  }
+
+  /** §16.2 `POST /auth/email-verification/request`: resend for the currently authenticated user. */
+  async requestEmailVerification(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
+    if (user.emailVerifiedAt) {
+      throw new AppException(409, 'EMAIL_ALREADY_VERIFIED', 'This email address is already verified.');
+    }
+    await this.sendVerificationEmail(user.id, user.email);
+  }
+
+  /** §16.2 `POST /auth/email-verification/confirm`. */
+  async confirmEmailVerification(token: string, sourceIp?: string, correlationId?: string): Promise<void> {
+    const userId = await this.emailVerificationTokens.consume(token);
+    if (!userId) {
+      throw new AppException(401, 'INVALID_VERIFICATION_TOKEN', 'This verification link is invalid or has expired.');
+    }
+
+    await this.prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'email_verified',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
   }
 
   async login(dto: LoginDto, sourceIp: string, correlationId?: string): Promise<LoginResult> {
@@ -135,7 +177,10 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokenPair(user);
-    return { ...tokens, user: { id: user.id, displayName: user.displayName, role: user.role } };
+    return {
+      ...tokens,
+      user: { id: user.id, displayName: user.displayName, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) },
+    };
   }
 
   /**
@@ -176,7 +221,7 @@ export class AuthService {
     code: string,
     sourceIp?: string,
     correlationId?: string,
-  ): Promise<TokenPair & { user: { id: string; displayName: string; role: string } }> {
+  ): Promise<TokenPair & { user: { id: string; displayName: string; role: string; emailVerified: boolean } }> {
     const userId = await this.mfaChallenges.consume(mfaChallengeId);
     if (!userId) {
       throw new AppException(401, 'MFA_CHALLENGE_EXPIRED', 'This MFA challenge has expired or was already used. Please log in again.');
@@ -204,7 +249,10 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokenPair(user);
-    return { ...tokens, user: { id: user.id, displayName: user.displayName, role: user.role } };
+    return {
+      ...tokens,
+      user: { id: user.id, displayName: user.displayName, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) },
+    };
   }
 
   /** §16.2 `POST /auth/mfa/setup`: generates a pending secret; MFA only takes effect once mfaEnable() verifies it. */

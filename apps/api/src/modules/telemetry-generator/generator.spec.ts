@@ -882,3 +882,442 @@ describe('generateTelemetry — fileless malware scenario (§7.2, §8.2)', () =>
     expect(baitCandidates).toHaveLength(2);
   });
 });
+
+function buildCredentialDumpingDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-07', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1003.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'credential_dumping_lsass_dump_v1',
+        relative_timestamp: '+3h',
+        correlation_group: 'lsass-dump-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1071.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'malicious_c2_beacon_v1',
+        relative_timestamp: '+3h5m',
+        correlation_group: 'lsass-dump-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — credential dumping via LSASS scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1003.001', randomUUID()],
+    ['T1071.001', randomUUID()],
+  ]);
+
+  it('produces a rundll32/comsvcs.dll process, a dump file, and a beacon burst, all on the victim device', () => {
+    const def = buildCredentialDumpingDefinition();
+    const result = generateTelemetry(randomUUID(), 71n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-07')!;
+
+    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
+    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+
+    expect(groundTruthProcesses).toHaveLength(1);
+    expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('comsvcs.dll');
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('minidump');
+
+    expect(groundTruthFiles).toHaveLength(1);
+    expect(groundTruthFiles[0].deviceId).toBe(victimDevice.id);
+    expect(groundTruthFiles[0].filePath).toBe('C:\\Windows\\Temp\\lsass_dbg.dmp');
+
+    expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("feeds the Alert Engine's credential-dumping rule", async () => {
+    const { evaluateCredentialDumpingRule } = await import('../alert-engine/rules');
+    const def = buildCredentialDumpingDefinition();
+    const result = generateTelemetry(randomUUID(), 71n, def, techniqueIdBySlug);
+
+    const candidates = evaluateCredentialDumpingRule(
+      result.processEvents as unknown as Parameters<typeof evaluateCredentialDumpingRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateCredentialDumpingRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+  });
+});
+
+function buildInsiderUsbCopyDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'SLS-WKS-09', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1052.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'insider_bulk_usb_copy_v1',
+        relative_timestamp: '+21h',
+        correlation_group: 'usb-exfil-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1070.004',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'insider_source_file_cleanup_v1',
+        relative_timestamp: '+21h5m',
+        correlation_group: 'usb-exfil-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — insider bulk USB copy scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1052.001', randomUUID()],
+    ['T1070.004', randomUUID()],
+  ]);
+
+  it('produces a burst of removable-media file creations and matching source-file deletions', () => {
+    const def = buildInsiderUsbCopyDefinition();
+    const result = generateTelemetry(randomUUID(), 91n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'SLS-WKS-09')!;
+
+    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const copies = groundTruthFiles.filter((f) => f.action === 'created');
+    const deletions = groundTruthFiles.filter((f) => f.action === 'deleted');
+
+    expect(copies.length).toBeGreaterThanOrEqual(5);
+    expect(copies.every((f) => f.deviceId === victimDevice.id && f.filePath.startsWith('E:\\Backup\\'))).toBe(true);
+    expect(deletions.length).toBeGreaterThanOrEqual(5);
+    expect(deletions.every((f) => f.deviceId === victimDevice.id && !f.filePath.startsWith('E:\\'))).toBe(true);
+  });
+
+  it("feeds the Alert Engine's removable-media-copy rule but not the source deletions (portal-discoverable only)", async () => {
+    const { evaluateRemovableMediaCopyRule } = await import('../alert-engine/rules');
+    const def = buildInsiderUsbCopyDefinition();
+    const result = generateTelemetry(randomUUID(), 91n, def, techniqueIdBySlug);
+
+    const candidates = evaluateRemovableMediaCopyRule(
+      result.fileEvents as unknown as Parameters<typeof evaluateRemovableMediaCopyRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateRemovableMediaCopyRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+function buildCloudBucketExposureDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1530',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'cloud_bucket_public_exposure_v1',
+        relative_timestamp: '+4h',
+        correlation_group: 'bucket-exposure-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1530',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'cloud_bucket_public_access_burst_v1',
+        relative_timestamp: '+4h15m',
+        correlation_group: 'bucket-exposure-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — cloud bucket public exposure scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([['T1530', randomUUID()]]);
+
+  it('produces a PutBucketPolicy event followed by a burst of object-access events', () => {
+    const def = buildCloudBucketExposureDefinition();
+    const result = generateTelemetry(randomUUID(), 111n, def, techniqueIdBySlug);
+    const victim = result.identities.find((i) => i.jobTitle === 'Cloud Platform Engineer')!;
+
+    const groundTruthCloud = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+    const policyChanges = groundTruthCloud.filter((c) => c.actionName === 'PutBucketPolicy');
+    const accessBurst = groundTruthCloud.filter((c) => c.actionName === 'GetObject' || c.actionName === 'ListBucket');
+
+    expect(policyChanges).toHaveLength(1);
+    expect(policyChanges[0].identityId).toBe(victim.id);
+    expect(accessBurst.length).toBeGreaterThanOrEqual(6);
+    expect(accessBurst.every((c) => c.identityId === victim.id)).toBe(true);
+  });
+
+  it("feeds the Alert Engine's suspicious-cloud-action rule via the existing PutBucketPolicy signal", async () => {
+    const { evaluateSuspiciousCloudActionRule } = await import('../alert-engine/rules');
+    const def = buildCloudBucketExposureDefinition();
+    const result = generateTelemetry(randomUUID(), 111n, def, techniqueIdBySlug);
+
+    const candidates = evaluateSuspiciousCloudActionRule(
+      result.cloudEvents as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[1],
+    );
+    expect(candidates.some((c) => c.title.includes('PutBucketPolicy'))).toBe(true);
+  });
+});
+
+function buildWebSqliDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-02', os_platform: 'linux' } }],
+      decoy_population_size: { identities: 4, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1190',
+        entity_ref: 'web_server_service_account',
+        device_ref: 'web_server_device',
+        event_template_id: 'web_sqli_probe_burst_v1',
+        relative_timestamp: '+5h',
+        correlation_group: 'sqli-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1190',
+        entity_ref: 'web_server_service_account',
+        device_ref: 'web_server_device',
+        event_template_id: 'web_sqli_data_exfil_v1',
+        relative_timestamp: '+5h10m',
+        correlation_group: 'sqli-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 2, device_ref: 'web_server_device' }] },
+  };
+}
+
+describe('generateTelemetry — web SQL injection scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([['T1190', randomUUID()]]);
+
+  it('produces a probe burst and a UNION SELECT exfil request, all on the web server device', () => {
+    const def = buildWebSqliDefinition();
+    const result = generateTelemetry(randomUUID(), 131n, def, techniqueIdBySlug);
+    const webServer = result.devices.find((d) => d.hostname === 'WEB-PROD-02')!;
+
+    const groundTruthHttp = result.httpRequests.filter((h) => h.isGroundTruthEvidence);
+    expect(groundTruthHttp.length).toBeGreaterThanOrEqual(5);
+    expect(groundTruthHttp.every((h) => h.deviceId === webServer.id)).toBe(true);
+    expect(groundTruthHttp.some((h) => h.url.toLowerCase().includes('union'))).toBe(true);
+  });
+
+  it("feeds the Alert Engine's SQL-injection rule, ignoring unrelated monitoring traffic", async () => {
+    const { evaluateSqlInjectionRule } = await import('../alert-engine/rules');
+    const def = buildWebSqliDefinition();
+    const result = generateTelemetry(randomUUID(), 131n, def, techniqueIdBySlug);
+
+    const candidates = evaluateSqlInjectionRule(
+      result.httpRequests as unknown as Parameters<typeof evaluateSqlInjectionRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateSqlInjectionRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+function buildRansomwareDataTheftDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-15', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1048',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'ransomware_data_staging_exfil_v1',
+        relative_timestamp: '+2h',
+        correlation_group: 'ransomware-2-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1486',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'mass_file_encryption_v1',
+        relative_timestamp: '+2h20m',
+        correlation_group: 'ransomware-2-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — ransomware double-extortion scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1048', randomUUID()],
+    ['T1486', randomUUID()],
+  ]);
+
+  it('produces a large-volume outbound exfil burst followed by mass file encryption, single device', () => {
+    const def = buildRansomwareDataTheftDefinition();
+    const result = generateTelemetry(randomUUID(), 151n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-15')!;
+
+    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+
+    expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
+    expect(groundTruthNetwork.every((n) => n.deviceId === victimDevice.id && n.bytesSent >= 50_000_000)).toBe(true);
+    expect(groundTruthFiles.filter((f) => f.action === 'encrypted').length).toBeGreaterThanOrEqual(5);
+    expect(groundTruthFiles.every((f) => f.deviceId === victimDevice.id)).toBe(true);
+  });
+
+  it("feeds the Alert Engine's existing mass-encryption rule (the exfil step is portal-discoverable only)", async () => {
+    const { evaluateMassEncryptionRule } = await import('../alert-engine/rules');
+    const def = buildRansomwareDataTheftDefinition();
+    const result = generateTelemetry(randomUUID(), 151n, def, techniqueIdBySlug);
+
+    const candidates = evaluateMassEncryptionRule(
+      result.fileEvents as unknown as Parameters<typeof evaluateMassEncryptionRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateMassEncryptionRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+  });
+});
+
+function buildTrojanScheduledTaskDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'ENG-WKS-21', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1204.002',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'trojan_installer_execution_v1',
+        relative_timestamp: '+1h',
+        correlation_group: 'trojan-installer-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1053.005',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'malware_scheduled_task_persistence_v1',
+        relative_timestamp: '+1h2m',
+        correlation_group: 'trojan-installer-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1071.001',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'malicious_c2_beacon_v1',
+        relative_timestamp: '+1h10m',
+        correlation_group: 'trojan-installer-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — trojanized installer + scheduled task scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1204.002', randomUUID()],
+    ['T1053.005', randomUUID()],
+    ['T1071.001', randomUUID()],
+  ]);
+
+  it('produces installer + dropped payload process events, a scheduled task creation, and a beacon burst', () => {
+    const def = buildTrojanScheduledTaskDefinition();
+    const result = generateTelemetry(randomUUID(), 171n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'ENG-WKS-21')!;
+
+    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
+    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+
+    expect(groundTruthProcesses).toHaveLength(3); // installer, dropped payload, schtasks.exe
+    expect(groundTruthProcesses.every((p) => p.deviceId === victimDevice.id)).toBe(true);
+    expect(groundTruthProcesses.some((p) => p.imagePath.includes('Adobe_Reader_Update_Setup.exe'))).toBe(true);
+    expect(groundTruthProcesses.some((p) => p.imagePath.toLowerCase().includes('schtasks.exe'))).toBe(true);
+
+    expect(groundTruthFiles).toHaveLength(1);
+    expect(groundTruthFiles[0].filePath).toContain('svc_helper.exe');
+
+    expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("feeds the Alert Engine's scheduled-task-persistence rule", async () => {
+    const { evaluateScheduledTaskPersistenceRule } = await import('../alert-engine/rules');
+    const def = buildTrojanScheduledTaskDefinition();
+    const result = generateTelemetry(randomUUID(), 171n, def, techniqueIdBySlug);
+
+    const candidates = evaluateScheduledTaskPersistenceRule(
+      result.processEvents as unknown as Parameters<typeof evaluateScheduledTaskPersistenceRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateScheduledTaskPersistenceRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].title).toContain('ENG-WKS-21');
+  });
+});

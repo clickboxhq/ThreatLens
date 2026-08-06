@@ -5,6 +5,7 @@ export interface AuthUser {
   id: string;
   displayName: string;
   role: 'student' | 'instructor' | 'org_admin' | 'platform_admin';
+  emailVerified: boolean;
 }
 
 export interface TokenResponse {

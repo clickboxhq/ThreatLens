@@ -28,6 +28,7 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { RealtimeModule } from './common/realtime/realtime.module';
 import { LearningModule } from './modules/learning/learning.module';
 import { AuditLogModule } from './common/audit-log/audit-log.module';
+import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
@@ -60,6 +61,7 @@ import { AdminModule } from './modules/admin/admin.module';
     RealtimeModule,
     LearningModule,
     AuditLogModule,
+    RateLimiterModule,
     AdminModule,
   ],
   controllers: [HealthController],

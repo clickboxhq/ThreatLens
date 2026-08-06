@@ -43,6 +43,10 @@ export const LEGACY_AUTH_BYPASS_RULE_NAME = 'Identity: Legacy Authentication Byp
 export const SUSPICIOUS_CLOUD_ACTION_RULE_NAME = 'Cloud: Sensitive API Action Detected';
 export const WEBSHELL_ACCESS_RULE_NAME = 'Web: Non-Browser Client Accessed a Script Path';
 export const PERSISTENCE_ARTIFACT_RULE_NAME = 'Device: Persistence Artifact Written to Startup Location';
+export const CREDENTIAL_DUMPING_RULE_NAME = 'Device: LSASS Memory Access via comsvcs.dll';
+export const REMOVABLE_MEDIA_COPY_RULE_NAME = 'Device: Bulk File Copy to Removable Media';
+export const SQL_INJECTION_RULE_NAME = 'Web: SQL Injection Payload Detected';
+export const SCHEDULED_TASK_PERSISTENCE_RULE_NAME = 'Device: Scheduled Task Created for Persistence';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
@@ -61,6 +65,13 @@ const SENSITIVE_CLOUD_ACTION_NAMES = ['CreateAccessKey', 'PutBucketPolicy', 'Del
 const NON_BROWSER_CLIENT_MARKERS = ['curl/', 'python-requests/', 'Wget/', 'PowerShell/'];
 const STARTUP_LOCATION_MARKER = '\\Start Menu\\Programs\\Startup\\';
 const SCRIPT_PATH_EXTENSIONS = ['.php', '.asp', '.aspx', '.jsp'];
+const LSASS_DUMP_COMMAND_MARKERS = ['comsvcs.dll', 'minidump'];
+const REMOVABLE_MEDIA_PATH_MARKERS = ['E:\\', 'F:\\'];
+const REMOVABLE_MEDIA_COPY_COUNT_THRESHOLD = 5;
+const REMOVABLE_MEDIA_COPY_WINDOW_MINUTES = 15;
+const SQLI_PAYLOAD_MARKERS = ["' or '", "or 1=1", "union select", "drop table", "sleep(", "--"];
+const SCHEDULED_TASK_IMAGE_NAME = 'SCHTASKS.EXE';
+const SCHEDULED_TASK_CREATE_MARKER = '/create';
 
 function imageBaseName(imagePath: string): string {
   const parts = imagePath.split(/[\\/]/);
@@ -559,6 +570,150 @@ export function evaluatePersistenceArtifactRule(fileEvents: FileEvent[], devices
         primaryEntityType: 'device' as const,
         primaryEntityId: device?.id ?? event.deviceId,
         evidenceRefs: [{ eventTable: 'file_events', eventId: event.id }],
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      };
+    });
+}
+
+/**
+ * Fires when a process's command line references both `comsvcs.dll` and `MiniDump` — the
+ * well-known "rundll32 + comsvcs.dll" LOLBin technique for dumping the LSASS process's
+ * memory (and, with it, cached credentials) without touching a dedicated dumping tool that
+ * antivirus would flag by name (T1003.001).
+ */
+export function evaluateCredentialDumpingRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  return processEvents
+    .filter((event) => {
+      const commandLine = event.commandLine.toLowerCase();
+      return LSASS_DUMP_COMMAND_MARKERS.every((marker) => commandLine.includes(marker));
+    })
+    .map((event) => {
+      const device = deviceById.get(event.deviceId);
+      return {
+        id: randomUUID(),
+        detectionRuleName: CREDENTIAL_DUMPING_RULE_NAME,
+        title: `Possible LSASS memory dump on ${device?.hostname ?? 'a device'}`,
+        description: `"${event.imagePath}" ran with a command line referencing comsvcs.dll's MiniDump export — a known technique for dumping the LSASS process's memory to disk: ${event.commandLine}`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device?.id ?? event.deviceId,
+        evidenceRefs: [{ eventTable: 'process_events', eventId: event.id }],
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      };
+    });
+}
+
+/**
+ * Fires when a device accumulates several file-`created` events whose path starts on a
+ * removable-media drive letter within a short window — the observable signature of a bulk
+ * copy to a USB drive (T1052.001), the same windowed-count-threshold shape as
+ * evaluateMassEncryptionRule.
+ */
+export function evaluateRemovableMediaCopyRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const byDevice = new Map<string, FileEvent[]>();
+  for (const event of fileEvents) {
+    if (event.action !== 'created') continue;
+    if (!REMOVABLE_MEDIA_PATH_MARKERS.some((marker) => event.filePath.startsWith(marker))) continue;
+    const group = byDevice.get(event.deviceId) ?? [];
+    group.push(event);
+    byDevice.set(event.deviceId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [deviceId, events] of byDevice) {
+    const device = deviceById.get(deviceId);
+    if (!device) continue;
+    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+
+    for (let i = 0; i < sorted.length; i++) {
+      const windowEnd = new Date(sorted[i].occurredAt.getTime() + REMOVABLE_MEDIA_COPY_WINDOW_MINUTES * 60 * 1000);
+      const cluster = sorted.slice(i).filter((e) => e.occurredAt <= windowEnd);
+      if (cluster.length < REMOVABLE_MEDIA_COPY_COUNT_THRESHOLD) continue;
+
+      const latest = cluster[cluster.length - 1];
+      candidates.push({
+        id: randomUUID(),
+        detectionRuleName: REMOVABLE_MEDIA_COPY_RULE_NAME,
+        title: `Bulk file copy to removable media on ${device.hostname}`,
+        description: `${cluster.length} files were copied to a removable drive on ${device.hostname} within ${REMOVABLE_MEDIA_COPY_WINDOW_MINUTES} minutes.`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device.id,
+        evidenceRefs: cluster.map((e) => ({ eventTable: 'file_events', eventId: e.id })),
+        correlationId: latest.correlationId,
+        occurredAt: latest.occurredAt,
+      });
+      break; // one alert per device is enough; the whole burst is already cited.
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Fires when an HTTP request's URL contains a recognizable SQL-injection payload marker
+ * (a boolean-tautology probe, a UNION SELECT, a stacked DROP TABLE, a time-based blind-SQLi
+ * SLEEP() call). Groups every matching request on a device into one alert — a real SQLi
+ * attack is a burst of probes followed by a successful exploit, not a single request
+ * (T1190).
+ */
+export function evaluateSqlInjectionRule(httpRequests: HttpRequest[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const containsSqliMarker = (url: string) => {
+    const decoded = decodeURIComponent(url).toLowerCase();
+    return SQLI_PAYLOAD_MARKERS.some((marker) => decoded.includes(marker));
+  };
+
+  const grouped = new Map<string, HttpRequest[]>();
+  for (const request of httpRequests) {
+    if (!request.deviceId || !containsSqliMarker(request.url)) continue;
+    const group = grouped.get(request.deviceId) ?? [];
+    group.push(request);
+    grouped.set(request.deviceId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const requests of grouped.values()) {
+    const device = deviceById.get(requests[0].deviceId!);
+    if (!device) continue;
+    const latest = [...requests].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: SQL_INJECTION_RULE_NAME,
+      title: `SQL injection payloads detected against ${device.hostname}`,
+      description: `${requests.length} request${requests.length === 1 ? '' : 's'} to ${device.hostname} contained SQL-injection markers in the request URL.`,
+      primaryEntityType: 'device' as const,
+      primaryEntityId: device.id,
+      evidenceRefs: requests.map((r) => ({ eventTable: 'http_requests', eventId: r.id })),
+      correlationId: latest.correlationId,
+      occurredAt: latest.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fires when `schtasks.exe` runs with a `/create` argument — a common, simple persistence
+ * mechanism (T1053.005) that survives a reboot without needing a Startup-folder artifact
+ * (contrast with evaluatePersistenceArtifactRule's T1547.001 path-based heuristic).
+ */
+export function evaluateScheduledTaskPersistenceRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  return processEvents
+    .filter((event) => imageBaseName(event.imagePath) === SCHEDULED_TASK_IMAGE_NAME)
+    .filter((event) => event.commandLine.toLowerCase().includes(SCHEDULED_TASK_CREATE_MARKER))
+    .map((event) => {
+      const device = deviceById.get(event.deviceId);
+      return {
+        id: randomUUID(),
+        detectionRuleName: SCHEDULED_TASK_PERSISTENCE_RULE_NAME,
+        title: `New scheduled task created on ${device?.hostname ?? 'a device'}`,
+        description: `A scheduled task was created on ${device?.hostname ?? 'a device'} — a common way to survive a reboot without a Startup-folder artifact: ${event.commandLine}`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device?.id ?? event.deviceId,
+        evidenceRefs: [{ eventTable: 'process_events', eventId: event.id }],
         correlationId: event.correlationId,
         occurredAt: event.occurredAt,
       };

@@ -54,6 +54,8 @@ export const authApi = {
   requestPasswordReset: (email: string) => api.post<void>('/auth/password-reset/request', { email }),
   confirmPasswordReset: (token: string, newPassword: string) =>
     api.post<void>('/auth/password-reset/confirm', { token, newPassword }),
+  requestEmailVerification: () => api.post<void>('/auth/email-verification/request'),
+  confirmEmailVerification: (token: string) => api.post<void>('/auth/email-verification/confirm', { token }),
 };
 
 export const mfaApi = {

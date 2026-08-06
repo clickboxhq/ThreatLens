@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
-import { RateLimiterService } from './rate-limiter.service';
+import { RateLimiterService } from '../../common/rate-limiter/rate-limiter.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -10,6 +10,7 @@ import { MfaEnableDto } from './dto/mfa-enable.dto';
 import { MfaDisableDto } from './dto/mfa-disable.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
+import { EmailVerificationConfirmDto } from './dto/email-verification-confirm.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -107,5 +108,21 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async confirmPasswordReset(@Body() dto: PasswordResetConfirmDto, @Req() req: Request) {
     await this.authService.confirmPasswordReset(dto.token, dto.newPassword, req.ip, correlationIdOf(req));
+  }
+
+  @Post('email-verification/request')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async requestEmailVerification(@CurrentUser() user: AuthenticatedUser) {
+    // Keyed by user_id, not IP: this is an authenticated endpoint (§5.2's keying rule), unlike
+    // the enumeration-prone unauthenticated request endpoints above.
+    await this.rateLimiter.enforce(`email-verification-request:${user.id}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
+    await this.authService.requestEmailVerification(user.id);
+  }
+
+  @Post('email-verification/confirm')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async confirmEmailVerification(@Body() dto: EmailVerificationConfirmDto, @Req() req: Request) {
+    await this.authService.confirmEmailVerification(dto.token, req.ip, correlationIdOf(req));
   }
 }

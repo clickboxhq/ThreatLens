@@ -4,6 +4,7 @@ import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
+import { EmailVerificationTokenStore } from './email-verification-token.store';
 import { LoginAttemptTracker, computeLockoutSeconds } from './login-attempt-tracker.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
@@ -69,6 +70,23 @@ class FakePasswordResetTokenStore {
   }
 }
 
+// Same rationale as FakePasswordResetTokenStore — deliberately not extending EmailVerificationTokenStore.
+class FakeEmailVerificationTokenStore {
+  private readonly byToken = new Map<string, string>();
+
+  async create(userId: string): Promise<string> {
+    const token = randomUUID();
+    this.byToken.set(token, userId);
+    return token;
+  }
+
+  async consume(token: string): Promise<string | null> {
+    const userId = this.byToken.get(token) ?? null;
+    this.byToken.delete(token);
+    return userId;
+  }
+}
+
 // Same rationale again — reuses the real computeLockoutSeconds math (already covered by its
 // own pure-function tests) but keeps everything in memory instead of a live Redis connection.
 class FakeLoginAttemptTracker {
@@ -100,6 +118,11 @@ function buildService(users: Map<string, User>) {
         if (where.id) return users.get(where.id) ?? null;
         return [...users.values()].find((u) => u.email === where.email) ?? null;
       }),
+      create: jest.fn(async ({ data }: { data: Partial<User> }) => {
+        const created = user({ ...data, id: randomUUID() });
+        users.set(created.id, created);
+        return created;
+      }),
       update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         const existing = users.get(where.id)!;
         const updated = {
@@ -126,6 +149,7 @@ function buildService(users: Map<string, User>) {
   const config = { get: jest.fn(() => undefined) };
   const mfaChallenges = new FakeMfaChallengeStore();
   const passwordResetTokens = new FakePasswordResetTokenStore();
+  const emailVerificationTokens = new FakeEmailVerificationTokenStore();
   const loginAttempts = new FakeLoginAttemptTracker();
   const auditLog = { record: jest.fn(async () => undefined) };
 
@@ -135,10 +159,11 @@ function buildService(users: Map<string, User>) {
     config as never,
     mfaChallenges as unknown as MfaChallengeStore,
     passwordResetTokens as unknown as PasswordResetTokenStore,
+    emailVerificationTokens as unknown as EmailVerificationTokenStore,
     loginAttempts as unknown as LoginAttemptTracker,
     auditLog as unknown as AuditLogService,
   );
-  return { service, prisma, mfaChallenges, passwordResetTokens, loginAttempts, auditLog };
+  return { service, prisma, mfaChallenges, passwordResetTokens, emailVerificationTokens, loginAttempts, auditLog };
 }
 
 describe('AuthService MFA (§15.1, §16.2)', () => {
@@ -355,6 +380,76 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
   });
 });
 
+describe('AuthService email verification (§15.1, §16.2)', () => {
+  it('signup() creates an unverified account and issues a verification token', async () => {
+    const users = new Map<string, User>();
+    const { service, emailVerificationTokens } = buildService(users);
+    const createSpy = jest.spyOn(emailVerificationTokens, 'create');
+
+    const result = await service.signup({
+      email: 'new.student@example.com',
+      password: 'correct horse battery staple',
+      displayName: 'New Student',
+    });
+
+    expect(result.emailVerificationRequired).toBe(true);
+    expect(createSpy).toHaveBeenCalledWith(result.userId);
+    const created = users.get(result.userId)!;
+    expect(created.emailVerifiedAt).toBeNull();
+  });
+
+  it('requestEmailVerification() issues a fresh token for an unverified account', async () => {
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens } = buildService(users);
+    const createSpy = jest.spyOn(emailVerificationTokens, 'create');
+
+    await service.requestEmailVerification(target.id);
+    expect(createSpy).toHaveBeenCalledWith(target.id);
+  });
+
+  it('requestEmailVerification() rejects an already-verified account', async () => {
+    const target = user({ emailVerifiedAt: new Date() });
+    const users = new Map([[target.id, target]]);
+    const { service } = buildService(users);
+
+    await expect(service.requestEmailVerification(target.id)).rejects.toMatchObject({
+      code: 'EMAIL_ALREADY_VERIFIED',
+    });
+  });
+
+  it('confirmEmailVerification() sets emailVerifiedAt for a valid token', async () => {
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens } = buildService(users);
+
+    const token = await emailVerificationTokens.create(target.id);
+    await service.confirmEmailVerification(token);
+
+    expect(users.get(target.id)!.emailVerifiedAt).not.toBeNull();
+  });
+
+  it('confirmEmailVerification() rejects an invalid or unknown token', async () => {
+    const users = new Map<string, User>();
+    const { service } = buildService(users);
+
+    await expect(service.confirmEmailVerification('not-a-real-token')).rejects.toMatchObject({
+      code: 'INVALID_VERIFICATION_TOKEN',
+    });
+  });
+
+  it('confirmEmailVerification() rejects a token that was already used (one-time use)', async () => {
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens } = buildService(users);
+
+    const token = await emailVerificationTokens.create(target.id);
+    await service.confirmEmailVerification(token);
+
+    await expect(service.confirmEmailVerification(token)).rejects.toThrow(AppException);
+  });
+});
+
 describe('AuthService login lockout (§15.1)', () => {
   it('locks out the (account, IP) pair after enough failed attempts, before the threshold is reached nothing is blocked', async () => {
     const argon2Mod = await import('argon2');
@@ -499,6 +594,17 @@ describe('AuthService audit logging (§6.22)', () => {
     await service.confirmPasswordReset(token, 'brand new password 456');
 
     expect(actionsRecorded(auditLog)).toEqual(['password_reset']);
+  });
+
+  it('records `email_verified` on a completed verification', async () => {
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens, auditLog } = buildService(users);
+
+    const token = await emailVerificationTokens.create(target.id);
+    await service.confirmEmailVerification(token);
+
+    expect(actionsRecorded(auditLog)).toEqual(['email_verified']);
   });
 
   it('records `logout_all`', async () => {

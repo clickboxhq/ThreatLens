@@ -13,6 +13,7 @@ interface AuthContextValue {
   completeMfaLogin: (mfaChallengeId: string, code: string) => Promise<AuthUser>;
   signup: (email: string, password: string, displayName: string, role?: 'student' | 'instructor') => Promise<void>;
   logout: () => void;
+  markEmailVerified: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -55,9 +56,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('socverse_user');
   }
 
+  // Called after a same-tab email verification confirm (§16.2 `POST /auth/email-verification/confirm`)
+  // so the catalog's "please verify" gate disappears without requiring a fresh login — the
+  // server-side gate itself always re-checks the DB directly, so this is a UI convenience only.
+  function markEmailVerified() {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, emailVerified: true };
+      localStorage.setItem('socverse_user', JSON.stringify(updated));
+      return updated;
+    });
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated: Boolean(user && getAccessToken()), login, completeMfaLogin, signup, logout }}
+      value={{
+        user,
+        isAuthenticated: Boolean(user && getAccessToken()),
+        login,
+        completeMfaLogin,
+        signup,
+        logout,
+        markEmailVerified,
+      }}
     >
       {children}
     </AuthContext.Provider>

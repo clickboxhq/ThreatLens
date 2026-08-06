@@ -5,6 +5,7 @@ import { toStudentAlertDto } from '../../common/dto/alert.dto';
 import {
   AlertCandidate,
   correlateCandidates,
+  evaluateCredentialDumpingRule,
   evaluateImpossibleTravelRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
@@ -14,10 +15,14 @@ import {
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluatePersistenceArtifactRule,
+  evaluateRemovableMediaCopyRule,
+  evaluateScheduledTaskPersistenceRule,
   evaluateSpfFailRule,
+  evaluateSqlInjectionRule,
   evaluateSuspiciousCloudActionRule,
   evaluateSuspiciousProcessRule,
   evaluateWebShellAccessRule,
+  CREDENTIAL_DUMPING_RULE_NAME,
   IMPOSSIBLE_TRAVEL_RULE_NAME,
   LATERAL_MOVEMENT_RULE_NAME,
   LEGACY_AUTH_BYPASS_RULE_NAME,
@@ -27,7 +32,10 @@ import {
   OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
   PASSWORD_SPRAY_RULE_NAME,
   PERSISTENCE_ARTIFACT_RULE_NAME,
+  REMOVABLE_MEDIA_COPY_RULE_NAME,
+  SCHEDULED_TASK_PERSISTENCE_RULE_NAME,
   SPF_FAIL_RULE_NAME,
+  SQL_INJECTION_RULE_NAME,
   SUSPICIOUS_CLOUD_ACTION_RULE_NAME,
   SUSPICIOUS_PROCESS_RULE_NAME,
   WEBSHELL_ACCESS_RULE_NAME,
@@ -73,6 +81,10 @@ export class AlertEngineService {
       suspiciousCloudActionRule,
       webShellAccessRule,
       persistenceArtifactRule,
+      credentialDumpingRule,
+      removableMediaCopyRule,
+      sqlInjectionRule,
+      scheduledTaskPersistenceRule,
     ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
       this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
@@ -96,6 +108,10 @@ export class AlertEngineService {
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SUSPICIOUS_CLOUD_ACTION_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: WEBSHELL_ACCESS_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: PERSISTENCE_ARTIFACT_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: CREDENTIAL_DUMPING_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: REMOVABLE_MEDIA_COPY_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SQL_INJECTION_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SCHEDULED_TASK_PERSISTENCE_RULE_NAME } }),
     ]);
 
     const allCandidates: AlertCandidate[] = [
@@ -112,6 +128,10 @@ export class AlertEngineService {
       ...evaluateSuspiciousCloudActionRule(cloudEvents, identities),
       ...evaluateWebShellAccessRule(httpRequests, devices),
       ...evaluatePersistenceArtifactRule(fileEvents, devices),
+      ...evaluateCredentialDumpingRule(processEvents, devices),
+      ...evaluateRemovableMediaCopyRule(fileEvents, devices),
+      ...evaluateSqlInjectionRule(httpRequests, devices),
+      ...evaluateScheduledTaskPersistenceRule(processEvents, devices),
     ];
     const links = correlateCandidates(allCandidates);
 
@@ -146,6 +166,10 @@ export class AlertEngineService {
       [SUSPICIOUS_CLOUD_ACTION_RULE_NAME, suspiciousCloudActionRule],
       [WEBSHELL_ACCESS_RULE_NAME, webShellAccessRule],
       [PERSISTENCE_ARTIFACT_RULE_NAME, persistenceArtifactRule],
+      [CREDENTIAL_DUMPING_RULE_NAME, credentialDumpingRule],
+      [REMOVABLE_MEDIA_COPY_RULE_NAME, removableMediaCopyRule],
+      [SQL_INJECTION_RULE_NAME, sqlInjectionRule],
+      [SCHEDULED_TASK_PERSISTENCE_RULE_NAME, scheduledTaskPersistenceRule],
     ]);
 
     const createdAlerts = await this.prisma.$transaction(

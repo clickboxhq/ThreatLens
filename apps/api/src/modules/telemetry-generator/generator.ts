@@ -4,6 +4,7 @@ import { SeededRng } from './rng';
 import {
   APPLICATIONS,
   CLOUD_STORAGE_BUCKET,
+  CLOUD_STORAGE_BUCKET_CUSTOMER_EXPORTS,
   DEPARTMENTS,
   EXEC_LOOKALIKE_DOMAIN,
   EXEC_NAME,
@@ -18,6 +19,8 @@ import {
   LEGITIMATE_SCRIPT_PATH,
   LEGITIMATE_STARTUP_SHORTCUT_PATH,
   LOOKALIKE_INTERNAL_DOMAIN,
+  LSASS_DUMP_COMMAND_LINE_TEMPLATE,
+  LSASS_DUMP_FILE_PATH,
   MALICIOUS_DOMAIN,
   MALWARE_C2_IP,
   MALWARE_DELIVERY_DOMAIN,
@@ -27,10 +30,18 @@ import {
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
   RANSOM_NOTE_FILENAME,
+  RANSOMWARE_EXFIL_IP,
+  REMOVABLE_MEDIA_DRIVE,
   RISKY_UNFAMILIAR_COUNTRIES,
+  SCHEDULED_TASK_COMMAND_LINE,
   SENSITIVE_ATTACHMENT_FILENAMES,
   SHARED_FILE_PATHS,
+  SQLI_PROBE_PAYLOADS,
+  SQLI_UNION_EXFIL_PAYLOAD,
   TRAVEL_COUNTRIES,
+  TROJAN_DROPPED_PAYLOAD_PATH,
+  TROJAN_INSTALLER_FILENAME,
+  WEB_SQLI_ENDPOINT_PATH,
   WEBSHELL_PATH,
 } from './templates';
 
@@ -1142,6 +1153,276 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         filePath: LEGITIMATE_STARTUP_SHORTCUT_PATH,
         hashSha256: syntheticHash(ctx.rng),
         processGuid: null,
+      });
+      break;
+    }
+    case 'credential_dumping_lsass_dump_v1': {
+      if (!ctx.device) break;
+      const guid = deterministicUuidFromSeed(`${ctx.correlationId}:lsass-dump`);
+      const targetPid = ctx.rng.intBetween(600, 1400);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lsass_credential_dump' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: guid,
+        parentProcessGuid: null,
+        imagePath: 'C:\\Windows\\System32\\rundll32.exe',
+        commandLine: LSASS_DUMP_COMMAND_LINE_TEMPLATE(targetPid, LSASS_DUMP_FILE_PATH),
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'High',
+        identityId: ctx.identity.id,
+      });
+
+      const dumpOccurredAt = new Date(ctx.occurredAt.getTime() + 5 * 1000);
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: dumpOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'lsass_dump_file' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: LSASS_DUMP_FILE_PATH,
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: guid,
+      });
+      break;
+    }
+    case 'insider_bulk_usb_copy_v1': {
+      if (!ctx.device) break;
+      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(6, SHARED_FILE_PATHS.length));
+      paths.forEach((path, i) => {
+        const filename = path.split('\\').pop();
+        ctx.fileEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 15 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'insider_usb_copy' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device!.id,
+          action: 'created',
+          filePath: `${REMOVABLE_MEDIA_DRIVE}${filename}`,
+          hashSha256: syntheticHash(ctx.rng),
+          processGuid: null,
+        });
+      });
+      break;
+    }
+    case 'insider_source_file_cleanup_v1': {
+      if (!ctx.device) break;
+      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(6, SHARED_FILE_PATHS.length));
+      paths.forEach((path, i) => {
+        ctx.fileEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 15 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'insider_source_cleanup' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device!.id,
+          action: 'deleted',
+          filePath: path,
+          hashSha256: syntheticHash(ctx.rng),
+          processGuid: null,
+        });
+      });
+      break;
+    }
+    case 'cloud_bucket_public_exposure_v1': {
+      ctx.cloudEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'bucket_public_exposure' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        provider: 'aws_style',
+        actionName: 'PutBucketPolicy',
+        resourceId: CLOUD_STORAGE_BUCKET_CUSTOMER_EXPORTS,
+        sourceIp: syntheticIp(ctx.rng),
+      });
+      break;
+    }
+    case 'cloud_bucket_public_access_burst_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'bucket-exposure');
+      const actionCount = ctx.rng.intBetween(6, 9);
+      for (let i = 0; i < actionCount; i++) {
+        ctx.cloudEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 12 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'bucket_public_access' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          provider: 'aws_style',
+          actionName: i === 0 ? 'ListBucket' : 'GetObject',
+          resourceId: CLOUD_STORAGE_BUCKET_CUSTOMER_EXPORTS,
+          sourceIp: attacker.ip,
+        });
+      }
+      break;
+    }
+    case 'web_sqli_probe_burst_v1': {
+      if (!ctx.device) break;
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'sqli');
+      SQLI_PROBE_PAYLOADS.forEach((payload, i) => {
+        ctx.httpRequests.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 8 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'sqli_probe' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device!.id,
+          method: 'GET',
+          url: `${WEB_SQLI_ENDPOINT_PATH}?id=${encodeURIComponent(payload)}`,
+          userAgent: ctx.rng.pick(NON_BROWSER_USER_AGENTS),
+          statusCode: i % 2 === 0 ? 200 : 500,
+          sourceIp: attacker.ip,
+        });
+      });
+      break;
+    }
+    case 'web_sqli_data_exfil_v1': {
+      if (!ctx.device) break;
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'sqli');
+      ctx.httpRequests.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'sqli_data_exfil' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        method: 'GET',
+        url: `${WEB_SQLI_ENDPOINT_PATH}?id=${encodeURIComponent(SQLI_UNION_EXFIL_PAYLOAD)}`,
+        userAgent: ctx.rng.pick(NON_BROWSER_USER_AGENTS),
+        statusCode: 200,
+        sourceIp: attacker.ip,
+      });
+      break;
+    }
+    case 'ransomware_data_staging_exfil_v1': {
+      if (!ctx.device) break;
+      const beaconCount = ctx.rng.intBetween(4, 6);
+      for (let i = 0; i < beaconCount; i++) {
+        ctx.networkEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 3 * 60 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'ransomware_data_staging' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          direction: 'outbound',
+          protocol: 'tcp',
+          localPort: ctx.rng.intBetween(49152, 65535),
+          remoteIp: RANSOMWARE_EXFIL_IP,
+          remotePort: 443,
+          bytesSent: ctx.rng.intBetween(50_000_000, 200_000_000),
+          bytesReceived: ctx.rng.intBetween(500, 2_000),
+          processGuid: null,
+        });
+      }
+      break;
+    }
+    case 'trojan_installer_execution_v1': {
+      if (!ctx.device) break;
+      const installerGuid = deterministicUuidFromSeed(`${ctx.correlationId}:installer`);
+      const payloadGuid = deterministicUuidFromSeed(`${ctx.correlationId}:payload`);
+
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'trojan_installer_launch' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: installerGuid,
+        parentProcessGuid: null,
+        imagePath: `C:\\Users\\Public\\Downloads\\${TROJAN_INSTALLER_FILENAME}`,
+        commandLine: `"${TROJAN_INSTALLER_FILENAME}" /S`,
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+
+      const payloadOccurredAt = new Date(ctx.occurredAt.getTime() + 20 * 1000);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: payloadOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'trojan_payload_launch' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: payloadGuid,
+        parentProcessGuid: installerGuid,
+        imagePath: TROJAN_DROPPED_PAYLOAD_PATH,
+        commandLine: `"${TROJAN_DROPPED_PAYLOAD_PATH}"`,
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: `C:\\Users\\Public\\Downloads\\${TROJAN_INSTALLER_FILENAME}`,
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+
+      const dropOccurredAt = new Date(payloadOccurredAt.getTime() + 5 * 1000);
+      ctx.fileEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: dropOccurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'trojan_payload_dropped' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        action: 'created',
+        filePath: TROJAN_DROPPED_PAYLOAD_PATH,
+        hashSha256: syntheticHash(ctx.rng),
+        processGuid: installerGuid,
+      });
+      break;
+    }
+    case 'malware_scheduled_task_persistence_v1': {
+      if (!ctx.device) break;
+      const payloadGuid = deterministicUuidFromSeed(`${ctx.correlationId}:payload`);
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'scheduled_task_persistence' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:schtasks`),
+        parentProcessGuid: payloadGuid,
+        imagePath: 'C:\\Windows\\System32\\schtasks.exe',
+        commandLine: SCHEDULED_TASK_COMMAND_LINE,
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: TROJAN_DROPPED_PAYLOAD_PATH,
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
       });
       break;
     }

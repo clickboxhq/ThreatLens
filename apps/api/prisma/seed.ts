@@ -147,6 +147,44 @@ const MITRE_TECHNIQUES = [
       'Adversaries add a program to a startup location — such as the Startup folder or a registry Run key — so it executes automatically at every user logon, a simple and durable persistence mechanism.',
     url: 'https://attack.mitre.org/techniques/T1547/001/',
   },
+  {
+    techniqueId: 'T1003.001',
+    name: 'OS Credential Dumping: LSASS Memory',
+    tactic: 'TA0006',
+    description:
+      'Adversaries dump the memory of the LSASS process, which caches credential material, often using a living-off-the-land technique like rundll32.exe with comsvcs.dll\'s MiniDump export to avoid a dedicated dumping tool that antivirus would flag by name.',
+    url: 'https://attack.mitre.org/techniques/T1003/001/',
+  },
+  {
+    techniqueId: 'T1052.001',
+    name: 'Exfiltration Over Physical Medium: Exfiltration over USB',
+    tactic: 'TA0010',
+    description: 'Adversaries or insiders copy data onto a removable USB drive to move it out of an environment without touching the network.',
+    url: 'https://attack.mitre.org/techniques/T1052/001/',
+  },
+  {
+    techniqueId: 'T1070.004',
+    name: 'Indicator Removal: File Deletion',
+    tactic: 'TA0005',
+    description: 'Adversaries or insiders delete files to remove evidence of their activity from a system.',
+    url: 'https://attack.mitre.org/techniques/T1070/004/',
+  },
+  {
+    techniqueId: 'T1190',
+    name: 'Exploit Public-Facing Application',
+    tactic: 'TA0001',
+    description:
+      'Adversaries exploit a weakness in an Internet-facing application — such as a SQL injection vulnerability — to gain initial access or extract data directly from its backing database.',
+    url: 'https://attack.mitre.org/techniques/T1190/',
+  },
+  {
+    techniqueId: 'T1053.005',
+    name: 'Scheduled Task/Job: Scheduled Task',
+    tactic: 'TA0003',
+    description:
+      'Adversaries use the Windows Task Scheduler (schtasks.exe) to register a program to run on a schedule or at logon, surviving a reboot without needing a Startup-folder artifact.',
+    url: 'https://attack.mitre.org/techniques/T1053/005/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -246,6 +284,34 @@ const DETECTION_RULES = [
     logicSummary: "action = created AND file_path contains '\\Start Menu\\Programs\\Startup\\'.",
     defaultSeverity: 'high' as const,
     mitreTechniqueSlug: 'T1547.001',
+  },
+  {
+    name: 'Device: LSASS Memory Access via comsvcs.dll',
+    description: 'Fires when a process command line references both comsvcs.dll and MiniDump — a known LSASS credential-dumping technique.',
+    logicSummary: "command_line contains 'comsvcs.dll' AND command_line contains 'minidump' (case-insensitive).",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1003.001',
+  },
+  {
+    name: 'Device: Bulk File Copy to Removable Media',
+    description: 'Fires when a device accumulates several file-created events on a removable-media drive letter within a short window.',
+    logicSummary: "count(file_events WHERE action = created AND file_path starts with a removable-drive letter) grouped by device_id, within a 15-minute rolling window >= 5.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1052.001',
+  },
+  {
+    name: 'Web: SQL Injection Payload Detected',
+    description: 'Fires when an HTTP request URL contains a recognizable SQL-injection payload marker.',
+    logicSummary: "url (decoded) contains a known SQLi marker (boolean tautology, UNION SELECT, DROP TABLE, SLEEP()), grouped by device_id.",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1190',
+  },
+  {
+    name: 'Device: Scheduled Task Created for Persistence',
+    description: 'Fires when schtasks.exe runs with a /create argument.',
+    logicSummary: "process image IN (SCHTASKS.EXE) AND command_line contains '/create'.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1053.005',
   },
 ];
 
@@ -1293,10 +1359,468 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'credential-dumping-lsass-comsvcs',
+      title: 'Credential Dumping — LSASS Memory Access via comsvcs.dll',
+      summary:
+        'An IT administrator\'s workstation ran a command referencing a well-known technique for dumping credentials out of memory. Investigate the device to determine whether this is a real credential-theft attempt.',
+      category: 'endpoint',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1003.001', 'T1071.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'endpoint',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker with brief interactive access to an IT admin workstation (the initial foothold happened outside this scenario\'s telemetry) uses rundll32.exe together with comsvcs.dll\'s MiniDump export — a living-off-the-land technique that avoids a dedicated credential-dumping tool antivirus would flag by name — to dump the LSASS process\'s memory to disk, then attempts to move the resulting dump file off the device over an outbound connection.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-07', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1003.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'credential_dumping_lsass_dump_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'lsass-dump-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1071.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_c2_beacon_v1',
+            relative_timestamp: '+3h5m',
+            correlation_group: 'lsass-dump-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1003.001', 'T1071.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's Process Tree for anything invoking a system DLL in an unusual way." },
+          { unlock_cost_percent: 10, text: '"comsvcs.dll" has a legitimate COM+ purpose, but its MiniDump export is a well-known way to dump another process\'s memory — what process is being targeted here?' },
+          { unlock_cost_percent: 15, text: 'If credentials were successfully dumped, the attacker still needs to get the file off the device — check the Network tab around the same time.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'ip',
+          value: '185.220.101.47',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed C2 infrastructure',
+          context: 'Observed as a command-and-control destination for outbound beacon traffic on port 443.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'insider-bulk-usb-copy-resignation',
+      title: 'Insider Threat — Bulk File Copy to Removable Media',
+      summary:
+        'A sales employee copied a batch of sensitive company files to a removable drive, then deleted the originals. Determine whether this is a policy violation worth escalating.',
+      category: 'insider_threat',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1052.001', 'T1070.004'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'insider_threat',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            'An employee copies a batch of sensitive shared files onto a removable USB drive, then deletes the original copies from the shared file server — an attempt to take data with them while covering the most obvious trace of having done so.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'SLS-WKS-09', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1052.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'insider_bulk_usb_copy_v1',
+            relative_timestamp: '+21h',
+            correlation_group: 'usb-exfil-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1070.004',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'insider_source_file_cleanup_v1',
+            relative_timestamp: '+21h5m',
+            correlation_group: 'usb-exfil-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1052.001', 'T1070.004'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's File Timeline — is there a burst of file activity on a drive letter that isn't C:?" },
+          { unlock_cost_percent: 10, text: 'A drive letter other than C: on a corporate workstation is usually removable media.' },
+          { unlock_cost_percent: 15, text: 'Once you find the copies, check whether the original files were touched afterward — deleting the source is a common way to hide what was taken.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'cloud-storage-bucket-public-exposure',
+      title: 'Cloud — Storage Bucket Exposed to Public Access',
+      summary:
+        'A cloud engineer\'s identity changed a storage bucket\'s access policy, and shortly after, that bucket was accessed heavily from an unfamiliar location. Determine what happened.',
+      category: 'cloud',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1530'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'cloud',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            'A cloud engineer\'s identity changes a sensitive storage bucket\'s access policy to make it publicly readable — whether an honest misconfiguration or a deliberate act isn\'t yet clear. Shortly after, that same identity\'s credentials are used to pull a large batch of objects out of the bucket from an unfamiliar location, distinct from the engineer\'s normal working pattern.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1530',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'cloud_bucket_public_exposure_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'bucket-exposure-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1530',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'cloud_bucket_public_access_burst_v1',
+            relative_timestamp: '+4h15m',
+            correlation_group: 'bucket-exposure-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1530'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check the Identity Portal for this account's cloud activity — did a bucket's access policy change recently?" },
+          { unlock_cost_percent: 10, text: 'A policy change on its own could be an honest mistake. What happened to that bucket afterward?' },
+          { unlock_cost_percent: 15, text: 'Look at where the subsequent access came from — does it match this engineer\'s normal working pattern?' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'web-sql-injection-data-exfiltration',
+      title: 'Web — SQL Injection Data Exfiltration',
+      summary:
+        'A public-facing web server received a burst of scripted requests with SQL-injection-shaped payloads, followed by one that looks like it worked. Determine what data may have been exposed.',
+      category: 'web',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1190'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker probes a public-facing web application\'s customer-lookup endpoint with a series of SQL-injection payloads — boolean tautologies, a time-based blind probe, a stacked DROP TABLE attempt — to find an unsanitized parameter, then, having found one, issues a UNION SELECT crafted to pull username, password hash, and SSN columns out of the underlying database directly through the HTTP response.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-02', os_platform: 'linux' } }],
+          decoy_population_size: { identities: 8, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1190',
+            entity_ref: 'web_server_service_account',
+            device_ref: 'web_server_device',
+            event_template_id: 'web_sqli_probe_burst_v1',
+            relative_timestamp: '+5h',
+            correlation_group: 'sqli-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1190',
+            entity_ref: 'web_server_service_account',
+            device_ref: 'web_server_device',
+            event_template_id: 'web_sqli_data_exfil_v1',
+            relative_timestamp: '+5h10m',
+            correlation_group: 'sqli-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 4, device_ref: 'web_server_device' }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1190'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Check this server\'s HTTP requests for query parameters that look unusual, not just unusual paths.' },
+          { unlock_cost_percent: 10, text: "Several requests with slightly different payloads to the same endpoint in a short window suggest probing for a weakness, not a single mistake." },
+          { unlock_cost_percent: 15, text: 'A UNION SELECT payload naming specific column names is a strong sign the probing found something and the attacker moved to actually pulling data out.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'ransomware-double-extortion-data-theft',
+      title: 'Ransomware — Data Theft Before Encryption',
+      summary:
+        'A workstation sent an unusually large volume of data to an external address, then files on it started disappearing behind a new extension. Investigate the device to determine what happened.',
+      category: 'ransomware',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1048', 'T1486'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'ransomware',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'An attacker with interactive access to a single workstation (the initial foothold happened outside this scenario\'s telemetry) stages and exfiltrates a large volume of data over an outbound connection before encrypting files on the same device — the "double extortion" pattern common to modern ransomware operations, where stolen data backs up the ransom demand even if backups make recovery possible without paying. Unlike a lateral-movement ransomware attack, this one plays out entirely on one device.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-15', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1048',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'ransomware_data_staging_exfil_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'ransomware-2-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1486',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'mass_file_encryption_v1',
+            relative_timestamp: '+2h20m',
+            correlation_group: 'ransomware-2-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1048', 'T1486'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's File Timeline — is there a burst of files being encrypted?" },
+          { unlock_cost_percent: 10, text: 'Ransomware operators increasingly steal data before they encrypt it, so the ransom demand still has leverage even if backups exist. Check the Network tab before the encryption started.' },
+          { unlock_cost_percent: 15, text: 'An unusually large amount of data sent out, over several connections in a short window, is the signal to look for — not any one connection alone.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'ip',
+          value: '193.106.31.98',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed ransomware data-staging infrastructure',
+          context: 'Observed as the destination for a large outbound data transfer immediately preceding file encryption.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'malware-trojan-installer-scheduled-task',
+      title: 'Malware — Trojanized Installer with Scheduled Task Persistence',
+      summary:
+        'An engineer ran an installer downloaded outside official channels. Shortly after, a new scheduled task appeared on the device. Investigate the device to determine what happened.',
+      category: 'malware',
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1204.002', 'T1053.005', 'T1071.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'malware',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'A user runs an installer downloaded from outside official channels, disguised as a routine software update. The installer drops a second executable, which then registers itself as a scheduled task so it survives a reboot — a persistence mechanism distinct from a Startup-folder shortcut — and begins beaconing out to a remote command-and-control server.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'ENG-WKS-21', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1204.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'trojan_installer_execution_v1',
+            relative_timestamp: '+1h',
+            correlation_group: 'trojan-installer-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1053.005',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malware_scheduled_task_persistence_v1',
+            relative_timestamp: '+1h2m',
+            correlation_group: 'trojan-installer-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1071.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_c2_beacon_v1',
+            relative_timestamp: '+1h10m',
+            correlation_group: 'trojan-installer-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [{ event_template_id: 'legitimate_startup_shortcut_v1', count: 2, device_ref: 'victim_device_1' }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1204.002', 'T1053.005', 'T1071.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's Process Tree — is there an installer that dropped and launched a second program?" },
+          { unlock_cost_percent: 10, text: 'schtasks.exe with a /create argument registers a new scheduled task — a persistence mechanism just as durable as a Startup-folder shortcut, but in a different place.' },
+          { unlock_cost_percent: 15, text: 'Once you find the dropped payload, check the Network tab for that device around the same time as the scheduled task creation.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'ip',
+          value: '185.220.101.47',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed C2 infrastructure',
+          context: 'Observed as a command-and-control destination for outbound beacon traffic on port 443.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   await seedLearningPlatform();
 
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 12 scenarios, learning platform content.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 18 scenarios, learning platform content.`,
   );
 }
 
