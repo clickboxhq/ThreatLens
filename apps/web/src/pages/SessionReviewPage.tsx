@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
-import { incidentsApi, instructorApi, sessionApi } from '../api/endpoints';
-import type { EvidenceItem, Incident, InstructorFeedbackItem, ScoreResult } from '../api/types';
+import { Link, useParams } from 'react-router-dom';
+import { incidentsApi, instructorApi, sessionApi, timelineApi } from '../api/endpoints';
+import type { AnalystNote, EvidenceItem, Incident, InstructorFeedbackItem, ScoreResult, TimelineItem } from '../api/types';
+import { GlobalTimeline } from '../components/GlobalTimeline';
 
 interface IncidentBlock {
   incident: Incident;
   evidence: EvidenceItem[];
+  notes: AnalystNote[];
+  timeline: TimelineItem[];
   feedback: InstructorFeedbackItem[];
 }
 
@@ -94,12 +97,14 @@ export function SessionReviewPage() {
       const summaries = await incidentsApi.list(sessionId);
       const details = await Promise.all(
         summaries.map(async (s) => {
-          const [incident, evidence, feedback] = await Promise.all([
+          const [incident, evidence, notes, timeline, feedback] = await Promise.all([
             incidentsApi.get(sessionId, s.id),
             incidentsApi.listEvidence(sessionId, s.id),
+            incidentsApi.listNotes(sessionId, s.id),
+            timelineApi.list(sessionId, s.id),
             incidentsApi.listFeedback(sessionId, s.id),
           ]);
-          return { incident, evidence, feedback };
+          return { incident, evidence, notes, timeline, feedback };
         }),
       );
       setBlocks(details);
@@ -136,9 +141,14 @@ export function SessionReviewPage() {
         <p style={{ color: '#64748b' }}>Not yet scored.</p>
       )}
 
-      {blocks.map(({ incident, evidence, feedback }) => (
+      {blocks.map(({ incident, evidence, notes, timeline, feedback }) => (
         <div key={incident.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>{incident.title}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <h3 style={{ marginTop: 0 }}>{incident.title}</h3>
+            {incident.status === 'closed' && (
+              <Link to={`/sessions/${sessionId}/incidents/${incident.id}/report`}>View Full Report</Link>
+            )}
+          </div>
           <p>
             Status: {incident.status} {incident.verdict && `· Verdict: ${incident.verdict}`}
           </p>
@@ -155,6 +165,20 @@ export function SessionReviewPage() {
               </li>
             ))}
           </ul>
+
+          <h4>Analyst Notes ({notes.length})</h4>
+          {notes.length === 0 ? (
+            <p style={{ color: '#64748b', fontSize: 14 }}>No notes recorded.</p>
+          ) : (
+            <ul>
+              {notes.map((n) => (
+                <li key={n.id}>{n.body}</li>
+              ))}
+            </ul>
+          )}
+
+          <h4>Timeline</h4>
+          <GlobalTimeline items={timeline} incidentId={incident.id} readOnly />
 
           {feedback.length > 0 && (
             <>
