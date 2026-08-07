@@ -6,6 +6,21 @@ import { CertificatesService } from '../learning/certificates.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
 
+// Pure and exported for direct unit testing (same rationale as computeScore in scorer.ts):
+// an item pinned as evidence AND added to the Timeline must count once, not twice, toward
+// either side of the evidence precision/recall ratio.
+export function dedupeByEvent<T extends { eventTable: string; eventId: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    const key = `${item.eventTable} ${item.eventId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
 interface ScoringRubric {
   required_techniques: string[];
   required_verdict: string;
@@ -44,6 +59,7 @@ export class ScoringService {
         techniqueLinks: { include: { mitreTechnique: true } },
         alertLinks: true,
         evidenceCollection: true,
+        timelineItems: true,
       },
     });
 
@@ -78,16 +94,24 @@ export class ScoringService {
       groundTruthCloud +
       groundTruthHttp;
 
+    // §2.9: "that curated set [the Timeline] is itself part of what the Scoring Engine
+    // evaluates (did they include the right events; did they include noise)" — folded into
+    // the same evidence precision/recall pool Evidence Collection already feeds, rather than
+    // a separate rubric component, since "right events vs noise" is exactly what that
+    // component already measures. Deduped by (eventTable, eventId): an item pinned AND
+    // timeline-added must count once, not twice, toward either side of the ratio.
     const pinnedEvidence = closedIncidents.flatMap((i) => i.evidenceCollection);
-    const pinnedTotalEvidenceCount = pinnedEvidence.length;
-    const pinnedGroundTruthEvidenceCount = await this.countGroundTruthAmong(pinnedEvidence);
+    const timelineItems = closedIncidents.flatMap((i) => i.timelineItems);
+    const curatedEvidence = dedupeByEvent([...pinnedEvidence, ...timelineItems]);
+    const pinnedTotalEvidenceCount = curatedEvidence.length;
+    const pinnedGroundTruthEvidenceCount = await this.countGroundTruthAmong(curatedEvidence);
 
     const falsePositiveAlerts = await this.prisma.alert.findMany({
       where: { sessionId, isFalsePositiveByDesign: true },
       include: { evidenceRefs: true },
     });
     const escalatedAlertIds = new Set(closedIncidents.flatMap((i) => i.alertLinks.map((l) => l.alertId)));
-    const pinnedEventIds = new Set(pinnedEvidence.map((e) => e.eventId));
+    const pinnedEventIds = new Set(curatedEvidence.map((e) => e.eventId));
 
     let falsePositiveCorrectlyHandledCount = 0;
     let falsePositiveMishandledCount = 0;

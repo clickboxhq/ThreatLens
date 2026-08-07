@@ -135,3 +135,16 @@ export const TROJAN_DROPPED_PAYLOAD_PATH = 'C:\\Users\\Public\\AppData\\Local\\T
 export const SCHEDULED_TASK_NAME = 'MicrosoftEdgeUpdateTaskMachine';
 export const SCHEDULED_TASK_COMMAND_LINE =
   `schtasks.exe /create /tn "MicrosoftEdgeUpdateTaskMachine" /tr "${'C:\\Users\\Public\\AppData\\Local\\Temp\\svc_helper.exe'}" /sc onlogon /ru SYSTEM`;
+
+// ---------- Cloud — OAuth illicit consent grant phishing (§1.8) ----------
+export const OAUTH_PHISHING_DOMAIN = 'app-reconnect-office365-verify.com';
+export const MALICIOUS_OAUTH_APP_NAME = 'Office Sync Helper';
+
+// ---------- Endpoint — Kerberoasting for service-account pivot (§1.8) ----------
+export const KERBEROASTING_TOOL_PATH = 'C:\\Users\\Public\\Downloads\\Rubeus.exe';
+export const KERBEROASTING_COMMAND_LINE = 'Rubeus.exe kerberoast /outfile:C:\\Windows\\Temp\\svc_hashes.txt /format:hashcat';
+
+// ---------- Malware — DNS tunneling C2 and exfiltration (§1.8) ----------
+export const DNS_BACKDOOR_TOOL_PATH = 'C:\\Users\\Public\\Downloads\\NetDiagTool.exe';
+export const DNS_BACKDOOR_COMMAND_LINE = '"NetDiagTool.exe" --mode covert --relay dns';
+export const DNS_TUNNEL_C2_IP = '91.219.237.14';

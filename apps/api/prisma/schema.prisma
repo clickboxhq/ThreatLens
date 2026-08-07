@@ -78,6 +78,7 @@ model User {
   authoredScenarios     AttackScenario[]           @relation("ScenarioAuthor")
   authoredVersions      ScenarioVersion[]          @relation("ScenarioVersionAuthor")
   pinnedEvidence        EvidenceCollection[]
+  timelineItems         TimelineItem[]
   analystNotes          AnalystNote[]
   investigationActions  InvestigationAction[]
   ownedCohorts          Cohort[]                   @relation("CohortOwner")
@@ -859,6 +860,7 @@ model Incident {
   alertLinks           IncidentAlert[]
   techniqueLinks       IncidentTechnique[]
   evidenceCollection   EvidenceCollection[]
+  timelineItems        TimelineItem[]
   analystNotes         AnalystNote[]
   investigationActions InvestigationAction[]
   instructorFeedback   InstructorFeedback[]
@@ -904,6 +906,27 @@ model EvidenceCollection {
   pinnedByUser User     @relation(fields: [pinnedBy], references: [id])
 
   @@map("evidence_collection")
+}
+
+// §2.9/§6.13: the "current state" table backing the Global Timeline's manually-added items —
+// distinct from EvidenceCollection (which is about *relevance/proof*, §2.10) in that this is
+// about *order*: a curated, addable/removable set a Student builds to reconstruct the attack
+// chain, independent of whether an item is also pinned as evidence. Every add is additionally
+// recorded as an `add_to_timeline` InvestigationAction (§6.13) for the replay trail — this
+// table is only ever the current set, not the historical log of who-added-what-when.
+model TimelineItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  incidentId String   @map("incident_id") @db.Uuid
+  eventTable String   @map("event_table")
+  eventId    String   @map("event_id") @db.Uuid
+  addedBy    String   @map("added_by") @db.Uuid
+  addedAt    DateTime @default(now()) @map("added_at")
+
+  incident    Incident @relation(fields: [incidentId], references: [id])
+  addedByUser User     @relation(fields: [addedBy], references: [id])
+
+  @@unique([incidentId, eventTable, eventId])
+  @@map("timeline_items")
 }
 
 model AnalystNote {

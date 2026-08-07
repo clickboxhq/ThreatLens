@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { learningApi, sessionApi } from '../api/endpoints';
-import type { MyCertificate, SessionHistoryItem } from '../api/types';
+import type { MyCertificate, SessionHistoryItem, SkillRadarEntry } from '../api/types';
+import { SkillRadarChart } from '../components/SkillRadarChart';
 
 interface ScenarioSummary {
   scenarioId: string;
@@ -40,13 +41,15 @@ function summarizeByScenario(sessions: SessionHistoryItem[]): ScenarioSummary[] 
 export function ProgressPage() {
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [certificates, setCertificates] = useState<MyCertificate[]>([]);
+  const [skillRadar, setSkillRadar] = useState<SkillRadarEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([sessionApi.listMine(), learningApi.myCertificates()])
-      .then(([s, c]) => {
+    Promise.all([sessionApi.listMine(), learningApi.myCertificates(), sessionApi.getSkillRadar()])
+      .then(([s, c, radar]) => {
         setSessions(s);
         setCertificates(c);
+        setSkillRadar(radar);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -68,6 +71,44 @@ export function ProgressPage() {
   return (
     <div>
       <h1>My Progress</h1>
+
+      <h3>Skill Radar</h3>
+      <p style={{ color: '#64748b', fontSize: 13, marginTop: -6 }}>
+        How often you correctly tag the required MITRE ATT&amp;CK technique for a tactic, across every scenario you've completed.
+      </p>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 32 }}>
+        <SkillRadarChart entries={skillRadar} />
+        {skillRadar.length > 0 && (
+          <table style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                <th style={{ padding: '4px 12px 4px 0' }}>Tactic</th>
+                <th style={{ padding: '4px 12px' }}>Hit / Required</th>
+                <th style={{ padding: '4px 0' }}>Accuracy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {skillRadar.map((entry) => (
+                <tr key={entry.tactic} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '4px 12px 4px 0' }}>{entry.tacticName}</td>
+                  <td style={{ padding: '4px 12px' }}>
+                    {entry.hitCount} / {entry.requiredCount}
+                  </td>
+                  <td
+                    style={{
+                      padding: '4px 0',
+                      fontWeight: 600,
+                      color: entry.percent >= 70 ? '#16a34a' : entry.percent >= 40 ? '#b45309' : '#dc2626',
+                    }}
+                  >
+                    {entry.percent}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {certificates.length > 0 && (
         <>

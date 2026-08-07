@@ -440,6 +440,49 @@ export interface LeaderboardResult {
   myEntry: LeaderboardEntry | null;
 }
 
+// ---------- Global Timeline (§2.9) ----------
+
+export interface TimelineItem {
+  id: string;
+  eventTable: string;
+  occurredAt: string;
+  entityType: 'identity' | 'device' | 'mailbox';
+  entityId: string;
+  entityLabel: string;
+  summary: string;
+  source: ('evidence' | 'manual')[];
+  relatedItemIds: string[];
+}
+
+// ---------- Incident Report (§2.14, §2.19) ----------
+
+export interface IncidentReport {
+  incident: {
+    id: string;
+    title: string;
+    status: string;
+    verdict: string | null;
+    summary: string | null;
+    techniques: MitreTechniqueRef[];
+    createdAt: string;
+    closedAt: string | null;
+  };
+  notes: AnalystNote[];
+  evidence: (EvidenceItem & { summary: string })[];
+  timeline: TimelineItem[];
+  score: { overallPercent: number; verdictCorrect: boolean; scoredAt: string } | null;
+}
+
+// ---------- Skill Radar (§2.17, §13.2) ----------
+
+export interface SkillRadarEntry {
+  tactic: string;
+  tacticName: string;
+  requiredCount: number;
+  hitCount: number;
+  percent: number;
+}
+
 // ---------- Hints (§12.5) ----------
 
 export interface HintItem {

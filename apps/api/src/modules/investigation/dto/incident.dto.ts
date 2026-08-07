@@ -52,3 +52,11 @@ export class CreateNoteDto {
   @MinLength(1)
   body!: string;
 }
+
+export class AddToTimelineDto {
+  @IsString()
+  eventTable!: string;
+
+  @IsUUID()
+  eventId!: string;
+}

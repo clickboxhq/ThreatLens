@@ -1321,3 +1321,256 @@ describe('generateTelemetry — trojanized installer + scheduled task scenario (
     expect(candidates[0].title).toContain('ENG-WKS-21');
   });
 });
+
+function buildOAuthConsentGrantDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Human Resources', job_title: 'HR Generalist', home_country: 'US' } },
+      ],
+      narrative_devices: [],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1566.002',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'oauth_consent_phishing_email_v1',
+        relative_timestamp: '+3h',
+        correlation_group: 'oauth-consent-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1528',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'oauth_illicit_consent_grant_v1',
+        relative_timestamp: '+3h10m',
+        correlation_group: 'oauth-consent-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1114.002',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'oauth_app_mailbox_exfil_v1',
+        relative_timestamp: '+3h15m',
+        correlation_group: 'oauth-consent-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — OAuth illicit consent grant scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1566.002', randomUUID()],
+    ['T1528', randomUUID()],
+    ['T1114.002', randomUUID()],
+  ]);
+
+  it('produces a phishing email, a consent-grant cloud event, and a mailbox-access burst, all for the victim identity', () => {
+    const def = buildOAuthConsentGrantDefinition();
+    const result = generateTelemetry(randomUUID(), 211n, def, techniqueIdBySlug);
+    const victim = result.identities.find((i) => i.jobTitle === 'HR Generalist')!;
+
+    const groundTruthEmails = result.emailMessages.filter((e) => e.isGroundTruthEvidence);
+    const groundTruthCloud = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+    const consentEvents = groundTruthCloud.filter((c) => c.actionName === 'ConsentToApplication');
+    const mailAccessEvents = groundTruthCloud.filter((c) => c.actionName === 'MailItemsAccessed');
+
+    expect(groundTruthEmails).toHaveLength(1);
+    expect(groundTruthEmails[0].recipientAddresses).toContain(victim.userPrincipalName);
+
+    expect(consentEvents).toHaveLength(1);
+    expect(consentEvents[0].identityId).toBe(victim.id);
+    expect(consentEvents[0].resourceId).toBe('Office Sync Helper');
+
+    expect(mailAccessEvents.length).toBeGreaterThanOrEqual(5);
+    expect(mailAccessEvents.every((c) => c.identityId === victim.id && c.resourceId === 'Office Sync Helper')).toBe(true);
+    // The consent click is the victim's own action; the subsequent app activity is the attacker's.
+    expect(mailAccessEvents.every((c) => c.sourceIp !== consentEvents[0].sourceIp)).toBe(true);
+  });
+
+  it("feeds the Alert Engine's OAuth-consent-grant rule", async () => {
+    const { evaluateOAuthConsentGrantRule } = await import('../alert-engine/rules');
+    const def = buildOAuthConsentGrantDefinition();
+    const result = generateTelemetry(randomUUID(), 211n, def, techniqueIdBySlug);
+
+    const candidates = evaluateOAuthConsentGrantRule(
+      result.cloudEvents as unknown as Parameters<typeof evaluateOAuthConsentGrantRule>[0],
+      result.identities as unknown as Parameters<typeof evaluateOAuthConsentGrantRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('identity');
+    expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+function buildKerberoastingDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+        { ref: 'service_account_identity_1', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1558.003',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'kerberoasting_tgs_request_v1',
+        relative_timestamp: '+5h',
+        correlation_group: 'kerberoast-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1078.002',
+        entity_ref: 'service_account_identity_1',
+        event_template_id: 'risky_signin_new_country_v1',
+        relative_timestamp: '+5h30m',
+        correlation_group: 'kerberoast-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — Kerberoasting service-account pivot scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1558.003', randomUUID()],
+    ['T1078.002', randomUUID()],
+  ]);
+
+  it('produces a Rubeus-style ticket request on the admin workstation and a risky sign-in for the service account', () => {
+    const def = buildKerberoastingDefinition();
+    const result = generateTelemetry(randomUUID(), 231n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
+    const serviceAccount = result.identities.find((i) => i.jobTitle === 'Service Account')!;
+
+    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
+    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+
+    expect(groundTruthProcesses).toHaveLength(1);
+    expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('kerberoast');
+
+    expect(groundTruthSignIns).toHaveLength(1);
+    expect(groundTruthSignIns[0].identityId).toBe(serviceAccount.id);
+    expect(groundTruthSignIns[0].result).toBe('success');
+  });
+
+  it("feeds the Alert Engine's Kerberoasting rule", async () => {
+    const { evaluateKerberoastingRule } = await import('../alert-engine/rules');
+    const def = buildKerberoastingDefinition();
+    const result = generateTelemetry(randomUUID(), 231n, def, techniqueIdBySlug);
+
+    const candidates = evaluateKerberoastingRule(
+      result.processEvents as unknown as Parameters<typeof evaluateKerberoastingRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateKerberoastingRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+  });
+});
+
+function buildDnsTunnelingDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        { ref: 'victim_identity_1', attributes: { department: 'Marketing', job_title: 'Marketing Coordinator', home_country: 'US' } },
+      ],
+      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'MKT-WKS-04', os_platform: 'windows' } }],
+      decoy_population_size: { identities: 5, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1204.002',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'dns_backdoor_execution_v1',
+        relative_timestamp: '+4h',
+        correlation_group: 'dns-tunnel-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1071.004',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'dns_tunnel_c2_beacon_v1',
+        relative_timestamp: '+4h10m',
+        correlation_group: 'dns-tunnel-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1041',
+        entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
+        event_template_id: 'dns_tunnel_data_exfil_v1',
+        relative_timestamp: '+4h40m',
+        correlation_group: 'dns-tunnel-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: { false_positive_bait: [] },
+  };
+}
+
+describe('generateTelemetry — DNS tunneling scenario (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1204.002', randomUUID()],
+    ['T1071.004', randomUUID()],
+    ['T1041', randomUUID()],
+  ]);
+
+  it('produces a backdoor execution followed by a DNS beacon and a higher-volume DNS exfil burst, all on the victim device', () => {
+    const def = buildDnsTunnelingDefinition();
+    const result = generateTelemetry(randomUUID(), 251n, def, techniqueIdBySlug);
+    const victimDevice = result.devices.find((d) => d.hostname === 'MKT-WKS-04')!;
+
+    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
+    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const dnsEvents = groundTruthNetwork.filter((n) => n.remotePort === 53);
+
+    expect(groundTruthProcesses).toHaveLength(1);
+    expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
+
+    expect(dnsEvents.length).toBeGreaterThanOrEqual(30);
+    expect(dnsEvents.every((n) => n.deviceId === victimDevice.id && n.protocol === 'udp')).toBe(true);
+
+    const totalSent = dnsEvents.reduce((sum, n) => sum + n.bytesSent, 0);
+    const avgSent = totalSent / dnsEvents.length;
+    expect(avgSent).toBeGreaterThan(120); // the larger exfil burst pulls the average up past pure-beacon size
+  });
+
+  it("feeds the Alert Engine's DNS-tunneling rule, citing both the beacon and exfil bursts as one alert", async () => {
+    const { evaluateDnsTunnelingRule } = await import('../alert-engine/rules');
+    const def = buildDnsTunnelingDefinition();
+    const result = generateTelemetry(randomUUID(), 251n, def, techniqueIdBySlug);
+
+    const candidates = evaluateDnsTunnelingRule(
+      result.networkEvents as unknown as Parameters<typeof evaluateDnsTunnelingRule>[0],
+      result.devices as unknown as Parameters<typeof evaluateDnsTunnelingRule>[1],
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(30);
+  });
+});

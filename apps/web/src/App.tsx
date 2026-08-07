@@ -12,6 +12,7 @@ import { SearchPage } from './pages/SearchPage';
 import { IncidentsListPage } from './pages/IncidentsListPage';
 import { IncidentWorkspacePage } from './pages/IncidentWorkspacePage';
 import { ResultsPage } from './pages/ResultsPage';
+import { ReportPage } from './pages/ReportPage';
 import { InstructorCohortsPage } from './pages/InstructorCohortsPage';
 import { CohortDetailPage } from './pages/CohortDetailPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/sessions/:sessionId/search" element={<SearchPage />} />
         <Route path="/sessions/:sessionId/incidents" element={<IncidentsListPage />} />
         <Route path="/sessions/:sessionId/incidents/:incidentId" element={<IncidentWorkspacePage />} />
+        <Route path="/sessions/:sessionId/incidents/:incidentId/report" element={<ReportPage />} />
         <Route path="/sessions/:sessionId/results" element={<ResultsPage />} />
         <Route path="/cohorts/join" element={<JoinCohortPage />} />
         <Route path="/settings" element={<SettingsPage />} />

@@ -16,7 +16,7 @@ export class EvidenceNotesService {
 
   async pinEvidence(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: PinEvidenceDto) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    await this.assertIncidentInSession(sessionId, incidentId);
+    await this.assertIncidentEditable(sessionId, incidentId);
 
     const evidence = await this.prisma.evidenceCollection.create({
       data: {
@@ -49,13 +49,13 @@ export class EvidenceNotesService {
 
   async removeEvidence(sessionId: string, incidentId: string, evidenceId: string, user: AuthenticatedUser) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    await this.assertIncidentInSession(sessionId, incidentId);
+    await this.assertIncidentEditable(sessionId, incidentId);
     await this.prisma.evidenceCollection.deleteMany({ where: { id: evidenceId, incidentId } });
   }
 
   async createNote(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: CreateNoteDto) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    await this.assertIncidentInSession(sessionId, incidentId);
+    await this.assertIncidentEditable(sessionId, incidentId);
     return this.prisma.analystNote.create({ data: { incidentId, body: dto.body, createdBy: user.id } });
   }
 
@@ -86,5 +86,16 @@ export class EvidenceNotesService {
   private async assertIncidentInSession(sessionId: string, incidentId: string) {
     const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
     if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+  }
+
+  // §2.3's acceptance criterion: "Case status and verdict are immutable once submitted except
+  // via an explicit, audited instructor reopen action" — this is what actually makes a closed
+  // incident's eventual report *final* rather than a snapshot of data that could still drift.
+  private async assertIncidentEditable(sessionId: string, incidentId: string) {
+    const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
+    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    if (incident.status === 'closed') {
+      throw new AppException(409, 'INCIDENT_CLOSED', 'This incident is closed. Ask an instructor to reopen it to make further changes.');
+    }
   }
 }

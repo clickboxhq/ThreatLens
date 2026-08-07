@@ -1,3 +1,4 @@
+import * as sanitizeHtmlLib from 'sanitize-html';
 import type { EmailAttachment, EmailMessage, EmailUrl } from '@prisma/client';
 
 export interface StudentEmailAttachmentDto {
@@ -71,8 +72,26 @@ export function toStudentEmailDto(
   };
 }
 
-// §15.6/§11.10: strip active content before rendered HTML ever leaves the API, even though
-// all body content is authored by the content team, not untrusted third-party input.
+// §15.6/§11.10: strip active content before rendered HTML ever leaves the API. Today's scenario
+// content is authored by the content team, not a third party, but the frontend renders this
+// field via dangerouslySetInnerHTML (§17), and future scenario-authoring tooling (§12.1) would
+// let instructors author this content directly — so this is real sanitization against a real
+// sink, not theater, using an allowlist library rather than a regex that's trivial to bypass
+// (e.g. a regex can't safely catch every dangerous tag/attribute/URL-scheme combination).
+const SANITIZE_HTML_OPTIONS: sanitizeHtmlLib.IOptions = {
+  allowedTags: [
+    'p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'ol', 'li',
+    'span', 'div', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+    'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img',
+  ],
+  allowedAttributes: {
+    a: ['href'],
+    img: ['src', 'alt'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  disallowedTagsMode: 'discard',
+};
+
 function sanitizeHtml(html: string): string {
-  return html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on[a-z]+="[^"]*"/gi, '');
+  return sanitizeHtmlLib(html, SANITIZE_HTML_OPTIONS);
 }

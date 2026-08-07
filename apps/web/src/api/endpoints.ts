@@ -36,8 +36,11 @@ import type {
   SearchFilter,
   SearchResult,
   SessionHistoryItem,
+  IncidentReport,
   SessionSummary,
   SignIn,
+  SkillRadarEntry,
+  TimelineItem,
   TokenResponse,
 } from './types';
 
@@ -75,6 +78,7 @@ export const sessionApi = {
   create: (scenarioId: string, cohortAssignmentId?: string) =>
     api.post<SessionSummary>('/sessions', { scenarioId, cohortAssignmentId }),
   listMine: () => api.get<SessionHistoryItem[]>('/sessions'),
+  getSkillRadar: () => api.get<SkillRadarEntry[]>('/sessions/skill-radar'),
   get: (sessionId: string) => api.get<SessionSummary>(`/sessions/${sessionId}`),
   submit: (sessionId: string, incidentIds: string[]) =>
     api.post<{ scoringStatus: string }>(`/sessions/${sessionId}/submit`, { incidentIds }),
@@ -114,6 +118,20 @@ export const incidentsApi = {
     api.get<AnalystNote[]>(`/sessions/${sessionId}/incidents/${incidentId}/notes`),
   listFeedback: (sessionId: string, incidentId: string) =>
     api.get<InstructorFeedbackItem[]>(`/sessions/${sessionId}/incidents/${incidentId}/feedback`),
+};
+
+export const timelineApi = {
+  list: (sessionId: string, incidentId: string) =>
+    api.get<TimelineItem[]>(`/sessions/${sessionId}/incidents/${incidentId}/timeline`),
+  add: (sessionId: string, incidentId: string, eventTable: string, eventId: string) =>
+    api.post<TimelineItem>(`/sessions/${sessionId}/incidents/${incidentId}/timeline`, { eventTable, eventId }),
+  remove: (sessionId: string, incidentId: string, eventTable: string, eventId: string) =>
+    api.delete<void>(`/sessions/${sessionId}/incidents/${incidentId}/timeline/${eventTable}/${eventId}`),
+};
+
+export const reportApi = {
+  get: (sessionId: string, incidentId: string) =>
+    api.get<IncidentReport>(`/sessions/${sessionId}/incidents/${incidentId}/report`),
 };
 
 export const cohortsApi = {

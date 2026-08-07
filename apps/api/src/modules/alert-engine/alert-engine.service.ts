@@ -6,12 +6,15 @@ import {
   AlertCandidate,
   correlateCandidates,
   evaluateCredentialDumpingRule,
+  evaluateDnsTunnelingRule,
   evaluateImpossibleTravelRule,
+  evaluateKerberoastingRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
   evaluateMassEncryptionRule,
   evaluateMfaFatigueRule,
   evaluateNewCountryRule,
+  evaluateOAuthConsentGrantRule,
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluatePersistenceArtifactRule,
@@ -23,12 +26,15 @@ import {
   evaluateSuspiciousProcessRule,
   evaluateWebShellAccessRule,
   CREDENTIAL_DUMPING_RULE_NAME,
+  DNS_TUNNELING_RULE_NAME,
   IMPOSSIBLE_TRAVEL_RULE_NAME,
+  KERBEROASTING_RULE_NAME,
   LATERAL_MOVEMENT_RULE_NAME,
   LEGACY_AUTH_BYPASS_RULE_NAME,
   MASS_ENCRYPTION_RULE_NAME,
   MFA_FATIGUE_RULE_NAME,
   NEW_COUNTRY_RULE_NAME,
+  OAUTH_CONSENT_GRANT_RULE_NAME,
   OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
   PASSWORD_SPRAY_RULE_NAME,
   PERSISTENCE_ARTIFACT_RULE_NAME,
@@ -65,6 +71,7 @@ export class AlertEngineService {
       identities,
       processEvents,
       fileEvents,
+      networkEvents,
       cloudEvents,
       httpRequests,
       devices,
@@ -85,6 +92,9 @@ export class AlertEngineService {
       removableMediaCopyRule,
       sqlInjectionRule,
       scheduledTaskPersistenceRule,
+      oauthConsentGrantRule,
+      kerberoastingRule,
+      dnsTunnelingRule,
     ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
       this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
@@ -92,6 +102,7 @@ export class AlertEngineService {
       this.prisma.identity.findMany({ where: { sessionId } }),
       this.prisma.processEvent.findMany({ where: { sessionId } }),
       this.prisma.fileEvent.findMany({ where: { sessionId } }),
+      this.prisma.networkEvent.findMany({ where: { sessionId } }),
       this.prisma.cloudEvent.findMany({ where: { sessionId } }),
       this.prisma.httpRequest.findMany({ where: { sessionId } }),
       this.prisma.device.findMany({ where: { sessionId } }),
@@ -112,6 +123,9 @@ export class AlertEngineService {
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: REMOVABLE_MEDIA_COPY_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SQL_INJECTION_RULE_NAME } }),
       this.prisma.detectionRule.findFirstOrThrow({ where: { name: SCHEDULED_TASK_PERSISTENCE_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: OAUTH_CONSENT_GRANT_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: KERBEROASTING_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({ where: { name: DNS_TUNNELING_RULE_NAME } }),
     ]);
 
     const allCandidates: AlertCandidate[] = [
@@ -132,6 +146,9 @@ export class AlertEngineService {
       ...evaluateRemovableMediaCopyRule(fileEvents, devices),
       ...evaluateSqlInjectionRule(httpRequests, devices),
       ...evaluateScheduledTaskPersistenceRule(processEvents, devices),
+      ...evaluateOAuthConsentGrantRule(cloudEvents, identities),
+      ...evaluateKerberoastingRule(processEvents, devices),
+      ...evaluateDnsTunnelingRule(networkEvents, devices),
     ];
     const links = correlateCandidates(allCandidates);
 
@@ -148,6 +165,7 @@ export class AlertEngineService {
     for (const e of fileEvents) groundTruthByKey.set(`file_events:${e.id}`, e.isGroundTruthEvidence);
     for (const e of cloudEvents) groundTruthByKey.set(`cloud_events:${e.id}`, e.isGroundTruthEvidence);
     for (const e of httpRequests) groundTruthByKey.set(`http_requests:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of networkEvents) groundTruthByKey.set(`network_events:${e.id}`, e.isGroundTruthEvidence);
     const isFalsePositiveByDesign = (candidate: AlertCandidate) =>
       candidate.evidenceRefs.length > 0 &&
       candidate.evidenceRefs.every((ref) => groundTruthByKey.get(`${ref.eventTable}:${ref.eventId}`) === false);
@@ -170,6 +188,9 @@ export class AlertEngineService {
       [REMOVABLE_MEDIA_COPY_RULE_NAME, removableMediaCopyRule],
       [SQL_INJECTION_RULE_NAME, sqlInjectionRule],
       [SCHEDULED_TASK_PERSISTENCE_RULE_NAME, scheduledTaskPersistenceRule],
+      [OAUTH_CONSENT_GRANT_RULE_NAME, oauthConsentGrantRule],
+      [KERBEROASTING_RULE_NAME, kerberoastingRule],
+      [DNS_TUNNELING_RULE_NAME, dnsTunnelingRule],
     ]);
 
     const createdAlerts = await this.prisma.$transaction(

@@ -7,9 +7,11 @@ import { AppException } from '../../common/exceptions/app-exception';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { TELEMETRY_GENERATION_QUEUE, SCORING_QUEUE } from '../../common/queue/queue.module';
+import { computeSkillRadar } from './skill-radar';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { TelemetryGenerationJobData } from '../telemetry-generator/telemetry-generator.processor';
 import type { ScoringJobData } from '../scoring/scoring.types';
+import type { SessionTechniqueOutcome } from './skill-radar';
 
 const SESSION_TTL_HOURS = 6;
 
@@ -96,6 +98,47 @@ export class SessionsService {
       startedAt: session.startedAt,
       submittedAt: session.submittedAt,
     }));
+  }
+
+  // §2.17/§13.2: aggregates every scored session's required-vs-tagged techniques into a
+  // per-tactic proficiency rollup. Mirrors scoring.service.ts's own required/tagged
+  // computation (rubric JSON + closed-incident IncidentTechnique rows) rather than reading
+  // back through Score.rubricBreakdown, since that field never captured a tactic or a hit list.
+  async getSkillRadar(user: AuthenticatedUser) {
+    const scoredSessions = await this.prisma.investigationSession.findMany({
+      where: { userId: user.id, status: 'scored' },
+      include: { scenarioVersion: true },
+    });
+
+    const sessionIds = scoredSessions.map((s) => s.id);
+    const closedIncidents = sessionIds.length
+      ? await this.prisma.incident.findMany({
+          where: { sessionId: { in: sessionIds }, status: 'closed' },
+          include: { techniqueLinks: { include: { mitreTechnique: true } } },
+        })
+      : [];
+
+    const taggedBySessionId = new Map<string, Set<string>>();
+    for (const incident of closedIncidents) {
+      const set = taggedBySessionId.get(incident.sessionId) ?? new Set<string>();
+      for (const link of incident.techniqueLinks) set.add(link.mitreTechnique.techniqueId);
+      taggedBySessionId.set(incident.sessionId, set);
+    }
+
+    const outcomes: SessionTechniqueOutcome[] = scoredSessions.map((session) => {
+      const def = session.scenarioVersion.groundTruthDefinition as unknown as {
+        scoring_rubric: { required_techniques: string[] };
+      };
+      return {
+        requiredTechniqueIds: def.scoring_rubric.required_techniques,
+        taggedTechniqueIds: [...(taggedBySessionId.get(session.id) ?? [])],
+      };
+    });
+
+    const allTechniques = await this.prisma.mitreTechnique.findMany({ select: { techniqueId: true, tactic: true } });
+    const tacticByTechniqueId = new Map(allTechniques.map((t) => [t.techniqueId, t.tactic]));
+
+    return computeSkillRadar(outcomes, tacticByTechniqueId);
   }
 
   async submitSession(sessionId: string, user: AuthenticatedUser, incidentIds: string[]) {

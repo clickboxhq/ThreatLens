@@ -185,6 +185,45 @@ const MITRE_TECHNIQUES = [
       'Adversaries use the Windows Task Scheduler (schtasks.exe) to register a program to run on a schedule or at logon, surviving a reboot without needing a Startup-folder artifact.',
     url: 'https://attack.mitre.org/techniques/T1053/005/',
   },
+  {
+    techniqueId: 'T1528',
+    name: 'Steal Application Access Token',
+    tactic: 'TA0006',
+    description:
+      'Adversaries phish a user into granting a malicious OAuth application consent to access their account, obtaining a durable access token without ever needing the user\'s password.',
+    url: 'https://attack.mitre.org/techniques/T1528/',
+  },
+  {
+    techniqueId: 'T1558.003',
+    name: 'Steal or Forge Kerberos Tickets: Kerberoasting',
+    tactic: 'TA0006',
+    description:
+      'Adversaries request Kerberos service tickets (TGS) for accounts with a Service Principal Name, then attempt to crack the ticket\'s encrypted portion offline to recover the service account\'s plaintext password.',
+    url: 'https://attack.mitre.org/techniques/T1558/003/',
+  },
+  {
+    techniqueId: 'T1078.002',
+    name: 'Valid Accounts: Domain Accounts',
+    tactic: 'TA0001',
+    description:
+      'Adversaries obtain and abuse credentials for a domain or service account to gain access, persistence, or privilege escalation across a Windows domain environment.',
+    url: 'https://attack.mitre.org/techniques/T1078/002/',
+  },
+  {
+    techniqueId: 'T1071.004',
+    name: 'Application Layer Protocol: DNS',
+    tactic: 'TA0011',
+    description:
+      'Adversaries use the DNS protocol for command-and-control traffic, encoding data into queries and responses so it blends in with the DNS lookups every device on a network already generates.',
+    url: 'https://attack.mitre.org/techniques/T1071/004/',
+  },
+  {
+    techniqueId: 'T1041',
+    name: 'Exfiltration Over C2 Channel',
+    tactic: 'TA0010',
+    description: 'Adversaries move stolen data out of an environment over the same channel already used for command-and-control, rather than a separate exfiltration-specific connection.',
+    url: 'https://attack.mitre.org/techniques/T1041/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -312,6 +351,28 @@ const DETECTION_RULES = [
     logicSummary: "process image IN (SCHTASKS.EXE) AND command_line contains '/create'.",
     defaultSeverity: 'high' as const,
     mitreTechniqueSlug: 'T1053.005',
+  },
+  {
+    name: 'Cloud: Suspicious OAuth App Consent Followed by Mailbox Access',
+    description: 'Fires when an identity consents to a third-party app, which then accesses several mail items shortly after.',
+    logicSummary:
+      "action_name = ConsentToApplication for an identity, followed within 45 minutes by >= 3 MailItemsAccessed actions from the same app (resource_id), grouped by identity.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1528',
+  },
+  {
+    name: 'Device: Kerberoasting Ticket Request Detected',
+    description: 'Fires when a process command line references known Kerberoasting tooling (Rubeus, or a PowerView-style "kerberoast" request).',
+    logicSummary: "command_line (case-insensitive) contains 'rubeus' OR 'kerberoast'.",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1558.003',
+  },
+  {
+    name: 'Device: High-Frequency DNS Traffic to a Single External Address',
+    description: 'Fires when a device accumulates several DNS-port (53) network events to the same remote address.',
+    logicSummary: "count(network_events WHERE remote_port = 53) grouped by (device_id, remote_ip) >= 8.",
+    defaultSeverity: 'critical' as const,
+    mitreTechniqueSlug: 'T1071.004',
   },
 ];
 
@@ -1817,10 +1878,256 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'oauth-illicit-consent-grant-phishing',
+      title: 'Cloud — OAuth Illicit Consent Grant via Phishing',
+      summary:
+        'An HR employee received an email urging them to reconnect their mailbox through a third-party app. Shortly after, that app began pulling a large volume of mail. Determine what happened.',
+      category: 'cloud',
+      difficulty: 'advanced',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1566.002', 'T1528', 'T1114.002'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'cloud',
+          difficulty: 'advanced',
+          estimated_minutes: 30,
+          narrative_summary:
+            'An attacker sends a phishing email urging the recipient to "reconnect" their mailbox by granting a third-party app permission to read it. Unlike a credential-harvesting phish, the victim never types a password — clicking through and approving the consent prompt hands the attacker a durable API access token directly. The attacker\'s infrastructure then uses that token to pull a large volume of mail out of the mailbox via the app\'s own API access, with no further sign-in ever required.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Human Resources', job_title: 'HR Generalist', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'oauth_consent_phishing_email_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'oauth-consent-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1528',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'oauth_illicit_consent_grant_v1',
+            relative_timestamp: '+3h10m',
+            correlation_group: 'oauth-consent-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1114.002',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'oauth_app_mailbox_exfil_v1',
+            relative_timestamp: '+3h15m',
+            correlation_group: 'oauth-consent-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.002', 'T1528', 'T1114.002'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this identity's mailbox for a message urging them to reconnect or re-authorize something." },
+          { unlock_cost_percent: 10, text: 'In the Identity Portal, check this account\'s cloud activity for an app consent action — no password is needed for this technique, so look past sign-ins.' },
+          { unlock_cost_percent: 15, text: 'Once an app is granted consent, check what that same app did afterward — and from where.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'app-reconnect-office365-verify.com',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed OAuth-phishing infrastructure',
+          context: 'Domain used to deliver a phishing link to a fraudulent OAuth app consent page.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'kerberoasting-service-account-pivot',
+      title: 'Endpoint — Kerberoasting for Service Account Compromise',
+      summary:
+        'An IT admin workstation ran a tool that requests Kerberos service tickets in bulk. Some time later, a service account signed in from an unfamiliar location. Investigate to determine what happened.',
+      category: 'endpoint',
+      difficulty: 'advanced',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1558.003', 'T1078.002'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'endpoint',
+          difficulty: 'advanced',
+          estimated_minutes: 30,
+          narrative_summary:
+            'An attacker with brief interactive access to an IT admin workstation (the initial foothold happened outside this scenario\'s telemetry) runs a well-known Kerberoasting tool to request service tickets for every account with a Service Principal Name, then takes the tickets offline to crack at their own pace. Some time later, the compromised service account\'s credentials are used to sign in from a location inconsistent with its normal, automated behavior.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+            { ref: 'service_account_identity_1', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1558.003',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'kerberoasting_tgs_request_v1',
+            relative_timestamp: '+5h',
+            correlation_group: 'kerberoast-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078.002',
+            entity_ref: 'service_account_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+5h30m',
+            correlation_group: 'kerberoast-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 2 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1558.003', 'T1078.002'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's Process Tree for a tool requesting Kerberos tickets in bulk." },
+          { unlock_cost_percent: 10, text: 'Requesting service tickets for every account with a Service Principal Name lets an attacker crack their passwords offline, away from any lockout policy.' },
+          { unlock_cost_percent: 15, text: 'Once you find the ticket request, check the Identity Portal for any service account signing in somewhere unusual afterward.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'dns-tunneling-data-exfiltration',
+      title: 'Malware — DNS Tunneling Command-and-Control and Exfiltration',
+      summary:
+        'A marketing workstation ran a downloaded "network utility." Shortly after, the device began sending an unusually high volume of DNS traffic to one external address. Investigate the device to determine what happened.',
+      category: 'malware',
+      difficulty: 'advanced',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1204.002', 'T1071.004', 'T1041'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'malware',
+          difficulty: 'advanced',
+          estimated_minutes: 30,
+          narrative_summary:
+            'A user runs a downloaded utility disguised as a network diagnostics tool. It establishes a backdoor that communicates using DNS queries rather than a typical HTTPS connection — a channel most networks never inspect closely because every device generates DNS traffic constantly. The backdoor first beacons steadily to check in, then a second, higher-volume burst of DNS queries to the same address follows as it tunnels data out encoded into the queries themselves.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Marketing', job_title: 'Marketing Coordinator', home_country: 'US' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'MKT-WKS-04', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 10, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1204.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'dns_backdoor_execution_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'dns-tunnel-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1071.004',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'dns_tunnel_c2_beacon_v1',
+            relative_timestamp: '+4h10m',
+            correlation_group: 'dns-tunnel-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1041',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'dns_tunnel_data_exfil_v1',
+            relative_timestamp: '+4h40m',
+            correlation_group: 'dns-tunnel-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1204.002', 'T1071.004', 'T1041'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: "Check this device's Process Tree for a downloaded tool with an unremarkable name." },
+          { unlock_cost_percent: 10, text: 'In the Network tab, look for an unusually large number of connections to the same external address on port 53 — that\'s the DNS port, not a typical C2 port like 443.' },
+          { unlock_cost_percent: 15, text: 'Compare the earlier, steadier DNS traffic to a later burst with much higher data sent per query — that shift is when tunneling turns into actual exfiltration.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'ip',
+          value: '91.219.237.14',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed DNS-tunneling C2 infrastructure',
+          context: 'Observed as the destination for a sustained, high-volume DNS-port (53) query pattern consistent with DNS tunneling.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   await seedLearningPlatform();
 
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 18 scenarios, learning platform content.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 21 scenarios, learning platform content.`,
   );
 }
 
@@ -1831,14 +2138,15 @@ async function seedLearningPlatform(): Promise<void> {
   const scenarios = await prisma.attackScenario.findMany({ select: { id: true, slug: true } });
   const scenarioIdBySlug = new Map(scenarios.map((s) => [s.slug, s.id]));
 
+  const courseDescription =
+    'A breadth-first introduction to SOC investigation across identity, email, endpoint, cloud, web, malware, ransomware, and insider-threat scenarios.';
   const course = await prisma.course.upsert({
     where: { slug: 'soc-analyst-fundamentals' },
-    update: {},
+    update: { description: courseDescription },
     create: {
       slug: 'soc-analyst-fundamentals',
       title: 'SOC Analyst Fundamentals',
-      description:
-        'A breadth-first introduction to SOC investigation across identity, email, endpoint, insider-threat, and ransomware scenarios.',
+      description: courseDescription,
       careerTrack: 'soc_analyst',
     },
   });
@@ -1860,6 +2168,35 @@ async function seedLearningPlatform(): Promise<void> {
         'insider-data-exfiltration',
         'malware-execution-via-attachment',
         'ransomware-lateral-movement-encryption',
+        // Added during learning-path expansion: the remaining insider-threat and ransomware
+        // scenarios not yet in any path, grouped here since this path already mixes both
+        // themes rather than splitting each into its own thin, single-scenario path.
+        'insider-bulk-usb-copy-resignation',
+        'ransomware-double-extortion-data-theft',
+      ],
+    },
+    {
+      slug: 'cloud-web-application-security',
+      title: 'Cloud & Web Application Security',
+      passThresholdPercent: 70,
+      scenarioSlugs: [
+        'cloud-account-takeover-access-key',
+        'cloud-storage-bucket-public-exposure',
+        'oauth-illicit-consent-grant-phishing',
+        'web-shell-public-facing-server',
+        'web-sql-injection-data-exfiltration',
+      ],
+    },
+    {
+      slug: 'advanced-endpoint-malware-analysis',
+      title: 'Advanced Endpoint & Malware Analysis',
+      passThresholdPercent: 70,
+      scenarioSlugs: [
+        'credential-dumping-lsass-comsvcs',
+        'kerberoasting-service-account-pivot',
+        'fileless-malware-startup-persistence',
+        'malware-trojan-installer-scheduled-task',
+        'dns-tunneling-data-exfiltration',
       ],
     },
   ];

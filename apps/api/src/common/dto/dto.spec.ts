@@ -249,3 +249,72 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
     expect(JSON.parse(JSON.stringify(dto)).raw).toBeUndefined();
   });
 });
+
+// §15.6/§11.10: rendered email HTML is sanitized server-side before it ever leaves the API —
+// the frontend renders bodyHtml via dangerouslySetInnerHTML (§17), so this is a real sink, not
+// a theoretical one. An allowlist library, not a regex, is what actually holds up against the
+// combinations below.
+describe('Email HTML sanitization (§15.6, §11.10)', () => {
+  function email(bodyHtml: string): EmailMessage {
+    return {
+      id: 'm-1',
+      isGroundTruthEvidence: true,
+      mitreTechniqueId: null,
+      correlationId: null,
+      sessionId: 's-1',
+      occurredAt: new Date(),
+      messageId: '<a@b>',
+      direction: 'inbound',
+      senderAddress: 'a@b.com',
+      senderDisplayName: 'A',
+      recipientAddresses: ['victim@example.com'],
+      subject: 'Test',
+      bodyHtml,
+      headersRaw: {},
+      spfResult: 'fail',
+      dkimResult: 'none',
+      dmarcResult: 'fail',
+    } as EmailMessage;
+  }
+
+  it('strips a <script> tag and its contents entirely', () => {
+    const dto = toStudentEmailDto(email('<p>Hello</p><script>alert(document.cookie)</script>'));
+    expect(dto.bodyHtml).not.toContain('script');
+    expect(dto.bodyHtml).not.toContain('alert');
+    expect(dto.bodyHtml).toContain('Hello');
+  });
+
+  it('strips inline event-handler attributes', () => {
+    const dto = toStudentEmailDto(email('<p onclick="exfil()">Click here</p>'));
+    expect(dto.bodyHtml).not.toContain('onclick');
+    expect(dto.bodyHtml).not.toContain('exfil');
+    expect(dto.bodyHtml).toContain('Click here');
+  });
+
+  it('strips a javascript: href instead of just passing it through', () => {
+    const dto = toStudentEmailDto(email('<a href="javascript:alert(1)">Link</a>'));
+    expect(dto.bodyHtml).not.toContain('javascript:');
+  });
+
+  it('drops an <iframe>, which a script-tag-only regex would miss', () => {
+    const dto = toStudentEmailDto(email('<p>Before</p><iframe src="https://evil.example.com"></iframe><p>After</p>'));
+    expect(dto.bodyHtml).not.toContain('iframe');
+    expect(dto.bodyHtml).toContain('Before');
+    expect(dto.bodyHtml).toContain('After');
+  });
+
+  it('drops an <svg onload>, which a script-tag-only regex would also miss', () => {
+    const dto = toStudentEmailDto(email('<svg onload="alert(1)"></svg><p>Safe</p>'));
+    expect(dto.bodyHtml).not.toContain('onload');
+    expect(dto.bodyHtml).not.toContain('svg');
+    expect(dto.bodyHtml).toContain('Safe');
+  });
+
+  it('preserves ordinary formatting markup used by real scenario content', () => {
+    const dto = toStudentEmailDto(
+      email('<p>Please <b>review</b> the attached <a href="https://example.com/invoice">invoice</a>.</p>'),
+    );
+    expect(dto.bodyHtml).toContain('<b>review</b>');
+    expect(dto.bodyHtml).toContain('href="https://example.com/invoice"');
+  });
+});

@@ -4,6 +4,7 @@ import { emailPortalApi, incidentsApi } from '../api/endpoints';
 import type { EmailMessage, IncidentSummary } from '../api/types';
 import { SessionNav } from '../components/Layout';
 import { PinEvidenceButton } from '../components/PinEvidenceButton';
+import { AddToTimelineButton } from '../components/AddToTimelineButton';
 
 export function EmailPortalPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -13,6 +14,7 @@ export function EmailPortalPage() {
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [targetIncidentId, setTargetIncidentId] = useState<string>('');
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [timelineKeys, setTimelineKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!sessionId) return;
@@ -26,6 +28,10 @@ export function EmailPortalPage() {
 
   function markPinned(key: string) {
     setPinnedKeys((prev) => new Set(prev).add(key));
+  }
+
+  function markAddedToTimeline(key: string) {
+    setTimelineKeys((prev) => new Set(prev).add(key));
   }
 
   return (
@@ -86,7 +92,7 @@ export function EmailPortalPage() {
                   </select>
                 </label>
               )}
-              <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 12, display: 'flex', gap: 6 }}>
                 <PinEvidenceButton
                   eventKey={`email_messages:${selected.id}`}
                   eventTable="email_messages"
@@ -94,6 +100,14 @@ export function EmailPortalPage() {
                   incidentId={targetIncidentId || null}
                   pinnedKeys={pinnedKeys}
                   onPinned={markPinned}
+                />
+                <AddToTimelineButton
+                  eventKey={`email_messages:${selected.id}`}
+                  eventTable="email_messages"
+                  eventId={selected.id}
+                  incidentId={targetIncidentId || null}
+                  addedKeys={timelineKeys}
+                  onAdded={markAddedToTimeline}
                 />
               </div>
 

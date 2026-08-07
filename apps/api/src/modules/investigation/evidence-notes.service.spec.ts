@@ -1,0 +1,57 @@
+import { randomUUID } from 'crypto';
+import { EvidenceNotesService } from './evidence-notes.service';
+import { AppException } from '../../common/exceptions/app-exception';
+import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
+
+const USER: AuthenticatedUser = { id: randomUUID(), role: 'student' } as AuthenticatedUser;
+
+function buildService(incidentStatus: string) {
+  const incident = { id: 'incident-1', sessionId: 'session-1', status: incidentStatus };
+  const prisma = {
+    incident: { findFirst: jest.fn(async () => incident) },
+    evidenceCollection: { create: jest.fn(async (args: { data: unknown }) => args.data), deleteMany: jest.fn(async () => ({ count: 1 })) },
+    analystNote: { create: jest.fn(async (args: { data: unknown }) => args.data) },
+  };
+  const sessionAccess = { getOwnedSession: jest.fn(async () => ({ id: 'session-1' })) };
+  const investigationActions = { record: jest.fn(async () => undefined) };
+
+  const service = new EvidenceNotesService(prisma as never, sessionAccess as never, investigationActions as never);
+  return { service };
+}
+
+// §2.3's acceptance criterion: "Case status and verdict are immutable once submitted except via
+// an explicit, audited instructor reopen action" — these tests guard the mutation-blocking half
+// of that, which is the direct prerequisite for the Incident Report (§2.14) being meaningfully final.
+describe('EvidenceNotesService closed-incident immutability (§2.3)', () => {
+  it('pinEvidence() rejects with 409 INCIDENT_CLOSED on a closed incident', async () => {
+    const { service } = buildService('closed');
+    await expect(
+      service.pinEvidence('session-1', 'incident-1', USER, { eventTable: 'sign_in_events', eventId: 'e1', justification: 'because' }),
+    ).rejects.toMatchObject({ status: 409, code: 'INCIDENT_CLOSED' });
+  });
+
+  it('removeEvidence() rejects on a closed incident', async () => {
+    const { service } = buildService('closed');
+    await expect(service.removeEvidence('session-1', 'incident-1', 'ev-1', USER)).rejects.toMatchObject({
+      status: 409,
+      code: 'INCIDENT_CLOSED',
+    });
+  });
+
+  it('createNote() rejects on a closed incident', async () => {
+    const { service } = buildService('closed');
+    await expect(service.createNote('session-1', 'incident-1', USER, { body: 'a note' })).rejects.toBeInstanceOf(AppException);
+  });
+
+  it('pinEvidence() succeeds on an open incident', async () => {
+    const { service } = buildService('open');
+    await expect(
+      service.pinEvidence('session-1', 'incident-1', USER, { eventTable: 'sign_in_events', eventId: 'e1', justification: 'because' }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('createNote() succeeds on an open incident', async () => {
+    const { service } = buildService('open');
+    await expect(service.createNote('session-1', 'incident-1', USER, { body: 'a note' })).resolves.toBeTruthy();
+  });
+});

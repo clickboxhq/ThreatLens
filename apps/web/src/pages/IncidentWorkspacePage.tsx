@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { alertsApi, incidentsApi, mitreApi } from '../api/endpoints';
+import { alertsApi, incidentsApi, mitreApi, timelineApi } from '../api/endpoints';
 import { connectSessionSocket } from '../api/realtime';
-import type { Alert, AnalystNote, EvidenceItem, Incident, InstructorFeedbackItem, MitreTechniqueRef } from '../api/types';
+import type { Alert, AnalystNote, EvidenceItem, Incident, InstructorFeedbackItem, MitreTechniqueRef, TimelineItem } from '../api/types';
 import { ApiError } from '../api/client';
 import { SessionNav } from '../components/Layout';
+import { AddToTimelineButton } from '../components/AddToTimelineButton';
+import { GlobalTimeline } from '../components/GlobalTimeline';
 
 interface EvidenceCandidate {
   alertId: string;
@@ -21,6 +23,8 @@ export function IncidentWorkspacePage() {
   const [linkedAlerts, setLinkedAlerts] = useState<Alert[]>([]);
   const [candidates, setCandidates] = useState<EvidenceCandidate[]>([]);
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
+  const [timelineKeys, setTimelineKeys] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState<AnalystNote[]>([]);
   const [noteBody, setNoteBody] = useState('');
   const [verdict, setVerdict] = useState('true_positive');
@@ -34,16 +38,19 @@ export function IncidentWorkspacePage() {
 
   async function load() {
     if (!sessionId || !incidentId) return;
-    const [inc, allAlerts, ev, allNotes, techniques, feedback] = await Promise.all([
+    const [inc, allAlerts, ev, timeline, allNotes, techniques, feedback] = await Promise.all([
       incidentsApi.get(sessionId, incidentId),
       alertsApi.list(sessionId),
       incidentsApi.listEvidence(sessionId, incidentId),
+      timelineApi.list(sessionId, incidentId),
       incidentsApi.listNotes(sessionId, incidentId),
       mitreApi.list(),
       incidentsApi.listFeedback(sessionId, incidentId),
     ]);
     setIncident(inc);
     setEvidence(ev);
+    setTimelineItems(timeline);
+    setTimelineKeys(new Set(timeline.filter((t) => t.source.includes('manual')).map((t) => `${t.eventTable}:${t.id}`)));
     setNotes(allNotes);
     setAllTechniques(techniques);
     setInstructorFeedback(feedback);
@@ -86,6 +93,13 @@ export function IncidentWorkspacePage() {
     const bSuggested = suggestedTechniqueIds.has(b.id) ? 0 : 1;
     return aSuggested - bSuggested || a.techniqueId.localeCompare(b.techniqueId);
   });
+
+  async function refreshTimeline() {
+    if (!sessionId || !incidentId) return;
+    const timeline = await timelineApi.list(sessionId, incidentId);
+    setTimelineItems(timeline);
+    setTimelineKeys(new Set(timeline.filter((t) => t.source.includes('manual')).map((t) => `${t.eventTable}:${t.id}`)));
+  }
 
   async function confirmPinEvidence(candidate: EvidenceCandidate) {
     if (justificationDraft.trim().length < 5) return;
@@ -182,6 +196,16 @@ export function IncidentWorkspacePage() {
                   Pin as Evidence
                 </button>
               )}
+              <span style={{ marginLeft: 6 }}>
+                <AddToTimelineButton
+                  eventKey={`${c.eventTable}:${c.eventId}`}
+                  eventTable={c.eventTable}
+                  eventId={c.eventId}
+                  incidentId={incidentId ?? null}
+                  addedKeys={timelineKeys}
+                  onAdded={() => refreshTimeline()}
+                />
+              </span>
             </div>
           ))}
 
@@ -234,7 +258,12 @@ export function IncidentWorkspacePage() {
         <div>
           <h3>Close Incident</h3>
           {incident.status === 'closed' ? (
-            <p>This incident is closed. Summary: {incident.summary}</p>
+            <div>
+              <p>This incident is closed. Summary: {incident.summary}</p>
+              <button onClick={() => navigate(`/sessions/${sessionId}/incidents/${incidentId}/report`)}>
+                View Final Report
+              </button>
+            </div>
           ) : (
             <form onSubmit={closeIncident} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <label>
@@ -278,6 +307,15 @@ export function IncidentWorkspacePage() {
             </form>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <h3>Global Timeline</h3>
+        <p style={{ color: '#64748b', fontSize: 13, marginTop: -6 }}>
+          Grouped by identity/device/mailbox lane, in chronological order. Items with a matching colored border share a
+          correlated origin.
+        </p>
+        <GlobalTimeline items={timelineItems} incidentId={incidentId!} onRemoved={() => refreshTimeline()} />
       </div>
     </div>
   );

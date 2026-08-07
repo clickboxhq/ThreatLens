@@ -42,6 +42,13 @@ export class SessionsController {
     return this.sessionsService.listMine(user);
   }
 
+  // Must be declared before @Get(':id') — Nest matches routes in declaration order, and
+  // ':id' would otherwise greedily capture "skill-radar" and fail ParseUUIDPipe.
+  @Get('skill-radar')
+  async getSkillRadar(@CurrentUser() user: AuthenticatedUser) {
+    return this.sessionsService.getSkillRadar(user);
+  }
+
   @Get(':id')
   async get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.sessionsService.getSession(id, user);

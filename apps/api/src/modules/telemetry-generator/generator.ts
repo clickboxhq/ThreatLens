@@ -6,6 +6,9 @@ import {
   CLOUD_STORAGE_BUCKET,
   CLOUD_STORAGE_BUCKET_CUSTOMER_EXPORTS,
   DEPARTMENTS,
+  DNS_BACKDOOR_COMMAND_LINE,
+  DNS_BACKDOOR_TOOL_PATH,
+  DNS_TUNNEL_C2_IP,
   EXEC_LOOKALIKE_DOMAIN,
   EXEC_NAME,
   EXEC_TITLE,
@@ -15,6 +18,8 @@ import {
   HOME_COUNTRIES,
   HOSTNAME_PREFIX,
   JOB_TITLES,
+  KERBEROASTING_COMMAND_LINE,
+  KERBEROASTING_TOOL_PATH,
   LAST_NAMES,
   LEGITIMATE_SCRIPT_PATH,
   LEGITIMATE_STARTUP_SHORTCUT_PATH,
@@ -22,11 +27,13 @@ import {
   LSASS_DUMP_COMMAND_LINE_TEMPLATE,
   LSASS_DUMP_FILE_PATH,
   MALICIOUS_DOMAIN,
+  MALICIOUS_OAUTH_APP_NAME,
   MALWARE_C2_IP,
   MALWARE_DELIVERY_DOMAIN,
   MALWARE_PERSISTENCE_STARTUP_PATH,
   MONITORING_USER_AGENT,
   NON_BROWSER_USER_AGENTS,
+  OAUTH_PHISHING_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
   RANSOM_NOTE_FILENAME,
@@ -1424,6 +1431,177 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         integrityLevel: 'Medium',
         identityId: ctx.identity.id,
       });
+      break;
+    }
+    case 'oauth_consent_phishing_email_v1': {
+      const emailId = randomUUID();
+      ctx.emailMessages.push({
+        id: emailId,
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        messageId: `<${randomUUID()}@${OAUTH_PHISHING_DOMAIN}>`,
+        direction: 'inbound',
+        senderAddress: `no-reply@${OAUTH_PHISHING_DOMAIN}`,
+        senderDisplayName: 'Microsoft 365 App Permissions',
+        recipientAddresses: [ctx.identity.userPrincipalName as string],
+        subject: 'Action Required: Reconnect Your Mailbox to Restore Sync',
+        bodyHtml:
+          '<p>Your mailbox sync was interrupted. To restore access, please reconnect your account and grant permission to the Office Sync Helper app.</p>',
+        headersRaw: {
+          'Received-Chain': [`mail.${OAUTH_PHISHING_DOMAIN}`, 'edge-relay-04.example-mx.net'],
+          'Authentication-Results': `spf=fail smtp.mailfrom=${OAUTH_PHISHING_DOMAIN}; dkim=none; dmarc=fail`,
+        },
+        spfResult: 'fail',
+        dkimResult: 'none',
+        dmarcResult: 'fail',
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      ctx.emailUrls.push({
+        id: randomUUID(),
+        emailMessageId: emailId,
+        url: `https://${OAUTH_PHISHING_DOMAIN}/oauth/authorize?client_id=office-sync-helper&scope=Mail.Read`,
+        displayText: 'Reconnect Mailbox',
+        reputation: 'malicious',
+        isRewrittenBySafeLinks: false,
+      });
+      break;
+    }
+    case 'oauth_illicit_consent_grant_v1': {
+      // The consent click itself is performed by the tricked user from their own browser, so
+      // (deliberately, unlike the mailbox-access burst below) this event uses the identity's
+      // own synthetic IP rather than an attacker profile — the Student has to notice the
+      // unfamiliar app name and action, not just an unfamiliar IP.
+      ctx.cloudEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'oauth_illicit_consent_grant' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        identityId: ctx.identity.id,
+        provider: 'saas',
+        actionName: 'ConsentToApplication',
+        resourceId: MALICIOUS_OAUTH_APP_NAME,
+        sourceIp: syntheticIp(ctx.rng),
+      });
+      break;
+    }
+    case 'oauth_app_mailbox_exfil_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'oauth-consent');
+      const accessCount = ctx.rng.intBetween(5, 8);
+      for (let i = 0; i < accessCount; i++) {
+        ctx.cloudEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 20 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'oauth_app_mailbox_access' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          provider: 'saas',
+          actionName: 'MailItemsAccessed',
+          resourceId: MALICIOUS_OAUTH_APP_NAME,
+          sourceIp: attacker.ip,
+        });
+      }
+      break;
+    }
+    case 'kerberoasting_tgs_request_v1': {
+      if (!ctx.device) break;
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'kerberoasting_tgs_request' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:kerberoast`),
+        parentProcessGuid: null,
+        imagePath: KERBEROASTING_TOOL_PATH,
+        commandLine: KERBEROASTING_COMMAND_LINE,
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+      break;
+    }
+    case 'dns_backdoor_execution_v1': {
+      if (!ctx.device) break;
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'ground_truth', pattern: 'dns_backdoor_execution' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`),
+        parentProcessGuid: null,
+        imagePath: DNS_BACKDOOR_TOOL_PATH,
+        commandLine: DNS_BACKDOOR_COMMAND_LINE,
+        hashSha256: syntheticHash(ctx.rng),
+        integrityLevel: 'Medium',
+        identityId: ctx.identity.id,
+      });
+      break;
+    }
+    case 'dns_tunnel_c2_beacon_v1': {
+      if (!ctx.device) break;
+      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`);
+      const queryCount = ctx.rng.intBetween(10, 14);
+      for (let i = 0; i < queryCount; i++) {
+        ctx.networkEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 90 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'dns_tunnel_c2_beacon' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          direction: 'outbound',
+          protocol: 'udp',
+          localPort: ctx.rng.intBetween(49152, 65535),
+          remoteIp: DNS_TUNNEL_C2_IP,
+          remotePort: 53,
+          bytesSent: ctx.rng.intBetween(60, 120),
+          bytesReceived: ctx.rng.intBetween(60, 120),
+          processGuid,
+        });
+      }
+      break;
+    }
+    case 'dns_tunnel_data_exfil_v1': {
+      if (!ctx.device) break;
+      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`);
+      const queryCount = ctx.rng.intBetween(20, 28);
+      for (let i = 0; i < queryCount; i++) {
+        ctx.networkEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 20 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'dns_tunnel_data_exfil' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          direction: 'outbound',
+          protocol: 'udp',
+          localPort: ctx.rng.intBetween(49152, 65535),
+          remoteIp: DNS_TUNNEL_C2_IP,
+          remotePort: 53,
+          bytesSent: ctx.rng.intBetween(400, 900),
+          bytesReceived: ctx.rng.intBetween(40, 90),
+          processGuid,
+        });
+      }
       break;
     }
     default:

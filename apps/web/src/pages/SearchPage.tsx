@@ -5,6 +5,7 @@ import { incidentsApi, searchApi } from '../api/endpoints';
 import type { IncidentSummary, SearchResult } from '../api/types';
 import { SessionNav } from '../components/Layout';
 import { PinEvidenceButton } from '../components/PinEvidenceButton';
+import { AddToTimelineButton } from '../components/AddToTimelineButton';
 
 const SIGN_IN_FIELDS = [
   { field: 'sourceIp', label: 'Source IP' },
@@ -29,11 +30,15 @@ function ResultRow({
   targetIncidentId,
   pinnedKeys,
   onPinned,
+  timelineKeys,
+  onAddedToTimeline,
 }: {
   result: SearchResult;
   targetIncidentId: string | null;
   pinnedKeys: Set<string>;
   onPinned: (key: string) => void;
+  timelineKeys: Set<string>;
+  onAddedToTimeline: (key: string) => void;
 }) {
   const eventTable = result.entityType === 'sign_in_event' ? 'sign_in_events' : 'email_messages';
   const summary =
@@ -47,14 +52,24 @@ function ResultRow({
       <td>{result.entityType === 'sign_in_event' ? 'Sign-in' : 'Email'}</td>
       <td>{summary}</td>
       <td>
-        <PinEvidenceButton
-          eventKey={resultKey(result)}
-          eventTable={eventTable}
-          eventId={result.data.id}
-          incidentId={targetIncidentId}
-          pinnedKeys={pinnedKeys}
-          onPinned={onPinned}
-        />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <PinEvidenceButton
+            eventKey={resultKey(result)}
+            eventTable={eventTable}
+            eventId={result.data.id}
+            incidentId={targetIncidentId}
+            pinnedKeys={pinnedKeys}
+            onPinned={onPinned}
+          />
+          <AddToTimelineButton
+            eventKey={resultKey(result)}
+            eventTable={eventTable}
+            eventId={result.data.id}
+            incidentId={targetIncidentId}
+            addedKeys={timelineKeys}
+            onAdded={onAddedToTimeline}
+          />
+        </div>
       </td>
     </tr>
   );
@@ -69,6 +84,7 @@ export function SearchPage() {
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [targetIncidentId, setTargetIncidentId] = useState<string>('');
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [timelineKeys, setTimelineKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!sessionId) return;
@@ -81,6 +97,10 @@ export function SearchPage() {
 
   function markPinned(key: string) {
     setPinnedKeys((prev) => new Set(prev).add(key));
+  }
+
+  function markAddedToTimeline(key: string) {
+    setTimelineKeys((prev) => new Set(prev).add(key));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -186,6 +206,8 @@ export function SearchPage() {
                     targetIncidentId={targetIncidentId || null}
                     pinnedKeys={pinnedKeys}
                     onPinned={markPinned}
+                    timelineKeys={timelineKeys}
+                    onAddedToTimeline={markAddedToTimeline}
                   />
                 ))}
               </tbody>

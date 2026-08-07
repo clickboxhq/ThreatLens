@@ -1,14 +1,28 @@
 import { randomUUID } from 'crypto';
-import type { CloudEvent, Device, EmailAttachment, EmailMessage, FileEvent, HttpRequest, Identity, ProcessEvent, SignInEvent } from '@prisma/client';
+import type {
+  CloudEvent,
+  Device,
+  EmailAttachment,
+  EmailMessage,
+  FileEvent,
+  HttpRequest,
+  Identity,
+  NetworkEvent,
+  ProcessEvent,
+  SignInEvent,
+} from '@prisma/client';
 import {
   correlateCandidates,
   evaluateCredentialDumpingRule,
+  evaluateDnsTunnelingRule,
   evaluateImpossibleTravelRule,
+  evaluateKerberoastingRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
   evaluateMassEncryptionRule,
   evaluateMfaFatigueRule,
   evaluateNewCountryRule,
+  evaluateOAuthConsentGrantRule,
   evaluateOutboundPersonalEmailRule,
   evaluatePasswordSprayRule,
   evaluatePersistenceArtifactRule,
@@ -158,6 +172,28 @@ function cloudEvent(identityId: string, overrides: Partial<CloudEvent> = {}): Cl
     sourceIp: '203.0.113.10',
     ...overrides,
   } as CloudEvent;
+}
+
+function networkEvent(deviceId: string, overrides: Partial<NetworkEvent> = {}): NetworkEvent {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date(),
+    correlationId: null,
+    raw: {},
+    isGroundTruthEvidence: true,
+    mitreTechniqueId: null,
+    deviceId,
+    direction: 'outbound',
+    protocol: 'tcp',
+    localPort: 51000,
+    remoteIp: '203.0.113.10',
+    remotePort: 443,
+    bytesSent: 500,
+    bytesReceived: 300,
+    processGuid: null,
+    ...overrides,
+  } as NetworkEvent;
 }
 
 function httpRequest(deviceId: string, overrides: Partial<HttpRequest> = {}): HttpRequest {
@@ -851,5 +887,133 @@ describe('evaluateScheduledTaskPersistenceRule (§8.2)', () => {
     const dev = device();
     const unrelated = processEvent(dev.id, { imagePath: 'C:\\Windows\\System32\\notepad.exe', commandLine: 'notepad.exe /create' });
     expect(evaluateScheduledTaskPersistenceRule([unrelated], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateOAuthConsentGrantRule (§8.2)', () => {
+  it('fires when a consent grant is followed by >= 3 mailbox-access actions from the same app within the window', () => {
+    const victim = identity();
+    const consent = cloudEvent(victim.id, {
+      provider: 'saas',
+      actionName: 'ConsentToApplication',
+      resourceId: 'Office Sync Helper',
+      occurredAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const mailAccess = Array.from({ length: 5 }, (_, i) =>
+      cloudEvent(victim.id, {
+        provider: 'saas',
+        actionName: 'MailItemsAccessed',
+        resourceId: 'Office Sync Helper',
+        occurredAt: new Date(consent.occurredAt.getTime() + (i + 1) * 20 * 1000),
+      }),
+    );
+
+    const candidates = evaluateOAuthConsentGrantRule([consent, ...mailAccess], [victim]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('identity');
+    expect(candidates[0].evidenceRefs).toHaveLength(6);
+  });
+
+  it('does not fire below the mailbox-access threshold', () => {
+    const victim = identity();
+    const consent = cloudEvent(victim.id, { actionName: 'ConsentToApplication', resourceId: 'Office Sync Helper' });
+    const mailAccess = Array.from({ length: 2 }, () =>
+      cloudEvent(victim.id, { actionName: 'MailItemsAccessed', resourceId: 'Office Sync Helper' }),
+    );
+    expect(evaluateOAuthConsentGrantRule([consent, ...mailAccess], [victim])).toHaveLength(0);
+  });
+
+  it('does not fire for mailbox access from a different app than the one consented to', () => {
+    const victim = identity();
+    const consent = cloudEvent(victim.id, {
+      actionName: 'ConsentToApplication',
+      resourceId: 'Office Sync Helper',
+      occurredAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const unrelatedAccess = Array.from({ length: 5 }, (_, i) =>
+      cloudEvent(victim.id, {
+        actionName: 'MailItemsAccessed',
+        resourceId: 'Some Other App',
+        occurredAt: new Date(consent.occurredAt.getTime() + (i + 1) * 20 * 1000),
+      }),
+    );
+    expect(evaluateOAuthConsentGrantRule([consent, ...unrelatedAccess], [victim])).toHaveLength(0);
+  });
+
+  it('does not fire for mailbox access outside the correlation window', () => {
+    const victim = identity();
+    const consent = cloudEvent(victim.id, {
+      actionName: 'ConsentToApplication',
+      resourceId: 'Office Sync Helper',
+      occurredAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const lateAccess = Array.from({ length: 5 }, (_, i) =>
+      cloudEvent(victim.id, {
+        actionName: 'MailItemsAccessed',
+        resourceId: 'Office Sync Helper',
+        occurredAt: new Date(consent.occurredAt.getTime() + 60 * 60 * 1000 + i * 1000),
+      }),
+    );
+    expect(evaluateOAuthConsentGrantRule([consent, ...lateAccess], [victim])).toHaveLength(0);
+  });
+});
+
+describe('evaluateKerberoastingRule (§8.2)', () => {
+  it('fires when a command line references Rubeus', () => {
+    const dev = device();
+    const ticketRequest = processEvent(dev.id, {
+      imagePath: 'C:\\Users\\Public\\Downloads\\Rubeus.exe',
+      commandLine: 'Rubeus.exe kerberoast /outfile:C:\\Windows\\Temp\\svc_hashes.txt /format:hashcat',
+    });
+
+    const candidates = evaluateKerberoastingRule([ticketRequest], [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toEqual([{ eventTable: 'process_events', eventId: ticketRequest.id }]);
+  });
+
+  it('is case-insensitive on the command-line marker', () => {
+    const dev = device();
+    const ticketRequest = processEvent(dev.id, { commandLine: 'Get-DomainSPNTicket -SPN HTTP/webapp -OutputFormat KERBEROAST' });
+    expect(evaluateKerberoastingRule([ticketRequest], [dev])).toHaveLength(1);
+  });
+
+  it('does not fire for an unrelated process', () => {
+    const dev = device();
+    const benign = processEvent(dev.id, { commandLine: 'notepad.exe' });
+    expect(evaluateKerberoastingRule([benign], [dev])).toHaveLength(0);
+  });
+});
+
+describe('evaluateDnsTunnelingRule (§8.2)', () => {
+  it('fires once a device accumulates >= 8 DNS-port events to the same remote address', () => {
+    const dev = device();
+    const queries = Array.from({ length: 8 }, (_, i) =>
+      networkEvent(dev.id, { remoteIp: '91.219.237.14', remotePort: 53, protocol: 'udp', occurredAt: new Date(Date.now() + i * 1000) }),
+    );
+
+    const candidates = evaluateDnsTunnelingRule(queries, [dev]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].primaryEntityType).toBe('device');
+    expect(candidates[0].evidenceRefs).toHaveLength(8);
+  });
+
+  it('does not fire below the query-count threshold', () => {
+    const dev = device();
+    const queries = Array.from({ length: 7 }, () => networkEvent(dev.id, { remoteIp: '91.219.237.14', remotePort: 53 }));
+    expect(evaluateDnsTunnelingRule(queries, [dev])).toHaveLength(0);
+  });
+
+  it('ignores non-DNS-port traffic even in high volume', () => {
+    const dev = device();
+    const traffic = Array.from({ length: 10 }, () => networkEvent(dev.id, { remoteIp: '185.220.101.47', remotePort: 443 }));
+    expect(evaluateDnsTunnelingRule(traffic, [dev])).toHaveLength(0);
+  });
+
+  it('does not merge DNS queries to different remote addresses into one alert', () => {
+    const dev = device();
+    const toFirst = Array.from({ length: 4 }, () => networkEvent(dev.id, { remoteIp: '91.219.237.14', remotePort: 53 }));
+    const toSecond = Array.from({ length: 4 }, () => networkEvent(dev.id, { remoteIp: '198.51.100.20', remotePort: 53 }));
+    expect(evaluateDnsTunnelingRule([...toFirst, ...toSecond], [dev])).toHaveLength(0);
   });
 });

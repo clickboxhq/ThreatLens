@@ -7,6 +7,7 @@ import type {
   FileEvent,
   HttpRequest,
   Identity,
+  NetworkEvent,
   ProcessEvent,
   SignInEvent,
 } from '@prisma/client';
@@ -47,6 +48,9 @@ export const CREDENTIAL_DUMPING_RULE_NAME = 'Device: LSASS Memory Access via com
 export const REMOVABLE_MEDIA_COPY_RULE_NAME = 'Device: Bulk File Copy to Removable Media';
 export const SQL_INJECTION_RULE_NAME = 'Web: SQL Injection Payload Detected';
 export const SCHEDULED_TASK_PERSISTENCE_RULE_NAME = 'Device: Scheduled Task Created for Persistence';
+export const OAUTH_CONSENT_GRANT_RULE_NAME = 'Cloud: Suspicious OAuth App Consent Followed by Mailbox Access';
+export const KERBEROASTING_RULE_NAME = 'Device: Kerberoasting Ticket Request Detected';
+export const DNS_TUNNELING_RULE_NAME = 'Device: High-Frequency DNS Traffic to a Single External Address';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
@@ -72,6 +76,13 @@ const REMOVABLE_MEDIA_COPY_WINDOW_MINUTES = 15;
 const SQLI_PAYLOAD_MARKERS = ["' or '", "or 1=1", "union select", "drop table", "sleep(", "--"];
 const SCHEDULED_TASK_IMAGE_NAME = 'SCHTASKS.EXE';
 const SCHEDULED_TASK_CREATE_MARKER = '/create';
+const OAUTH_CONSENT_ACTION_NAME = 'ConsentToApplication';
+const OAUTH_MAILBOX_ACCESS_ACTION_NAME = 'MailItemsAccessed';
+const OAUTH_MAILBOX_ACCESS_THRESHOLD = 3;
+const OAUTH_MAILBOX_ACCESS_WINDOW_MINUTES = 45;
+const KERBEROASTING_COMMAND_MARKERS = ['rubeus', 'kerberoast'];
+const DNS_PORT = 53;
+const DNS_TUNNELING_QUERY_COUNT_THRESHOLD = 8;
 
 function imageBaseName(imagePath: string): string {
   const parts = imagePath.split(/[\\/]/);
@@ -718,6 +729,131 @@ export function evaluateScheduledTaskPersistenceRule(processEvents: ProcessEvent
         occurredAt: event.occurredAt,
       };
     });
+}
+
+/**
+ * Fires when an identity consents to a third-party app (T1528) and that same app then racks
+ * up several mailbox-access actions against the identity's mail shortly after — the observable
+ * signature of an illicit OAuth consent grant used to read mail via API rather than a further
+ * sign-in. The two-step, windowed-correlation shape mirrors evaluateLegacyAuthBypassRule's
+ * bypass-then-collection pattern, but within a single cloud-events table instead of two.
+ */
+export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identities: Identity[]): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const byIdentity = new Map<string, CloudEvent[]>();
+  for (const event of cloudEvents) {
+    const group = byIdentity.get(event.identityId) ?? [];
+    group.push(event);
+    byIdentity.set(event.identityId, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const [identityId, events] of byIdentity) {
+    const identity = identityById.get(identityId);
+    if (!identity) continue;
+
+    for (const consent of events.filter((e) => e.actionName === OAUTH_CONSENT_ACTION_NAME)) {
+      const windowEnd = new Date(consent.occurredAt.getTime() + OAUTH_MAILBOX_ACCESS_WINDOW_MINUTES * 60 * 1000);
+      const mailAccessEvents = events.filter(
+        (e) =>
+          e.actionName === OAUTH_MAILBOX_ACCESS_ACTION_NAME &&
+          e.resourceId === consent.resourceId &&
+          e.occurredAt >= consent.occurredAt &&
+          e.occurredAt <= windowEnd,
+      );
+      if (mailAccessEvents.length < OAUTH_MAILBOX_ACCESS_THRESHOLD) continue;
+
+      const latest = [...mailAccessEvents].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+      candidates.push({
+        id: randomUUID(),
+        detectionRuleName: OAUTH_CONSENT_GRANT_RULE_NAME,
+        title: `${identity.displayName} granted "${consent.resourceId ?? 'an app'}" access, followed by bulk mailbox access`,
+        description: `${identity.displayName} consented to the third-party app "${consent.resourceId ?? 'unknown'}", which then accessed ${mailAccessEvents.length} mail items from ${mailAccessEvents[0].sourceIp} — consistent with token theft via a consent-phishing attack.`,
+        primaryEntityType: 'identity' as const,
+        primaryEntityId: identity.id,
+        evidenceRefs: [
+          { eventTable: 'cloud_events', eventId: consent.id },
+          ...mailAccessEvents.map((e) => ({ eventTable: 'cloud_events', eventId: e.id })),
+        ],
+        correlationId: latest.correlationId,
+        occurredAt: latest.occurredAt,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Fires when a process's command line references known Kerberoasting tooling markers
+ * (Rubeus, or PowerView-style "kerberoast") — the same single-signal, marker-based shape as
+ * evaluateCredentialDumpingRule, for a technique (T1558.003) that targets service-account
+ * Kerberos tickets rather than LSASS memory directly.
+ */
+export function evaluateKerberoastingRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  return processEvents
+    .filter((event) => {
+      const commandLine = event.commandLine.toLowerCase();
+      return KERBEROASTING_COMMAND_MARKERS.some((marker) => commandLine.includes(marker));
+    })
+    .map((event) => {
+      const device = deviceById.get(event.deviceId);
+      return {
+        id: randomUUID(),
+        detectionRuleName: KERBEROASTING_RULE_NAME,
+        title: `Possible Kerberoasting activity on ${device?.hostname ?? 'a device'}`,
+        description: `"${event.imagePath}" ran with a command line requesting Kerberos service tickets for offline cracking — a known technique for compromising service accounts without touching their password directly: ${event.commandLine}`,
+        primaryEntityType: 'device' as const,
+        primaryEntityId: device?.id ?? event.deviceId,
+        evidenceRefs: [{ eventTable: 'process_events', eventId: event.id }],
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      };
+    });
+}
+
+/**
+ * Fires when a device accumulates several DNS-port (53) network events to the same remote
+ * address — DNS tunneling shows up as an unusually high query volume rather than any single
+ * distinguishing packet, so (unlike a per-packet marker rule) this groups every matching event
+ * on the (device, remote address) pair into one alert, the same windowed-count shape as
+ * evaluateMassEncryptionRule and evaluateRemovableMediaCopyRule but without a time window —
+ * a sustained DNS C2/exfil channel spans the whole session, not a short burst (T1071.004,
+ * T1041). This is also the first rule to read the network_events table (§10.3).
+ */
+export function evaluateDnsTunnelingRule(networkEvents: NetworkEvent[], devices: Device[]): AlertCandidate[] {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const grouped = new Map<string, NetworkEvent[]>();
+  for (const event of networkEvents) {
+    if (event.remotePort !== DNS_PORT) continue;
+    const key = `${event.deviceId}::${event.remoteIp}`;
+    const group = grouped.get(key) ?? [];
+    group.push(event);
+    grouped.set(key, group);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const events of grouped.values()) {
+    if (events.length < DNS_TUNNELING_QUERY_COUNT_THRESHOLD) continue;
+    const device = deviceById.get(events[0].deviceId);
+    if (!device) continue;
+
+    const totalBytesSent = events.reduce((sum, e) => sum + e.bytesSent, 0);
+    const latest = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: DNS_TUNNELING_RULE_NAME,
+      title: `High-frequency DNS traffic to a single external address from ${device.hostname}`,
+      description: `${events.length} DNS-port (53) queries to ${events[0].remoteIp} were observed from ${device.hostname}, totaling ${totalBytesSent.toLocaleString()} bytes sent — consistent with DNS tunneling used as a covert command-and-control or exfiltration channel.`,
+      primaryEntityType: 'device' as const,
+      primaryEntityId: device.id,
+      evidenceRefs: events.map((e) => ({ eventTable: 'network_events', eventId: e.id })),
+      correlationId: latest.correlationId,
+      occurredAt: latest.occurredAt,
+    });
+  }
+  return candidates;
 }
 
 /**

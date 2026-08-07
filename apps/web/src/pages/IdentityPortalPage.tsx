@@ -4,6 +4,7 @@ import { identityPortalApi, incidentsApi } from '../api/endpoints';
 import type { CloudEvent, Identity, IncidentSummary, SignIn } from '../api/types';
 import { SessionNav } from '../components/Layout';
 import { PinEvidenceButton } from '../components/PinEvidenceButton';
+import { AddToTimelineButton } from '../components/AddToTimelineButton';
 
 export function IdentityPortalPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -14,6 +15,7 @@ export function IdentityPortalPage() {
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [targetIncidentId, setTargetIncidentId] = useState<string>('');
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [timelineKeys, setTimelineKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!sessionId) return;
@@ -27,6 +29,10 @@ export function IdentityPortalPage() {
 
   function markPinned(key: string) {
     setPinnedKeys((prev) => new Set(prev).add(key));
+  }
+
+  function markAddedToTimeline(key: string) {
+    setTimelineKeys((prev) => new Set(prev).add(key));
   }
 
   async function select(identity: Identity) {
@@ -112,14 +118,24 @@ export function IdentityPortalPage() {
                           : '—'}
                       </td>
                       <td>
-                        <PinEvidenceButton
-                          eventKey={`sign_in_events:${s.id}`}
-                          eventTable="sign_in_events"
-                          eventId={s.id}
-                          incidentId={targetIncidentId || null}
-                          pinnedKeys={pinnedKeys}
-                          onPinned={markPinned}
-                        />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <PinEvidenceButton
+                            eventKey={`sign_in_events:${s.id}`}
+                            eventTable="sign_in_events"
+                            eventId={s.id}
+                            incidentId={targetIncidentId || null}
+                            pinnedKeys={pinnedKeys}
+                            onPinned={markPinned}
+                          />
+                          <AddToTimelineButton
+                            eventKey={`sign_in_events:${s.id}`}
+                            eventTable="sign_in_events"
+                            eventId={s.id}
+                            incidentId={targetIncidentId || null}
+                            addedKeys={timelineKeys}
+                            onAdded={markAddedToTimeline}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -148,14 +164,24 @@ export function IdentityPortalPage() {
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{c.resourceId ?? '—'}</td>
                         <td>{c.sourceIp}</td>
                         <td>
-                          <PinEvidenceButton
-                            eventKey={`cloud_events:${c.id}`}
-                            eventTable="cloud_events"
-                            eventId={c.id}
-                            incidentId={targetIncidentId || null}
-                            pinnedKeys={pinnedKeys}
-                            onPinned={markPinned}
-                          />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <PinEvidenceButton
+                              eventKey={`cloud_events:${c.id}`}
+                              eventTable="cloud_events"
+                              eventId={c.id}
+                              incidentId={targetIncidentId || null}
+                              pinnedKeys={pinnedKeys}
+                              onPinned={markPinned}
+                            />
+                            <AddToTimelineButton
+                              eventKey={`cloud_events:${c.id}`}
+                              eventTable="cloud_events"
+                              eventId={c.id}
+                              incidentId={targetIncidentId || null}
+                              addedKeys={timelineKeys}
+                              onAdded={markAddedToTimeline}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -4,6 +4,7 @@ import { devicePortalApi, incidentsApi } from '../api/endpoints';
 import type { Device, FileEvent, HttpRequest, IncidentSummary, NetworkEvent, ProcessEventNode } from '../api/types';
 import { SessionNav } from '../components/Layout';
 import { PinEvidenceButton } from '../components/PinEvidenceButton';
+import { AddToTimelineButton } from '../components/AddToTimelineButton';
 
 interface ProcessTreeViewProps {
   nodes: ProcessEventNode[];
@@ -11,9 +12,19 @@ interface ProcessTreeViewProps {
   targetIncidentId: string | null;
   pinnedKeys: Set<string>;
   onPinned: (key: string) => void;
+  timelineKeys: Set<string>;
+  onAddedToTimeline: (key: string) => void;
 }
 
-function ProcessTreeView({ nodes, depth = 0, targetIncidentId, pinnedKeys, onPinned }: ProcessTreeViewProps) {
+function ProcessTreeView({
+  nodes,
+  depth = 0,
+  targetIncidentId,
+  pinnedKeys,
+  onPinned,
+  timelineKeys,
+  onAddedToTimeline,
+}: ProcessTreeViewProps) {
   return (
     <ul style={{ listStyle: 'none', margin: 0, paddingLeft: depth === 0 ? 0 : 20 }}>
       {nodes.map((node) => (
@@ -25,7 +36,7 @@ function ProcessTreeView({ nodes, depth = 0, targetIncidentId, pinnedKeys, onPin
               {new Date(node.occurredAt).toLocaleTimeString()} · integrity: {node.integrityLevel} · sha256:{' '}
               {node.hashSha256.slice(0, 12)}…
             </div>
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
               <PinEvidenceButton
                 eventKey={`process_events:${node.id}`}
                 eventTable="process_events"
@@ -33,6 +44,14 @@ function ProcessTreeView({ nodes, depth = 0, targetIncidentId, pinnedKeys, onPin
                 incidentId={targetIncidentId}
                 pinnedKeys={pinnedKeys}
                 onPinned={onPinned}
+              />
+              <AddToTimelineButton
+                eventKey={`process_events:${node.id}`}
+                eventTable="process_events"
+                eventId={node.id}
+                incidentId={targetIncidentId}
+                addedKeys={timelineKeys}
+                onAdded={onAddedToTimeline}
               />
             </div>
           </div>
@@ -43,6 +62,8 @@ function ProcessTreeView({ nodes, depth = 0, targetIncidentId, pinnedKeys, onPin
               targetIncidentId={targetIncidentId}
               pinnedKeys={pinnedKeys}
               onPinned={onPinned}
+              timelineKeys={timelineKeys}
+              onAddedToTimeline={onAddedToTimeline}
             />
           )}
         </li>
@@ -63,6 +84,7 @@ export function DevicePortalPage() {
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [targetIncidentId, setTargetIncidentId] = useState<string>('');
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [timelineKeys, setTimelineKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!sessionId) return;
@@ -76,6 +98,10 @@ export function DevicePortalPage() {
 
   function markPinned(key: string) {
     setPinnedKeys((prev) => new Set(prev).add(key));
+  }
+
+  function markAddedToTimeline(key: string) {
+    setTimelineKeys((prev) => new Set(prev).add(key));
   }
 
   async function select(device: Device) {
@@ -152,6 +178,8 @@ export function DevicePortalPage() {
                   targetIncidentId={targetIncidentId || null}
                   pinnedKeys={pinnedKeys}
                   onPinned={markPinned}
+                  timelineKeys={timelineKeys}
+                  onAddedToTimeline={markAddedToTimeline}
                 />
               ) : (
                 <p>No process activity recorded.</p>
@@ -188,14 +216,24 @@ export function DevicePortalPage() {
                         <td>{f.action}</td>
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{f.filePath}</td>
                         <td>
-                          <PinEvidenceButton
-                            eventKey={`file_events:${f.id}`}
-                            eventTable="file_events"
-                            eventId={f.id}
-                            incidentId={targetIncidentId || null}
-                            pinnedKeys={pinnedKeys}
-                            onPinned={markPinned}
-                          />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <PinEvidenceButton
+                              eventKey={`file_events:${f.id}`}
+                              eventTable="file_events"
+                              eventId={f.id}
+                              incidentId={targetIncidentId || null}
+                              pinnedKeys={pinnedKeys}
+                              onPinned={markPinned}
+                            />
+                            <AddToTimelineButton
+                              eventKey={`file_events:${f.id}`}
+                              eventTable="file_events"
+                              eventId={f.id}
+                              incidentId={targetIncidentId || null}
+                              addedKeys={timelineKeys}
+                              onAdded={markAddedToTimeline}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -229,14 +267,24 @@ export function DevicePortalPage() {
                           {n.bytesSent} / {n.bytesReceived}
                         </td>
                         <td>
-                          <PinEvidenceButton
-                            eventKey={`network_events:${n.id}`}
-                            eventTable="network_events"
-                            eventId={n.id}
-                            incidentId={targetIncidentId || null}
-                            pinnedKeys={pinnedKeys}
-                            onPinned={markPinned}
-                          />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <PinEvidenceButton
+                              eventKey={`network_events:${n.id}`}
+                              eventTable="network_events"
+                              eventId={n.id}
+                              incidentId={targetIncidentId || null}
+                              pinnedKeys={pinnedKeys}
+                              onPinned={markPinned}
+                            />
+                            <AddToTimelineButton
+                              eventKey={`network_events:${n.id}`}
+                              eventTable="network_events"
+                              eventId={n.id}
+                              incidentId={targetIncidentId || null}
+                              addedKeys={timelineKeys}
+                              onAdded={markAddedToTimeline}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -270,14 +318,24 @@ export function DevicePortalPage() {
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{h.userAgent}</td>
                         <td>{h.sourceIp}</td>
                         <td>
-                          <PinEvidenceButton
-                            eventKey={`http_requests:${h.id}`}
-                            eventTable="http_requests"
-                            eventId={h.id}
-                            incidentId={targetIncidentId || null}
-                            pinnedKeys={pinnedKeys}
-                            onPinned={markPinned}
-                          />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <PinEvidenceButton
+                              eventKey={`http_requests:${h.id}`}
+                              eventTable="http_requests"
+                              eventId={h.id}
+                              incidentId={targetIncidentId || null}
+                              pinnedKeys={pinnedKeys}
+                              onPinned={markPinned}
+                            />
+                            <AddToTimelineButton
+                              eventKey={`http_requests:${h.id}`}
+                              eventTable="http_requests"
+                              eventId={h.id}
+                              incidentId={targetIncidentId || null}
+                              addedKeys={timelineKeys}
+                              onAdded={markAddedToTimeline}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
