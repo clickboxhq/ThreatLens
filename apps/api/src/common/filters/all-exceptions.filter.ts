@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AppException } from '../exceptions/app-exception';
 
@@ -38,7 +45,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
             ? (body as { message: string[] }).message.join('; ')
             : ((body as { message?: string }).message ?? exception.message);
     } else {
-      this.logger.error(exception instanceof Error ? exception.stack : String(exception), correlationId);
+      this.logger.error(
+        exception instanceof Error ? exception.stack : String(exception),
+        correlationId,
+      );
     }
 
     response.status(status).json({

@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel a still-running run for the same branch/PR when a new commit lands,
+# so the queue doesn't back up with stale runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API — build & test
+    runs-on: ubuntu-latest
+    # `prisma generate` resolves these at schema-parse time even though it never opens a
+    # connection (no live Postgres runs in this job) — without them it fails outright, since
+    # the checkout has no `.env` (gitignored, per apps/api/.env.example). Placeholder values
+    # only; nothing here ever connects to a real database.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      MIGRATE_DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # No live database is needed here: `generate` only reads schema.prisma to produce
+      # the typed client apps/api's TypeScript imports — every Jest spec in this repo
+      # mocks PrismaService directly rather than hitting a real Postgres instance.
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      # Type-aware (parserOptions.project in .eslintrc.js), so it needs the generated Prisma
+      # client to resolve — must run after `generate`, same as build/test below.
+      - run: npm run lint --workspace=apps/api
+
+      - run: npm run build --workspace=apps/api
+
+      - run: npm test --workspace=apps/api -- --ci
+
+  web:
+    name: Web — build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint --workspace=apps/web
+
+      - run: npm run build --workspace=apps/web
+
+  e2e:
+    name: API — e2e (real Postgres + Redis)
+    runs-on: ubuntu-latest
+    # Unlike the `api` job above, this one runs against real service containers end to end:
+    # migrations actually apply, the full AppModule DI graph boots for real, and the
+    # Telemetry Generator → Alert Engine → Scoring Engine BullMQ job chain actually runs —
+    # exactly what mocked unit tests structurally cannot cover.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: socverse
+          POSTGRES_PASSWORD: socverse_dev_password
+          POSTGRES_DB: socverse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U socverse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # `socverse` is a real superuser role in this container (POSTGRES_USER above), needed
+      # for `migrate deploy` to run DDL. `socverse_app` doesn't exist yet at this point — it's
+      # self-created by the 20260806001500_add_least_privilege_app_role migration's DO block
+      # the moment `migrate deploy` applies it, mirroring exactly how local dev bootstraps it
+      # (infra/docker-compose.yml uses the same two-role split, same passwords).
+      DATABASE_URL: postgresql://socverse_app:socverse_app_dev_password@localhost:5432/socverse
+      MIGRATE_DATABASE_URL: postgresql://socverse:socverse_dev_password@localhost:5432/socverse
+      REDIS_URL: redis://localhost:6379
+      # No default in code (unlike JWT_ACCESS_TTL_SECONDS/JWT_REFRESH_TTL_DAYS, which fall
+      # back to 900/30) — JwtSharedModule fails every sign() call outright without this.
+      JWT_ACCESS_SECRET: ci-e2e-test-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      - run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+
+      # The e2e suite looks up published scenarios by slug — without the seed, the catalog
+      # is empty and every test past signup/login fails immediately.
+      - run: npm run prisma:seed --workspace=apps/api
+
+      - run: npm run test:e2e --workspace=apps/api

@@ -18,7 +18,9 @@ export class AlertEngineProcessor extends WorkerHost {
 
   async process(job: Job<AlertCorrelationJobData>): Promise<void> {
     const { sessionId } = job.data;
-    this.logger.log(`Evaluating alerts for session ${sessionId} (job ${job.id})`);
+    this.logger.log(
+      `Evaluating alerts for session ${sessionId} (job ${job.id})`,
+    );
     await this.alertEngineService.evaluateForSession(sessionId);
   }
 }

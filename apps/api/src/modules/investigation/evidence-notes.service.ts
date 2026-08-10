@@ -14,7 +14,12 @@ export class EvidenceNotesService {
     private readonly investigationActions: InvestigationActionsService,
   ) {}
 
-  async pinEvidence(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: PinEvidenceDto) {
+  async pinEvidence(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: PinEvidenceDto,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentEditable(sessionId, incidentId);
 
@@ -41,31 +46,63 @@ export class EvidenceNotesService {
     return evidence;
   }
 
-  async listEvidence(sessionId: string, incidentId: string, user: AuthenticatedUser) {
+  async listEvidence(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentInSession(sessionId, incidentId);
-    return this.prisma.evidenceCollection.findMany({ where: { incidentId }, orderBy: { pinnedAt: 'asc' } });
+    return this.prisma.evidenceCollection.findMany({
+      where: { incidentId },
+      orderBy: { pinnedAt: 'asc' },
+    });
   }
 
-  async removeEvidence(sessionId: string, incidentId: string, evidenceId: string, user: AuthenticatedUser) {
+  async removeEvidence(
+    sessionId: string,
+    incidentId: string,
+    evidenceId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentEditable(sessionId, incidentId);
-    await this.prisma.evidenceCollection.deleteMany({ where: { id: evidenceId, incidentId } });
+    await this.prisma.evidenceCollection.deleteMany({
+      where: { id: evidenceId, incidentId },
+    });
   }
 
-  async createNote(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: CreateNoteDto) {
+  async createNote(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: CreateNoteDto,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentEditable(sessionId, incidentId);
-    return this.prisma.analystNote.create({ data: { incidentId, body: dto.body, createdBy: user.id } });
+    return this.prisma.analystNote.create({
+      data: { incidentId, body: dto.body, createdBy: user.id },
+    });
   }
 
-  async listNotes(sessionId: string, incidentId: string, user: AuthenticatedUser) {
+  async listNotes(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentInSession(sessionId, incidentId);
-    return this.prisma.analystNote.findMany({ where: { incidentId }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.analystNote.findMany({
+      where: { incidentId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
-  async listInstructorFeedback(sessionId: string, incidentId: string, user: AuthenticatedUser) {
+  async listInstructorFeedback(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentInSession(sessionId, incidentId);
     const feedback = await this.prisma.instructorFeedback.findMany({
@@ -84,18 +121,28 @@ export class EvidenceNotesService {
   }
 
   private async assertIncidentInSession(sessionId: string, incidentId: string) {
-    const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
-    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    const incident = await this.prisma.incident.findFirst({
+      where: { id: incidentId, sessionId },
+    });
+    if (!incident)
+      throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
   }
 
   // §2.3's acceptance criterion: "Case status and verdict are immutable once submitted except
   // via an explicit, audited instructor reopen action" — this is what actually makes a closed
   // incident's eventual report *final* rather than a snapshot of data that could still drift.
   private async assertIncidentEditable(sessionId: string, incidentId: string) {
-    const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
-    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    const incident = await this.prisma.incident.findFirst({
+      where: { id: incidentId, sessionId },
+    });
+    if (!incident)
+      throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
     if (incident.status === 'closed') {
-      throw new AppException(409, 'INCIDENT_CLOSED', 'This incident is closed. Ask an instructor to reopen it to make further changes.');
+      throw new AppException(
+        409,
+        'INCIDENT_CLOSED',
+        'This incident is closed. Ask an instructor to reopen it to make further changes.',
+      );
     }
   }
 }

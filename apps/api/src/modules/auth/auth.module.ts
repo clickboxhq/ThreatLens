@@ -8,6 +8,12 @@ import { LoginAttemptTracker } from './login-attempt-tracker.service';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, MfaChallengeStore, PasswordResetTokenStore, EmailVerificationTokenStore, LoginAttemptTracker],
+  providers: [
+    AuthService,
+    MfaChallengeStore,
+    PasswordResetTokenStore,
+    EmailVerificationTokenStore,
+    LoginAttemptTracker,
+  ],
 })
 export class AuthModule {}

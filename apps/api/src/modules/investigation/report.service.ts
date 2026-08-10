@@ -33,7 +33,11 @@ export interface StudentIncidentReportDto {
   // read right after closing the incident that made the session's score final is exactly the
   // moment this is most useful, not because scoring is otherwise part of §2.14's "final report"
   // artifact (Notes + Evidence Collection + Timeline + Verdict).
-  score: { overallPercent: number; verdictCorrect: boolean; scoredAt: Date } | null;
+  score: {
+    overallPercent: number;
+    verdictCorrect: boolean;
+    scoredAt: Date;
+  } | null;
 }
 
 // §2.14/§2.19: "the 'final report' artifact assembled from Notes + Evidence Collection +
@@ -49,21 +53,36 @@ export class ReportService {
     private readonly timelineService: TimelineService,
   ) {}
 
-  async getReport(sessionId: string, incidentId: string, user: AuthenticatedUser): Promise<StudentIncidentReportDto> {
+  async getReport(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+  ): Promise<StudentIncidentReportDto> {
     await this.sessionAccess.getOwnedSession(sessionId, user);
 
     const incident = await this.prisma.incident.findFirst({
       where: { id: incidentId, sessionId },
       include: { techniqueLinks: { include: { mitreTechnique: true } } },
     });
-    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    if (!incident)
+      throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
     if (incident.status !== 'closed') {
-      throw new AppException(409, 'INCIDENT_NOT_CLOSED', 'A final report is only available once this incident is closed.');
+      throw new AppException(
+        409,
+        'INCIDENT_NOT_CLOSED',
+        'A final report is only available once this incident is closed.',
+      );
     }
 
     const [notes, evidence, timeline, score] = await Promise.all([
-      this.prisma.analystNote.findMany({ where: { incidentId }, orderBy: { createdAt: 'asc' } }),
-      this.prisma.evidenceCollection.findMany({ where: { incidentId }, orderBy: { pinnedAt: 'asc' } }),
+      this.prisma.analystNote.findMany({
+        where: { incidentId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.evidenceCollection.findMany({
+        where: { incidentId },
+        orderBy: { pinnedAt: 'asc' },
+      }),
       this.timelineService.getTimeline(sessionId, incidentId, user),
       this.prisma.score.findUnique({ where: { sessionId } }),
     ]);
@@ -76,7 +95,9 @@ export class ReportService {
         justification: e.justification,
         mitreTechniqueId: e.mitreTechniqueId,
         pinnedAt: e.pinnedAt,
-        summary: (await summarizeEvidenceRef(this.prisma, e.eventTable, e.eventId)).summary,
+        summary: (
+          await summarizeEvidenceRef(this.prisma, e.eventTable, e.eventId)
+        ).summary,
       })),
     );
 
@@ -95,7 +116,11 @@ export class ReportService {
         createdAt: incident.createdAt,
         closedAt: incident.closedAt,
       },
-      notes: notes.map((n) => ({ id: n.id, body: n.body, createdAt: n.createdAt })),
+      notes: notes.map((n) => ({
+        id: n.id,
+        body: n.body,
+        createdAt: n.createdAt,
+      })),
       evidence: enrichedEvidence,
       timeline,
       // §6.14's overall_percent is a Postgres NUMERIC (Prisma.Decimal client-side, not a plain
@@ -103,7 +128,13 @@ export class ReportService {
       // getScore() which relies on Decimal's own JSON serialization (producing a numeric
       // *string* in the response body). Converting keeps this report DTO's declared `number`
       // type actually true, rather than silently disagreeing with what's serialized.
-      score: score ? { overallPercent: Number(score.overallPercent), verdictCorrect: score.verdictCorrect, scoredAt: score.scoredAt } : null,
+      score: score
+        ? {
+            overallPercent: Number(score.overallPercent),
+            verdictCorrect: score.verdictCorrect,
+            scoredAt: score.scoredAt,
+          }
+        : null,
     };
   }
 }

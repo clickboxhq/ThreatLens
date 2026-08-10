@@ -26,7 +26,9 @@ describe('scrub (§5.2, §15.6)', () => {
   });
 
   it('redacts nested secret-shaped fields inside a logged object graph', () => {
-    const input = { user: { email: 'a@b.com', credentials: { password: 'hunter2' } } };
+    const input = {
+      user: { email: 'a@b.com', credentials: { password: 'hunter2' } },
+    };
     expect(scrub(input)).toEqual({
       user: { email: 'a@b.com', credentials: { password: '[REDACTED]' } },
     });
@@ -34,17 +36,24 @@ describe('scrub (§5.2, §15.6)', () => {
 
   it('redacts secret-shaped fields inside array elements', () => {
     const input = [{ token: 't1' }, { token: 't2' }];
-    expect(scrub(input)).toEqual([{ token: '[REDACTED]' }, { token: '[REDACTED]' }]);
+    expect(scrub(input)).toEqual([
+      { token: '[REDACTED]' },
+      { token: '[REDACTED]' },
+    ]);
   });
 
   it('leaves unrelated fields and non-object values untouched', () => {
-    expect(scrub({ id: 'u-1', displayName: 'Alex', count: 3, active: true })).toEqual({
+    expect(
+      scrub({ id: 'u-1', displayName: 'Alex', count: 3, active: true }),
+    ).toEqual({
       id: 'u-1',
       displayName: 'Alex',
       count: 3,
       active: true,
     });
-    expect(scrub('a plain string log message')).toBe('a plain string log message');
+    expect(scrub('a plain string log message')).toBe(
+      'a plain string log message',
+    );
     expect(scrub(42)).toBe(42);
     expect(scrub(null)).toBeNull();
     expect(scrub(undefined)).toBeUndefined();

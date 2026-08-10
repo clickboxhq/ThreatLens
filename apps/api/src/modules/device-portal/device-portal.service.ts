@@ -27,7 +27,11 @@ export class DevicePortalService {
     private readonly investigationActions: InvestigationActionsService,
   ) {}
 
-  async list(sessionId: string, user: AuthenticatedUser, filters: { riskLevel?: DeviceRiskLevel }) {
+  async list(
+    sessionId: string,
+    user: AuthenticatedUser,
+    filters: { riskLevel?: DeviceRiskLevel },
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const devices = await this.prisma.device.findMany({
       where: { sessionId, riskLevel: filters.riskLevel },
@@ -36,7 +40,11 @@ export class DevicePortalService {
     return devices.map(toStudentDeviceDto);
   }
 
-  async getProfile(sessionId: string, deviceId: string, user: AuthenticatedUser) {
+  async getProfile(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const device = await this.getDeviceOrThrow(sessionId, deviceId);
 
@@ -51,7 +59,11 @@ export class DevicePortalService {
     return toStudentDeviceDto(device);
   }
 
-  async getProcessTree(sessionId: string, deviceId: string, user: AuthenticatedUser): Promise<ProcessTreeNode[]> {
+  async getProcessTree(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ): Promise<ProcessTreeNode[]> {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getDeviceOrThrow(sessionId, deviceId);
 
@@ -62,12 +74,17 @@ export class DevicePortalService {
 
     const nodesByGuid = new Map<string, ProcessTreeNode>();
     for (const event of events) {
-      nodesByGuid.set(event.processGuid, { ...toStudentProcessEventDto(event), children: [] });
+      nodesByGuid.set(event.processGuid, {
+        ...toStudentProcessEventDto(event),
+        children: [],
+      });
     }
 
     const roots: ProcessTreeNode[] = [];
     for (const node of nodesByGuid.values()) {
-      const parent = node.parentProcessGuid ? nodesByGuid.get(node.parentProcessGuid) : undefined;
+      const parent = node.parentProcessGuid
+        ? nodesByGuid.get(node.parentProcessGuid)
+        : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -84,7 +101,11 @@ export class DevicePortalService {
     return events.map(toStudentFileEventDto);
   }
 
-  async getNetwork(sessionId: string, deviceId: string, user: AuthenticatedUser) {
+  async getNetwork(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getDeviceOrThrow(sessionId, deviceId);
     const events = await this.prisma.networkEvent.findMany({
@@ -94,7 +115,11 @@ export class DevicePortalService {
     return events.map(toStudentNetworkEventDto);
   }
 
-  async getTimeline(sessionId: string, deviceId: string, user: AuthenticatedUser) {
+  async getTimeline(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getDeviceOrThrow(sessionId, deviceId);
 
@@ -106,16 +131,36 @@ export class DevicePortalService {
     ]);
 
     const timeline = [
-      ...processes.map((e) => ({ entityType: 'process_event' as const, occurredAt: e.occurredAt, data: toStudentProcessEventDto(e) })),
-      ...files.map((e) => ({ entityType: 'file_event' as const, occurredAt: e.occurredAt, data: toStudentFileEventDto(e) })),
-      ...network.map((e) => ({ entityType: 'network_event' as const, occurredAt: e.occurredAt, data: toStudentNetworkEventDto(e) })),
-      ...http.map((e) => ({ entityType: 'http_request' as const, occurredAt: e.occurredAt, data: toStudentHttpRequestDto(e) })),
+      ...processes.map((e) => ({
+        entityType: 'process_event' as const,
+        occurredAt: e.occurredAt,
+        data: toStudentProcessEventDto(e),
+      })),
+      ...files.map((e) => ({
+        entityType: 'file_event' as const,
+        occurredAt: e.occurredAt,
+        data: toStudentFileEventDto(e),
+      })),
+      ...network.map((e) => ({
+        entityType: 'network_event' as const,
+        occurredAt: e.occurredAt,
+        data: toStudentNetworkEventDto(e),
+      })),
+      ...http.map((e) => ({
+        entityType: 'http_request' as const,
+        occurredAt: e.occurredAt,
+        data: toStudentHttpRequestDto(e),
+      })),
     ].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
 
     return { timeline };
   }
 
-  async getHttpRequests(sessionId: string, deviceId: string, user: AuthenticatedUser) {
+  async getHttpRequests(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getDeviceOrThrow(sessionId, deviceId);
     const events = await this.prisma.httpRequest.findMany({
@@ -135,7 +180,10 @@ export class DevicePortalService {
     }
 
     const [updated] = await this.prisma.$transaction([
-      this.prisma.device.update({ where: { id: deviceId }, data: { isolationStatus: 'isolated' } }),
+      this.prisma.device.update({
+        where: { id: deviceId },
+        data: { isolationStatus: 'isolated' },
+      }),
       this.prisma.investigationAction.create({
         data: {
           sessionId,
@@ -151,7 +199,9 @@ export class DevicePortalService {
   }
 
   private async getDeviceOrThrow(sessionId: string, deviceId: string) {
-    const device = await this.prisma.device.findFirst({ where: { id: deviceId, sessionId } });
+    const device = await this.prisma.device.findFirst({
+      where: { id: deviceId, sessionId },
+    });
     if (!device) throw new AppException(404, 'NOT_FOUND', 'Device not found.');
     return device;
   }

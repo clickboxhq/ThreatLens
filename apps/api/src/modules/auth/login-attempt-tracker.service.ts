@@ -27,11 +27,16 @@ export class LoginAttemptTracker implements OnModuleDestroy {
   private readonly redis: Redis;
 
   constructor(config: ConfigService) {
-    this.redis = new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379');
+    this.redis = new Redis(
+      config.get<string>('REDIS_URL') ?? 'redis://localhost:6379',
+    );
   }
 
   /** Seconds remaining if this (account, source IP) pair is currently locked out, else 0. */
-  async lockoutSecondsRemaining(email: string, sourceIp: string): Promise<number> {
+  async lockoutSecondsRemaining(
+    email: string,
+    sourceIp: string,
+  ): Promise<number> {
     const ttl = await this.redis.ttl(this.lockKey(email, sourceIp));
     return ttl > 0 ? ttl : 0;
   }
@@ -44,13 +49,21 @@ export class LoginAttemptTracker implements OnModuleDestroy {
 
     const lockoutSeconds = computeLockoutSeconds(count);
     if (lockoutSeconds > 0) {
-      await this.redis.set(this.lockKey(email, sourceIp), '1', 'EX', lockoutSeconds);
+      await this.redis.set(
+        this.lockKey(email, sourceIp),
+        '1',
+        'EX',
+        lockoutSeconds,
+      );
     }
   }
 
   /** Clears the failure count and any active lockout — called on a successful login. */
   async clear(email: string, sourceIp: string): Promise<void> {
-    await this.redis.del(this.countKey(email, sourceIp), this.lockKey(email, sourceIp));
+    await this.redis.del(
+      this.countKey(email, sourceIp),
+      this.lockKey(email, sourceIp),
+    );
   }
 
   private countKey(email: string, sourceIp: string): string {

@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { TimelineService } from './timeline.service';
 import { AddToTimelineDto } from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -38,7 +47,13 @@ export class TimelineController {
     @Param('eventTable') eventTable: string,
     @Param('eventId', ParseUUIDPipe) eventId: string,
   ) {
-    await this.service.removeFromTimeline(sessionId, incidentId, eventTable, eventId, user);
+    await this.service.removeFromTimeline(
+      sessionId,
+      incidentId,
+      eventTable,
+      eventId,
+      user,
+    );
     return { removed: true };
   }
 }

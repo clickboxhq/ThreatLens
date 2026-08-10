@@ -11,7 +11,10 @@ export class ScenarioCatalogController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async list(@Query('category') category?: ScenarioCategory, @Query('difficulty') difficulty?: ScenarioDifficulty) {
+  async list(
+    @Query('category') category?: ScenarioCategory,
+    @Query('difficulty') difficulty?: ScenarioDifficulty,
+  ) {
     const scenarios = await this.prisma.attackScenario.findMany({
       where: { status: 'published', category, difficulty },
       orderBy: { title: 'asc' },
@@ -29,7 +32,9 @@ export class ScenarioCatalogController {
 
   @Get(':slug')
   async getBySlug(@Param('slug') slug: string) {
-    const scenario = await this.prisma.attackScenario.findUnique({ where: { slug } });
+    const scenario = await this.prisma.attackScenario.findUnique({
+      where: { slug },
+    });
     if (!scenario || scenario.status !== 'published') {
       throw new AppException(404, 'NOT_FOUND', 'Scenario not found.');
     }

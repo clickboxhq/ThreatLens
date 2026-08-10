@@ -49,25 +49,54 @@ describe('computeScore (§12.4)', () => {
   });
 
   it('penalizes tagging extra, incorrect techniques (precision matters, not just recall)', () => {
-    const preciseOnly = computeScore(baseInput({ taggedTechniqueIds: ['T1566.002', 'T1078'] }));
+    const preciseOnly = computeScore(
+      baseInput({ taggedTechniqueIds: ['T1566.002', 'T1078'] }),
+    );
     const overTagged = computeScore(
-      baseInput({ taggedTechniqueIds: ['T1566.002', 'T1078', 'T1110', 'T1621', 'T1566.001'] }),
+      baseInput({
+        taggedTechniqueIds: [
+          'T1566.002',
+          'T1078',
+          'T1110',
+          'T1621',
+          'T1566.001',
+        ],
+      }),
     );
 
-    expect(overTagged.techniqueAccuracyPercent).toBeLessThan(preciseOnly.techniqueAccuracyPercent);
+    expect(overTagged.techniqueAccuracyPercent).toBeLessThan(
+      preciseOnly.techniqueAccuracyPercent,
+    );
   });
 
   it('penalizes escalating or pinning false-positive-by-design alerts', () => {
-    const clean = computeScore(baseInput({ falsePositiveCorrectlyHandledCount: 2, falsePositiveMishandledCount: 0 }));
-    const mishandled = computeScore(baseInput({ falsePositiveCorrectlyHandledCount: 0, falsePositiveMishandledCount: 2 }));
+    const clean = computeScore(
+      baseInput({
+        falsePositiveCorrectlyHandledCount: 2,
+        falsePositiveMishandledCount: 0,
+      }),
+    );
+    const mishandled = computeScore(
+      baseInput({
+        falsePositiveCorrectlyHandledCount: 0,
+        falsePositiveMishandledCount: 2,
+      }),
+    );
 
-    expect(mishandled.falsePositiveHandlingPercent).toBeLessThan(clean.falsePositiveHandlingPercent);
+    expect(mishandled.falsePositiveHandlingPercent).toBeLessThan(
+      clean.falsePositiveHandlingPercent,
+    );
     expect(clean.falsePositiveHandlingPercent).toBe(100);
     expect(mishandled.falsePositiveHandlingPercent).toBe(0);
   });
 
   it('does not reward inaction: never touching the false-positive bait scores 0 on that component', () => {
-    const result = computeScore(baseInput({ falsePositiveCorrectlyHandledCount: 0, falsePositiveMishandledCount: 0 }));
+    const result = computeScore(
+      baseInput({
+        falsePositiveCorrectlyHandledCount: 0,
+        falsePositiveMishandledCount: 0,
+      }),
+    );
     expect(result.falsePositiveHandlingPercent).toBe(0);
   });
 
@@ -91,7 +120,10 @@ describe('computeScore (§12.4)', () => {
       }),
     );
 
-    expect(withHints.overallPercent).toBeCloseTo(withoutHints.overallPercent - 15, 1);
+    expect(withHints.overallPercent).toBeCloseTo(
+      withoutHints.overallPercent - 15,
+      1,
+    );
   });
 
   it('never returns a percent outside [0, 100]', () => {

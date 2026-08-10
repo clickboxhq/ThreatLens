@@ -7,7 +7,8 @@ import { randomUUID } from 'crypto';
 export class CorrelationIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     const incoming = req.header('X-Correlation-Id');
-    const correlationId = incoming && incoming.length > 0 ? incoming : randomUUID();
+    const correlationId =
+      incoming && incoming.length > 0 ? incoming : randomUUID();
     (req as Request & { correlationId: string }).correlationId = correlationId;
     res.setHeader('X-Correlation-Id', correlationId);
     next();

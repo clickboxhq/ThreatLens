@@ -11,7 +11,10 @@ export class CohortsController {
   constructor(private readonly cohortsService: CohortsService) {}
 
   @Post('join')
-  async join(@CurrentUser() user: AuthenticatedUser, @Body() dto: JoinCohortDto) {
+  async join(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: JoinCohortDto,
+  ) {
     return this.cohortsService.join(user, dto.joinCode);
   }
 

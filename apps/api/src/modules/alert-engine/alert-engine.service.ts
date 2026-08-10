@@ -60,7 +60,9 @@ export class AlertEngineService {
   async evaluateForSession(sessionId: string): Promise<void> {
     const existing = await this.prisma.alert.count({ where: { sessionId } });
     if (existing > 0) {
-      this.logger.log(`Session ${sessionId} already has alerts; skipping (idempotent).`);
+      this.logger.log(
+        `Session ${sessionId} already has alerts; skipping (idempotent).`,
+      );
       return;
     }
 
@@ -97,7 +99,9 @@ export class AlertEngineService {
       dnsTunnelingRule,
     ] = await Promise.all([
       this.prisma.emailMessage.findMany({ where: { sessionId } }),
-      this.prisma.emailAttachment.findMany({ where: { emailMessage: { sessionId } } }),
+      this.prisma.emailAttachment.findMany({
+        where: { emailMessage: { sessionId } },
+      }),
       this.prisma.signInEvent.findMany({ where: { sessionId } }),
       this.prisma.identity.findMany({ where: { sessionId } }),
       this.prisma.processEvent.findMany({ where: { sessionId } }),
@@ -106,26 +110,66 @@ export class AlertEngineService {
       this.prisma.cloudEvent.findMany({ where: { sessionId } }),
       this.prisma.httpRequest.findMany({ where: { sessionId } }),
       this.prisma.device.findMany({ where: { sessionId } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SPF_FAIL_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: NEW_COUNTRY_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: PASSWORD_SPRAY_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: MFA_FATIGUE_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: IMPOSSIBLE_TRAVEL_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: OUTBOUND_PERSONAL_EMAIL_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SUSPICIOUS_PROCESS_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: LATERAL_MOVEMENT_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: MASS_ENCRYPTION_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: LEGACY_AUTH_BYPASS_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SUSPICIOUS_CLOUD_ACTION_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: WEBSHELL_ACCESS_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: PERSISTENCE_ARTIFACT_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: CREDENTIAL_DUMPING_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: REMOVABLE_MEDIA_COPY_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SQL_INJECTION_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: SCHEDULED_TASK_PERSISTENCE_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: OAUTH_CONSENT_GRANT_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: KERBEROASTING_RULE_NAME } }),
-      this.prisma.detectionRule.findFirstOrThrow({ where: { name: DNS_TUNNELING_RULE_NAME } }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: SPF_FAIL_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: NEW_COUNTRY_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: PASSWORD_SPRAY_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: MFA_FATIGUE_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: IMPOSSIBLE_TRAVEL_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: OUTBOUND_PERSONAL_EMAIL_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: SUSPICIOUS_PROCESS_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: LATERAL_MOVEMENT_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: MASS_ENCRYPTION_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: LEGACY_AUTH_BYPASS_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: SUSPICIOUS_CLOUD_ACTION_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: WEBSHELL_ACCESS_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: PERSISTENCE_ARTIFACT_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: CREDENTIAL_DUMPING_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: REMOVABLE_MEDIA_COPY_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: SQL_INJECTION_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: SCHEDULED_TASK_PERSISTENCE_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: OAUTH_CONSENT_GRANT_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: KERBEROASTING_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirstOrThrow({
+        where: { name: DNS_TUNNELING_RULE_NAME },
+      }),
     ]);
 
     const allCandidates: AlertCandidate[] = [
@@ -159,16 +203,26 @@ export class AlertEngineService {
     // `isFalsePositiveByDesign`, which the Scoring Engine's false-positive-handling
     // component (§12.4) depends on.
     const groundTruthByKey = new Map<string, boolean>();
-    for (const e of emails) groundTruthByKey.set(`email_messages:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of signIns) groundTruthByKey.set(`sign_in_events:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of processEvents) groundTruthByKey.set(`process_events:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of fileEvents) groundTruthByKey.set(`file_events:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of cloudEvents) groundTruthByKey.set(`cloud_events:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of httpRequests) groundTruthByKey.set(`http_requests:${e.id}`, e.isGroundTruthEvidence);
-    for (const e of networkEvents) groundTruthByKey.set(`network_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of emails)
+      groundTruthByKey.set(`email_messages:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of signIns)
+      groundTruthByKey.set(`sign_in_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of processEvents)
+      groundTruthByKey.set(`process_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of fileEvents)
+      groundTruthByKey.set(`file_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of cloudEvents)
+      groundTruthByKey.set(`cloud_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of httpRequests)
+      groundTruthByKey.set(`http_requests:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of networkEvents)
+      groundTruthByKey.set(`network_events:${e.id}`, e.isGroundTruthEvidence);
     const isFalsePositiveByDesign = (candidate: AlertCandidate) =>
       candidate.evidenceRefs.length > 0 &&
-      candidate.evidenceRefs.every((ref) => groundTruthByKey.get(`${ref.eventTable}:${ref.eventId}`) === false);
+      candidate.evidenceRefs.every(
+        (ref) =>
+          groundTruthByKey.get(`${ref.eventTable}:${ref.eventId}`) === false,
+      );
 
     const ruleByName = new Map([
       [SPF_FAIL_RULE_NAME, spfRule],
@@ -212,7 +266,10 @@ export class AlertEngineService {
             firstSeenAt: candidate.occurredAt,
             lastSeenAt: candidate.occurredAt,
             evidenceRefs: {
-              create: candidate.evidenceRefs.map((ref) => ({ eventTable: ref.eventTable, eventId: ref.eventId })),
+              create: candidate.evidenceRefs.map((ref) => ({
+                eventTable: ref.eventTable,
+                eventId: ref.eventId,
+              })),
             },
           },
           include: { mitreTechnique: true },
@@ -223,7 +280,10 @@ export class AlertEngineService {
     if (links.length > 0) {
       await this.prisma.$transaction(
         links.map(([fromId, toId]) =>
-          this.prisma.alert.update({ where: { id: toId }, data: { relatedAlertId: fromId } }),
+          this.prisma.alert.update({
+            where: { id: toId },
+            data: { relatedAlertId: fromId },
+          }),
         ),
       );
     }
@@ -236,11 +296,16 @@ export class AlertEngineService {
     // single refetch, not trickle in over several seconds of sequential Redis round-trips.
     await Promise.all(
       createdAlerts.map((alert) =>
-        this.realtimeEvents.publish(sessionId, { type: 'alert.new', payload: toStudentAlertDto(alert) }),
+        this.realtimeEvents.publish(sessionId, {
+          type: 'alert.new',
+          payload: toStudentAlertDto(alert),
+        }),
       ),
     );
 
-    this.logger.log(`Generated ${allCandidates.length} alerts (${links.length} correlated) for session ${sessionId}.`);
+    this.logger.log(
+      `Generated ${allCandidates.length} alerts (${links.length} correlated) for session ${sessionId}.`,
+    );
   }
 }
 

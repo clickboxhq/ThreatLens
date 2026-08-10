@@ -8,16 +8,24 @@ const TACTIC_MAP = new Map([
   ['T1486', 'TA0040'], // Impact
 ]);
 
-function outcome(overrides: Partial<SessionTechniqueOutcome> = {}): SessionTechniqueOutcome {
+function outcome(
+  overrides: Partial<SessionTechniqueOutcome> = {},
+): SessionTechniqueOutcome {
   return { requiredTechniqueIds: [], taggedTechniqueIds: [], ...overrides };
 }
 
 describe('computeSkillRadar (§2.17, §13.2)', () => {
   it('computes hit/required counts and percent per tactic across multiple sessions', () => {
     const sessions = [
-      outcome({ requiredTechniqueIds: ['T1566.002'], taggedTechniqueIds: ['T1566.002'] }), // Initial Access: hit
+      outcome({
+        requiredTechniqueIds: ['T1566.002'],
+        taggedTechniqueIds: ['T1566.002'],
+      }), // Initial Access: hit
       outcome({ requiredTechniqueIds: ['T1078'], taggedTechniqueIds: [] }), // Initial Access: miss
-      outcome({ requiredTechniqueIds: ['T1110.003'], taggedTechniqueIds: ['T1110.003'] }), // Credential Access: hit
+      outcome({
+        requiredTechniqueIds: ['T1110.003'],
+        taggedTechniqueIds: ['T1110.003'],
+      }), // Credential Access: hit
     ];
 
     const result = computeSkillRadar(sessions, TACTIC_MAP);
@@ -35,7 +43,12 @@ describe('computeSkillRadar (§2.17, §13.2)', () => {
   });
 
   it('omits tactics with zero required-technique instances entirely', () => {
-    const sessions = [outcome({ requiredTechniqueIds: ['T1566.002'], taggedTechniqueIds: ['T1566.002'] })];
+    const sessions = [
+      outcome({
+        requiredTechniqueIds: ['T1566.002'],
+        taggedTechniqueIds: ['T1566.002'],
+      }),
+    ];
     const result = computeSkillRadar(sessions, TACTIC_MAP);
 
     expect(result.some((r) => r.tactic === 'TA0040')).toBe(false); // Impact never required
@@ -44,7 +57,10 @@ describe('computeSkillRadar (§2.17, §13.2)', () => {
 
   it('returns tactics in canonical kill-chain order, not session order', () => {
     const sessions = [
-      outcome({ requiredTechniqueIds: ['T1486'], taggedTechniqueIds: ['T1486'] }), // Impact (late in chain)
+      outcome({
+        requiredTechniqueIds: ['T1486'],
+        taggedTechniqueIds: ['T1486'],
+      }), // Impact (late in chain)
       outcome({ requiredTechniqueIds: ['T1566.002'], taggedTechniqueIds: [] }), // Initial Access (early in chain)
     ];
 
@@ -53,7 +69,12 @@ describe('computeSkillRadar (§2.17, §13.2)', () => {
   });
 
   it('ignores technique IDs with no known tactic mapping', () => {
-    const sessions = [outcome({ requiredTechniqueIds: ['T9999.999'], taggedTechniqueIds: ['T9999.999'] })];
+    const sessions = [
+      outcome({
+        requiredTechniqueIds: ['T9999.999'],
+        taggedTechniqueIds: ['T9999.999'],
+      }),
+    ];
     expect(computeSkillRadar(sessions, TACTIC_MAP)).toHaveLength(0);
   });
 
@@ -63,7 +84,12 @@ describe('computeSkillRadar (§2.17, §13.2)', () => {
 
   it('does not count a tagged technique that was never required', () => {
     // Tagging an extra, unrequired technique should not inflate any tactic's hit count.
-    const sessions = [outcome({ requiredTechniqueIds: ['T1566.002'], taggedTechniqueIds: ['T1566.002', 'T1110.003'] })];
+    const sessions = [
+      outcome({
+        requiredTechniqueIds: ['T1566.002'],
+        taggedTechniqueIds: ['T1566.002', 'T1110.003'],
+      }),
+    ];
     const result = computeSkillRadar(sessions, TACTIC_MAP);
 
     expect(result).toHaveLength(1);

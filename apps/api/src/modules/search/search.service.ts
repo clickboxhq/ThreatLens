@@ -7,7 +7,12 @@ import { toStudentEmailDto } from '../../common/dto/email.dto';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { Prisma } from '@prisma/client';
 
-const SIGN_IN_FIELDS = new Set(['sourceIp', 'sourceCountry', 'sourceCity', 'application']);
+const SIGN_IN_FIELDS = new Set([
+  'sourceIp',
+  'sourceCountry',
+  'sourceCity',
+  'application',
+]);
 const EMAIL_FIELDS = new Set(['senderAddress', 'subject', 'recipientAddress']);
 
 interface SearchFilter {
@@ -25,7 +30,12 @@ export class SearchService {
     private readonly investigationActions: InvestigationActionsService,
   ) {}
 
-  async search(sessionId: string, user: AuthenticatedUser, filters: SearchFilter[], freetext?: string) {
+  async search(
+    sessionId: string,
+    user: AuthenticatedUser,
+    filters: SearchFilter[],
+    freetext?: string,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
 
     const signInWhere: Prisma.SignInEventWhereInput = { sessionId };
@@ -33,10 +43,16 @@ export class SearchService {
 
     for (const filter of filters) {
       if (SIGN_IN_FIELDS.has(filter.field)) {
-        (signInWhere as Record<string, unknown>)[filter.field] = { equals: filter.value, mode: 'insensitive' };
+        (signInWhere as Record<string, unknown>)[filter.field] = {
+          equals: filter.value,
+          mode: 'insensitive',
+        };
       }
       if (filter.field === 'senderAddress' || filter.field === 'subject') {
-        (emailWhere as Record<string, unknown>)[filter.field] = { contains: filter.value, mode: 'insensitive' };
+        (emailWhere as Record<string, unknown>)[filter.field] = {
+          contains: filter.value,
+          mode: 'insensitive',
+        };
       }
       if (filter.field === 'recipientAddress') {
         emailWhere.recipientAddresses = { has: filter.value };
@@ -52,12 +68,17 @@ export class SearchService {
     }
 
     const hasSignInFilter = filters.some((f) => SIGN_IN_FIELDS.has(f.field));
-    const hasEmailFilter = filters.some((f) => EMAIL_FIELDS.has(f.field)) || Boolean(freetext);
+    const hasEmailFilter =
+      filters.some((f) => EMAIL_FIELDS.has(f.field)) || Boolean(freetext);
     const searchEverything = filters.length === 0 && !freetext;
 
     const [signIns, emails] = await Promise.all([
       hasSignInFilter || searchEverything
-        ? this.prisma.signInEvent.findMany({ where: signInWhere, orderBy: { occurredAt: 'desc' }, take: 100 })
+        ? this.prisma.signInEvent.findMany({
+            where: signInWhere,
+            orderBy: { occurredAt: 'desc' },
+            take: 100,
+          })
         : Promise.resolve([]),
       hasEmailFilter || searchEverything
         ? this.prisma.emailMessage.findMany({
@@ -79,8 +100,16 @@ export class SearchService {
     });
 
     const results = [
-      ...signIns.map((event) => ({ entityType: 'sign_in_event' as const, occurredAt: event.occurredAt, data: toStudentSignInDto(event) })),
-      ...emails.map((email) => ({ entityType: 'email_message' as const, occurredAt: email.occurredAt, data: toStudentEmailDto(email) })),
+      ...signIns.map((event) => ({
+        entityType: 'sign_in_event' as const,
+        occurredAt: event.occurredAt,
+        data: toStudentSignInDto(event),
+      })),
+      ...emails.map((email) => ({
+        entityType: 'email_message' as const,
+        occurredAt: email.occurredAt,
+        data: toStudentEmailDto(email),
+      })),
     ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
     return { results };

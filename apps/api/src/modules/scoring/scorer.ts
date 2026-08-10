@@ -47,17 +47,30 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
   const taggedSet = new Set(input.taggedTechniqueIds);
   const matched = [...requiredSet].filter((t) => taggedSet.has(t)).length;
 
-  const techniquePrecision = taggedSet.size > 0 ? matched / taggedSet.size : requiredSet.size === 0 ? 1 : 0;
+  const techniquePrecision =
+    taggedSet.size > 0
+      ? matched / taggedSet.size
+      : requiredSet.size === 0
+        ? 1
+        : 0;
   const techniqueRecall = requiredSet.size > 0 ? matched / requiredSet.size : 1;
-  const techniqueAccuracyPercent = ((techniquePrecision + techniqueRecall) / 2) * 100;
+  const techniqueAccuracyPercent =
+    ((techniquePrecision + techniqueRecall) / 2) * 100;
 
   const evidencePrecisionPercent =
-    input.pinnedTotalEvidenceCount > 0 ? (input.pinnedGroundTruthEvidenceCount / input.pinnedTotalEvidenceCount) * 100 : 0;
+    input.pinnedTotalEvidenceCount > 0
+      ? (input.pinnedGroundTruthEvidenceCount /
+          input.pinnedTotalEvidenceCount) *
+        100
+      : 0;
   const evidenceRecallPercent =
     input.totalGroundTruthEvidenceCount > 0
-      ? (input.pinnedGroundTruthEvidenceCount / input.totalGroundTruthEvidenceCount) * 100
+      ? (input.pinnedGroundTruthEvidenceCount /
+          input.totalGroundTruthEvidenceCount) *
+        100
       : 100;
-  const evidenceComponentPercent = (evidencePrecisionPercent + evidenceRecallPercent) / 2;
+  const evidenceComponentPercent =
+    (evidencePrecisionPercent + evidenceRecallPercent) / 2;
 
   // Rewards correctly dismissing false-positive bait, penalizes escalating/pinning it as
   // evidence — and, deliberately, does NOT default to a high score for simply never
@@ -68,7 +81,8 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
           0,
           Math.min(
             100,
-            ((input.falsePositiveCorrectlyHandledCount - input.falsePositiveMishandledCount) /
+            ((input.falsePositiveCorrectlyHandledCount -
+              input.falsePositiveMishandledCount) /
               input.falsePositiveByDesignAlertCount) *
               100,
           ),
@@ -76,9 +90,13 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
       : 100;
 
   const responsePercent =
-    input.containmentExpectationCount > 0 ? (input.containmentMetCount / input.containmentExpectationCount) * 100 : 100;
+    input.containmentExpectationCount > 0
+      ? (input.containmentMetCount / input.containmentExpectationCount) * 100
+      : 100;
 
-  const verdictCorrect = input.submittedVerdicts.includes(input.requiredVerdict);
+  const verdictCorrect = input.submittedVerdicts.includes(
+    input.requiredVerdict,
+  );
 
   const weightedSum =
     techniqueAccuracyPercent * WEIGHTS.technique +
@@ -87,7 +105,10 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
     responsePercent * WEIGHTS.response +
     (verdictCorrect ? 100 : 0) * WEIGHTS.verdict;
 
-  const overallPercent = Math.max(0, Math.min(100, weightedSum - input.hintPenaltyPercent));
+  const overallPercent = Math.max(
+    0,
+    Math.min(100, weightedSum - input.hintPenaltyPercent),
+  );
 
   return {
     techniqueAccuracyPercent: round2(techniqueAccuracyPercent),

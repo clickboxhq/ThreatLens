@@ -1,4 +1,10 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { LearningService } from './learning.service';
 import { CertificatesService } from './certificates.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -20,7 +26,10 @@ export class LearningController {
   }
 
   @Get('paths/:id')
-  async getPath(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async getPath(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.learningService.getPath(id, user);
   }
 

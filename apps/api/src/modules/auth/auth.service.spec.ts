@@ -5,7 +5,10 @@ import { AuthService } from './auth.service';
 import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
 import { EmailVerificationTokenStore } from './email-verification-token.store';
-import { LoginAttemptTracker, computeLockoutSeconds } from './login-attempt-tracker.service';
+import {
+  LoginAttemptTracker,
+  computeLockoutSeconds,
+} from './login-attempt-tracker.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { User } from '@prisma/client';
@@ -96,7 +99,10 @@ class FakeLoginAttemptTracker {
     return `${email.toLowerCase()}:${sourceIp}`;
   }
 
-  async lockoutSecondsRemaining(email: string, sourceIp: string): Promise<number> {
+  async lockoutSecondsRemaining(
+    email: string,
+    sourceIp: string,
+  ): Promise<number> {
     const count = this.counts.get(this.key(email, sourceIp)) ?? 0;
     return computeLockoutSeconds(count);
   }
@@ -114,28 +120,43 @@ class FakeLoginAttemptTracker {
 function buildService(users: Map<string, User>) {
   const prisma = {
     user: {
-      findUnique: jest.fn(async ({ where }: { where: { id?: string; email?: string } }) => {
-        if (where.id) return users.get(where.id) ?? null;
-        return [...users.values()].find((u) => u.email === where.email) ?? null;
-      }),
+      findUnique: jest.fn(
+        async ({ where }: { where: { id?: string; email?: string } }) => {
+          if (where.id) return users.get(where.id) ?? null;
+          return (
+            [...users.values()].find((u) => u.email === where.email) ?? null
+          );
+        },
+      ),
       create: jest.fn(async ({ data }: { data: Partial<User> }) => {
         const created = user({ ...data, id: randomUUID() });
         users.set(created.id, created);
         return created;
       }),
-      update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        const existing = users.get(where.id)!;
-        const updated = {
-          ...existing,
-          ...data,
-          sessionVersion:
-            typeof data.sessionVersion === 'object' && data.sessionVersion !== null
-              ? existing.sessionVersion + (data.sessionVersion as { increment: number }).increment
-              : (data.sessionVersion as number | undefined) ?? existing.sessionVersion,
-        };
-        users.set(where.id, updated);
-        return updated;
-      }),
+      update: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const existing = users.get(where.id)!;
+          const updated = {
+            ...existing,
+            ...data,
+            sessionVersion:
+              typeof data.sessionVersion === 'object' &&
+              data.sessionVersion !== null
+                ? existing.sessionVersion +
+                  (data.sessionVersion as { increment: number }).increment
+                : ((data.sessionVersion as number | undefined) ??
+                  existing.sessionVersion),
+          };
+          users.set(where.id, updated);
+          return updated;
+        },
+      ),
     },
     refreshToken: {
       create: jest.fn(async () => ({ id: randomUUID() })),
@@ -163,29 +184,51 @@ function buildService(users: Map<string, User>) {
     loginAttempts as unknown as LoginAttemptTracker,
     auditLog as unknown as AuditLogService,
   );
-  return { service, prisma, mfaChallenges, passwordResetTokens, emailVerificationTokens, loginAttempts, auditLog };
+  return {
+    service,
+    prisma,
+    mfaChallenges,
+    passwordResetTokens,
+    emailVerificationTokens,
+    loginAttempts,
+    auditLog,
+  };
 }
 
 describe('AuthService MFA (§15.1, §16.2)', () => {
   it('login() does not issue tokens for an MFA-enrolled account, returning a challenge instead', async () => {
     const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
-    const enrolled = user({ mfaEnabled: true, mfaSecret: generateSecret(), passwordHash });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    const enrolled = user({
+      mfaEnabled: true,
+      mfaSecret: generateSecret(),
+      passwordHash,
+    });
     const users = new Map([[enrolled.id, enrolled]]);
     const { service } = buildService(users);
 
-    const result = await service.login({ email: enrolled.email, password: 'correct horse battery staple' }, TEST_IP);
+    const result = await service.login(
+      { email: enrolled.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
     expect('mfaRequired' in result && result.mfaRequired).toBe(true);
   });
 
   it('login() issues tokens directly for an account without MFA', async () => {
     const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const plain = user({ passwordHash });
     const users = new Map([[plain.id, plain]]);
     const { service } = buildService(users);
 
-    const result = await service.login({ email: plain.email, password: 'correct horse battery staple' }, TEST_IP);
+    const result = await service.login(
+      { email: plain.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
     expect('mfaRequired' in result).toBe(false);
     expect('accessToken' in result && result.accessToken).toBeTruthy();
   });
@@ -202,7 +245,9 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     expect(result.user.id).toBe(enrolled.id);
 
     const secondChallengeId = await mfaChallenges.create(enrolled.id);
-    await expect(service.mfaVerify(secondChallengeId, '000000')).rejects.toThrow(AppException);
+    await expect(
+      service.mfaVerify(secondChallengeId, '000000'),
+    ).rejects.toThrow(AppException);
   });
 
   it('mfaVerify() rejects a challenge id that was already consumed (one-time use)', async () => {
@@ -215,7 +260,9 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     const challengeId = await mfaChallenges.create(enrolled.id);
     await service.mfaVerify(challengeId, validCode);
 
-    await expect(service.mfaVerify(challengeId, validCode)).rejects.toThrow(AppException);
+    await expect(service.mfaVerify(challengeId, validCode)).rejects.toThrow(
+      AppException,
+    );
   });
 
   it('mfaEnable() turns MFA on only after a valid code against the pending secret, and issues recovery codes', async () => {
@@ -238,7 +285,9 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     const { service } = buildService(users);
 
     await service.mfaSetup(target.id);
-    await expect(service.mfaEnable(target.id, '000000')).rejects.toThrow(AppException);
+    await expect(service.mfaEnable(target.id, '000000')).rejects.toThrow(
+      AppException,
+    );
     expect(users.get(target.id)!.mfaEnabled).toBe(false);
   });
 
@@ -257,23 +306,36 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     expect(result.user.id).toBe(target.id);
 
     const secondChallengeId = await mfaChallenges.create(target.id);
-    await expect(service.mfaVerify(secondChallengeId, recoveryCode)).rejects.toThrow(AppException);
+    await expect(
+      service.mfaVerify(secondChallengeId, recoveryCode),
+    ).rejects.toThrow(AppException);
   });
 
   it('mfaDisable() is blocked for org_admin and platform_admin (§15.2 mandatory MFA)', async () => {
     const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
-    const admin = user({ role: 'org_admin', mfaEnabled: true, mfaSecret: generateSecret(), passwordHash });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    const admin = user({
+      role: 'org_admin',
+      mfaEnabled: true,
+      mfaSecret: generateSecret(),
+      passwordHash,
+    });
     const users = new Map([[admin.id, admin]]);
     const { service } = buildService(users);
 
-    await expect(service.mfaDisable(admin.id, 'correct horse battery staple')).rejects.toThrow(AppException);
+    await expect(
+      service.mfaDisable(admin.id, 'correct horse battery staple'),
+    ).rejects.toThrow(AppException);
     expect(users.get(admin.id)!.mfaEnabled).toBe(true);
   });
 
   it('mfaDisable() succeeds for a student with the correct password and clears the secret and recovery codes', async () => {
     const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const enrolled = user({
       mfaEnabled: true,
       mfaSecret: generateSecret(),
@@ -292,12 +354,20 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
 
   it('mfaDisable() rejects an incorrect password', async () => {
     const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
-    const enrolled = user({ mfaEnabled: true, mfaSecret: generateSecret(), passwordHash });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    const enrolled = user({
+      mfaEnabled: true,
+      mfaSecret: generateSecret(),
+      passwordHash,
+    });
     const users = new Map([[enrolled.id, enrolled]]);
     const { service } = buildService(users);
 
-    await expect(service.mfaDisable(enrolled.id, 'wrong password')).rejects.toThrow(AppException);
+    await expect(
+      service.mfaDisable(enrolled.id, 'wrong password'),
+    ).rejects.toThrow(AppException);
     expect(users.get(enrolled.id)!.mfaEnabled).toBe(true);
   });
 });
@@ -318,7 +388,9 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
     const { service, passwordResetTokens } = buildService(users);
     const createSpy = jest.spyOn(passwordResetTokens, 'create');
 
-    await expect(service.requestPasswordReset('nobody@example.com')).resolves.toBeUndefined();
+    await expect(
+      service.requestPasswordReset('nobody@example.com'),
+    ).resolves.toBeUndefined();
     expect(createSpy).not.toHaveBeenCalled();
   });
 
@@ -343,7 +415,9 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
   });
 
   it('confirmPasswordReset() sets a new password, invalidates the old one, and revokes other sessions', async () => {
-    const oldPasswordHash = await argon2.hash('old password 123', { type: argon2.argon2id });
+    const oldPasswordHash = await argon2.hash('old password 123', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash: oldPasswordHash });
     const users = new Map([[target.id, target]]);
     const { service, prisma, passwordResetTokens } = buildService(users);
@@ -352,7 +426,9 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
     await service.confirmPasswordReset(token, 'brand new password 456');
 
     const updated = users.get(target.id)!;
-    expect(await argon2.verify(updated.passwordHash!, 'brand new password 456')).toBe(true);
+    expect(
+      await argon2.verify(updated.passwordHash!, 'brand new password 456'),
+    ).toBe(true);
     expect(await argon2.verify(oldPasswordHash, 'old password 123')).toBe(true); // sanity: old hash itself still verifies its own password
     expect(updated.sessionVersion).toBe(target.sessionVersion + 1);
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
@@ -365,7 +441,12 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
     const users = new Map<string, User>();
     const { service } = buildService(users);
 
-    await expect(service.confirmPasswordReset('not-a-real-token', 'brand new password 456')).rejects.toThrow(AppException);
+    await expect(
+      service.confirmPasswordReset(
+        'not-a-real-token',
+        'brand new password 456',
+      ),
+    ).rejects.toThrow(AppException);
   });
 
   it('confirmPasswordReset() rejects a token that was already used (one-time use)', async () => {
@@ -376,7 +457,9 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
     const token = await passwordResetTokens.create(target.id);
     await service.confirmPasswordReset(token, 'brand new password 456');
 
-    await expect(service.confirmPasswordReset(token, 'yet another password 789')).rejects.toThrow(AppException);
+    await expect(
+      service.confirmPasswordReset(token, 'yet another password 789'),
+    ).rejects.toThrow(AppException);
   });
 });
 
@@ -413,7 +496,9 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     const users = new Map([[target.id, target]]);
     const { service } = buildService(users);
 
-    await expect(service.requestEmailVerification(target.id)).rejects.toMatchObject({
+    await expect(
+      service.requestEmailVerification(target.id),
+    ).rejects.toMatchObject({
       code: 'EMAIL_ALREADY_VERIFIED',
     });
   });
@@ -433,7 +518,9 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     const users = new Map<string, User>();
     const { service } = buildService(users);
 
-    await expect(service.confirmEmailVerification('not-a-real-token')).rejects.toMatchObject({
+    await expect(
+      service.confirmEmailVerification('not-a-real-token'),
+    ).rejects.toMatchObject({
       code: 'INVALID_VERIFICATION_TOKEN',
     });
   });
@@ -446,69 +533,118 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     const token = await emailVerificationTokens.create(target.id);
     await service.confirmEmailVerification(token);
 
-    await expect(service.confirmEmailVerification(token)).rejects.toThrow(AppException);
+    await expect(service.confirmEmailVerification(token)).rejects.toThrow(
+      AppException,
+    );
   });
 });
 
 describe('AuthService login lockout (§15.1)', () => {
   it('locks out the (account, IP) pair after enough failed attempts, before the threshold is reached nothing is blocked', async () => {
     const argon2Mod = await import('argon2');
-    const passwordHash = await argon2Mod.hash('correct horse battery staple', { type: argon2Mod.argon2id });
+    const passwordHash = await argon2Mod.hash('correct horse battery staple', {
+      type: argon2Mod.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service } = buildService(users);
 
     for (let i = 0; i < 4; i++) {
-      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: target.email, password: 'wrong password' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
 
     // Still under threshold — a correct password should still work.
-    const result = await service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP);
+    const result = await service.login(
+      { email: target.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
     expect('mfaRequired' in result).toBe(false);
   });
 
   it('rejects even a correct password once the (account, IP) pair is locked out', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service } = buildService(users);
 
     for (let i = 0; i < 5; i++) {
-      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: target.email, password: 'wrong password' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
 
-    await expect(service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP)).rejects.toMatchObject({
+    await expect(
+      service.login(
+        { email: target.email, password: 'correct horse battery staple' },
+        TEST_IP,
+      ),
+    ).rejects.toMatchObject({
       code: 'ACCOUNT_LOCKED',
     });
   });
 
   it('does not lock out attempts against the same account from a different source IP', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service } = buildService(users);
 
     for (let i = 0; i < 5; i++) {
-      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: target.email, password: 'wrong password' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
 
-    const result = await service.login({ email: target.email, password: 'correct horse battery staple' }, '198.51.100.99');
+    const result = await service.login(
+      { email: target.email, password: 'correct horse battery staple' },
+      '198.51.100.99',
+    );
     expect('mfaRequired' in result).toBe(false);
   });
 
   it('clears the failure count on a successful login, so a later mistake does not inherit prior attempts', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service } = buildService(users);
 
     for (let i = 0; i < 3; i++) {
-      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: target.email, password: 'wrong password' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
-    await service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP);
+    await service.login(
+      { email: target.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
 
     // Only 1 failure since the successful login — nowhere near the threshold.
-    await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toMatchObject({
+    await expect(
+      service.login(
+        { email: target.email, password: 'wrong password' },
+        TEST_IP,
+      ),
+    ).rejects.toMatchObject({
       code: 'INVALID_CREDENTIALS',
     });
   });
@@ -518,10 +654,20 @@ describe('AuthService login lockout (§15.1)', () => {
     const { service } = buildService(users);
 
     for (let i = 0; i < 5; i++) {
-      await expect(service.login({ email: 'nobody@example.com', password: 'irrelevant' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: 'nobody@example.com', password: 'irrelevant' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
 
-    await expect(service.login({ email: 'nobody@example.com', password: 'irrelevant' }, TEST_IP)).rejects.toMatchObject({
+    await expect(
+      service.login(
+        { email: 'nobody@example.com', password: 'irrelevant' },
+        TEST_IP,
+      ),
+    ).rejects.toMatchObject({
       code: 'ACCOUNT_LOCKED',
     });
   });
@@ -529,27 +675,41 @@ describe('AuthService login lockout (§15.1)', () => {
 
 describe('AuthService audit logging (§6.22)', () => {
   function actionsRecorded(auditLog: { record: jest.Mock }): string[] {
-    return auditLog.record.mock.calls.map((call) => (call[0] as { action: string }).action);
+    return auditLog.record.mock.calls.map(
+      (call) => (call[0] as { action: string }).action,
+    );
   }
 
   it('records a `login` entry for a successful non-MFA login and nothing for password-reset requests', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service, auditLog } = buildService(users);
 
-    await service.login({ email: target.email, password: 'correct horse battery staple' }, TEST_IP);
+    await service.login(
+      { email: target.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
     expect(actionsRecorded(auditLog)).toEqual(['login']);
   });
 
   it('records `login_failed` on a bad password, and `account_locked` on the failure that crosses the threshold', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service, auditLog } = buildService(users);
 
     for (let i = 0; i < 5; i++) {
-      await expect(service.login({ email: target.email, password: 'wrong password' }, TEST_IP)).rejects.toThrow(AppException);
+      await expect(
+        service.login(
+          { email: target.email, password: 'wrong password' },
+          TEST_IP,
+        ),
+      ).rejects.toThrow(AppException);
     }
 
     const actions = actionsRecorded(auditLog);
@@ -571,7 +731,9 @@ describe('AuthService audit logging (§6.22)', () => {
   });
 
   it('records `mfa_enabled` and `mfa_disabled`', async () => {
-    const passwordHash = await argon2.hash('correct horse battery staple', { type: argon2.argon2id });
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
     const target = user({ passwordHash });
     const users = new Map([[target.id, target]]);
     const { service, auditLog } = buildService(users);

@@ -13,7 +13,14 @@ export class MitreController {
 
   @Get()
   async list() {
-    const techniques = await this.prisma.mitreTechnique.findMany({ orderBy: { techniqueId: 'asc' } });
-    return techniques.map((t) => ({ id: t.id, techniqueId: t.techniqueId, name: t.name, tactic: t.tactic }));
+    const techniques = await this.prisma.mitreTechnique.findMany({
+      orderBy: { techniqueId: 'asc' },
+    });
+    return techniques.map((t) => ({
+      id: t.id,
+      techniqueId: t.techniqueId,
+      name: t.name,
+      tactic: t.tactic,
+    }));
   }
 }

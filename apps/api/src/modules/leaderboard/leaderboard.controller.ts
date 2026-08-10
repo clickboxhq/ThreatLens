@@ -22,10 +22,18 @@ export class LeaderboardController {
     @Query('cohortId') cohortId?: string,
   ) {
     if (!VALID_PERIODS.includes(period)) {
-      throw new AppException(400, 'INVALID_PERIOD', 'period must be weekly, monthly, or all_time.');
+      throw new AppException(
+        400,
+        'INVALID_PERIOD',
+        'period must be weekly, monthly, or all_time.',
+      );
     }
     if (!VALID_SCOPES.includes(scope)) {
-      throw new AppException(400, 'INVALID_SCOPE', 'scope must be global or cohort.');
+      throw new AppException(
+        400,
+        'INVALID_SCOPE',
+        'scope must be global or cohort.',
+      );
     }
     return this.leaderboardService.get(
       user,

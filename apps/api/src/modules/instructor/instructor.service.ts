@@ -5,7 +5,11 @@ import { RealtimeEventsService } from '../../common/realtime/realtime-events.ser
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
-import type { CreateAssignmentDto, CreateCohortDto, SubmitInstructorFeedbackDto } from './dto/instructor.dto';
+import type {
+  CreateAssignmentDto,
+  CreateCohortDto,
+  SubmitInstructorFeedbackDto,
+} from './dto/instructor.dto';
 
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1 — avoids transcription errors
 
@@ -72,11 +76,21 @@ export class InstructorService {
     }));
   }
 
-  async createAssignment(user: AuthenticatedUser, cohortId: string, dto: CreateAssignmentDto) {
+  async createAssignment(
+    user: AuthenticatedUser,
+    cohortId: string,
+    dto: CreateAssignmentDto,
+  ) {
     await this.getOwnedCohort(cohortId, user);
-    const scenario = await this.prisma.attackScenario.findUnique({ where: { id: dto.scenarioId } });
+    const scenario = await this.prisma.attackScenario.findUnique({
+      where: { id: dto.scenarioId },
+    });
     if (!scenario || scenario.status !== 'published') {
-      throw new AppException(404, 'SCENARIO_NOT_FOUND', 'Scenario not found or not published.');
+      throw new AppException(
+        404,
+        'SCENARIO_NOT_FOUND',
+        'Scenario not found or not published.',
+      );
     }
     const assignment = await this.prisma.cohortScenarioAssignment.create({
       data: {
@@ -103,12 +117,18 @@ export class InstructorService {
   async reviewQueue(user: AuthenticatedUser, cohortId: string) {
     await this.getOwnedCohort(cohortId, user);
     const assignmentIds = (
-      await this.prisma.cohortScenarioAssignment.findMany({ where: { cohortId }, select: { id: true } })
+      await this.prisma.cohortScenarioAssignment.findMany({
+        where: { cohortId },
+        select: { id: true },
+      })
     ).map((a) => a.id);
     if (assignmentIds.length === 0) return [];
 
     const sessions = await this.prisma.investigationSession.findMany({
-      where: { cohortAssignmentId: { in: assignmentIds }, status: { in: ['submitted', 'scored'] } },
+      where: {
+        cohortAssignmentId: { in: assignmentIds },
+        status: { in: ['submitted', 'scored'] },
+      },
       include: { user: true, scenario: true, score: true },
       orderBy: { submittedAt: 'desc' },
     });
@@ -125,16 +145,29 @@ export class InstructorService {
     }));
   }
 
-  async submitFeedback(user: AuthenticatedUser, incidentId: string, dto: SubmitInstructorFeedbackDto) {
+  async submitFeedback(
+    user: AuthenticatedUser,
+    incidentId: string,
+    dto: SubmitInstructorFeedbackDto,
+  ) {
     const incident = await this.prisma.incident.findUnique({
       where: { id: incidentId },
-      include: { session: { include: { cohortAssignment: { include: { cohort: true } } } } },
+      include: {
+        session: {
+          include: { cohortAssignment: { include: { cohort: true } } },
+        },
+      },
     });
-    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    if (!incident)
+      throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
 
     const cohort = incident.session.cohortAssignment?.cohort;
     if (!cohort || cohort.ownerId !== user.id) {
-      throw new AppException(403, 'FORBIDDEN', 'You do not have access to this incident.');
+      throw new AppException(
+        403,
+        'FORBIDDEN',
+        'You do not have access to this incident.',
+      );
     }
 
     const reopenSession = dto.reopenSession ?? false;
@@ -151,7 +184,10 @@ export class InstructorService {
       }),
       ...(reopenSession
         ? [
-            this.prisma.incident.update({ where: { id: incidentId }, data: { status: 'reopened' } }),
+            this.prisma.incident.update({
+              where: { id: incidentId },
+              data: { status: 'reopened' },
+            }),
             this.prisma.investigationSession.update({
               where: { id: incident.sessionId },
               data: { status: 'active' },
@@ -189,14 +225,19 @@ export class InstructorService {
     }));
   }
 
-  async gradebookCsv(user: AuthenticatedUser, cohortId: string): Promise<string> {
+  async gradebookCsv(
+    user: AuthenticatedUser,
+    cohortId: string,
+  ): Promise<string> {
     const cohort = await this.getOwnedCohort(cohortId, user);
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
       where: { cohortId },
       include: { scenario: true },
     });
     const assignmentIds = assignments.map((a) => a.id);
-    const scenarioTitleByAssignment = new Map(assignments.map((a) => [a.id, a.scenario.title]));
+    const scenarioTitleByAssignment = new Map(
+      assignments.map((a) => [a.id, a.scenario.title]),
+    );
 
     const sessions = assignmentIds.length
       ? await this.prisma.investigationSession.findMany({
@@ -206,7 +247,15 @@ export class InstructorService {
         })
       : [];
 
-    const header = ['Student', 'Email', 'Assignment', 'Status', 'Overall %', 'Verdict Correct', 'Submitted At'];
+    const header = [
+      'Student',
+      'Email',
+      'Assignment',
+      'Status',
+      'Overall %',
+      'Verdict Correct',
+      'Submitted At',
+    ];
     const rows = sessions.map((s) => [
       s.user.displayName,
       s.user.email,
@@ -223,14 +272,19 @@ export class InstructorService {
   }
 
   private async getOwnedCohort(cohortId: string, user: AuthenticatedUser) {
-    const cohort = await this.prisma.cohort.findUnique({ where: { id: cohortId } });
+    const cohort = await this.prisma.cohort.findUnique({
+      where: { id: cohortId },
+    });
     if (!cohort) throw new AppException(404, 'NOT_FOUND', 'Cohort not found.');
-    if (cohort.ownerId !== user.id) throw new AppException(403, 'FORBIDDEN', 'You do not own this cohort.');
+    if (cohort.ownerId !== user.id)
+      throw new AppException(403, 'FORBIDDEN', 'You do not own this cohort.');
     return cohort;
   }
 
   private async toCohortDto(cohortId: string) {
-    const cohort = await this.prisma.cohort.findUniqueOrThrow({ where: { id: cohortId } });
+    const cohort = await this.prisma.cohort.findUniqueOrThrow({
+      where: { id: cohortId },
+    });
     return {
       id: cohort.id,
       name: cohort.name,
@@ -242,10 +296,11 @@ export class InstructorService {
   }
 
   private async toAssignmentDto(assignmentId: string) {
-    const assignment = await this.prisma.cohortScenarioAssignment.findUniqueOrThrow({
-      where: { id: assignmentId },
-      include: { scenario: true },
-    });
+    const assignment =
+      await this.prisma.cohortScenarioAssignment.findUniqueOrThrow({
+        where: { id: assignmentId },
+        include: { scenario: true },
+      });
     return mapAssignment(assignment);
   }
 }

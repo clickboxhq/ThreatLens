@@ -1,4 +1,12 @@
-import { Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { HintsService } from './hints.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -11,7 +19,10 @@ export class HintsController {
   constructor(private readonly hintsService: HintsService) {}
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser, @Param('sessionId', ParseUUIDPipe) sessionId: string) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
     return this.hintsService.list(sessionId, user);
   }
 

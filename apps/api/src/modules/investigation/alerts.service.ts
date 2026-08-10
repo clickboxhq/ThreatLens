@@ -19,7 +19,11 @@ export class AlertsService {
     private readonly realtimeEvents: RealtimeEventsService,
   ) {}
 
-  async list(sessionId: string, user: AuthenticatedUser, filters: { severity?: AlertSeverity; status?: AlertStatus }) {
+  async list(
+    sessionId: string,
+    user: AuthenticatedUser,
+    filters: { severity?: AlertSeverity; status?: AlertStatus },
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const where: Prisma.AlertWhereInput = { sessionId };
     if (filters.severity) where.severity = filters.severity;
@@ -33,9 +37,16 @@ export class AlertsService {
     return alerts.map(toStudentAlertDto);
   }
 
-  async getEvidence(sessionId: string, alertId: string, user: AuthenticatedUser) {
+  async getEvidence(
+    sessionId: string,
+    alertId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    const alert = await this.prisma.alert.findFirst({ where: { id: alertId, sessionId }, include: { evidenceRefs: true } });
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, sessionId },
+      include: { evidenceRefs: true },
+    });
     if (!alert) throw new AppException(404, 'NOT_FOUND', 'Alert not found.');
 
     await this.investigationActions.record({
@@ -47,22 +58,34 @@ export class AlertsService {
     });
 
     const evidence = await Promise.all(
-      alert.evidenceRefs.map((ref) => summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId)),
+      alert.evidenceRefs.map((ref) =>
+        summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId),
+      ),
     );
 
     return { alertId, evidence };
   }
 
-  async updateStatus(sessionId: string, alertId: string, user: AuthenticatedUser, dto: UpdateAlertStatusDto) {
+  async updateStatus(
+    sessionId: string,
+    alertId: string,
+    user: AuthenticatedUser,
+    dto: UpdateAlertStatusDto,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    const alert = await this.prisma.alert.findFirst({ where: { id: alertId, sessionId } });
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, sessionId },
+    });
     if (!alert) throw new AppException(404, 'NOT_FOUND', 'Alert not found.');
 
     const updated = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
         status: dto.status,
-        dismissalReason: dto.status === 'dismissed' ? dto.dismissalReason : alert.dismissalReason,
+        dismissalReason:
+          dto.status === 'dismissed'
+            ? dto.dismissalReason
+            : alert.dismissalReason,
       },
       include: { mitreTechnique: true },
     });
@@ -73,11 +96,17 @@ export class AlertsService {
       actionType: dto.status === 'dismissed' ? 'dismiss_alert' : 'view_entity',
       targetType: 'alert',
       targetId: alertId,
-      metadata: dto.status === 'dismissed' ? { dismissalReason: dto.dismissalReason } : undefined,
+      metadata:
+        dto.status === 'dismissed'
+          ? { dismissalReason: dto.dismissalReason }
+          : undefined,
     });
 
     const updatedDto = toStudentAlertDto(updated);
-    await this.realtimeEvents.publish(sessionId, { type: 'alert.updated', payload: updatedDto });
+    await this.realtimeEvents.publish(sessionId, {
+      type: 'alert.updated',
+      payload: updatedDto,
+    });
     return updatedDto;
   }
 }

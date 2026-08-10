@@ -56,8 +56,18 @@ import {
 export interface GroundTruthDefinition {
   metadata: { world_time_window_hours?: number };
   population: {
-    narrative_identities: { ref: string; attributes: { department: string; job_title: string; home_country: string } }[];
-    narrative_devices: { ref: string; attributes: { hostname: string; os_platform: string } }[];
+    narrative_identities: {
+      ref: string;
+      attributes: {
+        department: string;
+        job_title: string;
+        home_country: string;
+      };
+    }[];
+    narrative_devices: {
+      ref: string;
+      attributes: { hostname: string; os_platform: string };
+    }[];
     decoy_population_size: { identities: number; devices: number };
     world_time_window_hours: number;
   };
@@ -76,7 +86,11 @@ export interface GroundTruthDefinition {
   noise_profile: {
     // device_ref: only needed for device-scoped bait templates (e.g. a benign automated
     // client hitting a web server) — event, sign-in, and email bait don't set it.
-    false_positive_bait: { event_template_id: string; count: number; device_ref?: string }[];
+    false_positive_bait: {
+      event_template_id: string;
+      count: number;
+      device_ref?: string;
+    }[];
   };
 }
 
@@ -135,8 +149,14 @@ export function generateTelemetry(
   const emailUrls: Prisma.EmailUrlCreateManyInput[] = [];
 
   // ---- Stage 1: world seeding ----
-  const identityByRef = new Map<string, Prisma.IdentityCreateManyInput & { id: string }>();
-  const deviceByRef = new Map<string, Prisma.DeviceCreateManyInput & { id: string }>();
+  const identityByRef = new Map<
+    string,
+    Prisma.IdentityCreateManyInput & { id: string }
+  >();
+  const deviceByRef = new Map<
+    string,
+    Prisma.DeviceCreateManyInput & { id: string }
+  >();
 
   for (const narrative of def.population.narrative_identities) {
     const firstName = rng.pick(FIRST_NAMES);
@@ -167,7 +187,10 @@ export function generateTelemetry(
       sessionId,
       hostname: narrative.attributes.hostname,
       osPlatform: narrative.attributes.os_platform,
-      osVersion: narrative.attributes.os_platform === 'windows' ? '11 23H2' : 'Ubuntu 22.04',
+      osVersion:
+        narrative.attributes.os_platform === 'windows'
+          ? '11 23H2'
+          : 'Ubuntu 22.04',
       riskLevel: 'none',
       isolationStatus: 'not_isolated',
       lastSeenAt: new Date(),
@@ -177,7 +200,8 @@ export function generateTelemetry(
     deviceByRef.set(narrative.ref, { ...device, id });
   }
 
-  const decoyIdentities: (Prisma.IdentityCreateManyInput & { id: string })[] = [];
+  const decoyIdentities: (Prisma.IdentityCreateManyInput & { id: string })[] =
+    [];
   for (let i = 0; i < def.population.decoy_population_size.identities; i++) {
     const firstName = rng.pick(FIRST_NAMES);
     const lastName = rng.pick(LAST_NAMES);
@@ -192,7 +216,11 @@ export function generateTelemetry(
       department,
       jobTitle: rng.pick(JOB_TITLES[department]),
       riskLevel: 'none',
-      mfaStatus: rng.pick(['enforced', 'registered_not_enforced', 'not_registered'] as const),
+      mfaStatus: rng.pick([
+        'enforced',
+        'registered_not_enforced',
+        'not_registered',
+      ] as const),
       accountStatus: 'active',
       isPrivileged: false,
       homeCountry: home.country,
@@ -222,10 +250,17 @@ export function generateTelemetry(
   // ---- Stage 2: baseline behavior synthesis ----
   const allIdentitiesWithHome = [...identityByRef.values(), ...decoyIdentities];
   for (const identity of allIdentitiesWithHome) {
-    const home = HOME_COUNTRIES.find((c) => c.country === identity.homeCountry) ?? HOME_COUNTRIES[0];
+    const home =
+      HOME_COUNTRIES.find((c) => c.country === identity.homeCountry) ??
+      HOME_COUNTRIES[0];
     const baselineCount = rng.intBetween(2, 4);
     for (let i = 0; i < baselineCount; i++) {
-      const occurredAt = new Date(worldStart.getTime() + rng.intBetween(0, def.population.world_time_window_hours * 60) * 60 * 1000);
+      const occurredAt = new Date(
+        worldStart.getTime() +
+          rng.intBetween(0, def.population.world_time_window_hours * 60) *
+            60 *
+            1000,
+      );
       signInEvents.push({
         id: randomUUID(),
         sessionId,
@@ -256,10 +291,16 @@ export function generateTelemetry(
   for (const step of def.kill_chain) {
     const identity = identityByRef.get(step.entity_ref);
     if (!identity) continue;
-    const device = step.device_ref ? deviceByRef.get(step.device_ref) : undefined;
-    const occurredAt = parseRelativeTimestamp(worldStart, step.relative_timestamp);
+    const device = step.device_ref
+      ? deviceByRef.get(step.device_ref)
+      : undefined;
+    const occurredAt = parseRelativeTimestamp(
+      worldStart,
+      step.relative_timestamp,
+    );
     const correlationId = correlationIdByGroup.get(step.correlation_group)!;
-    const mitreTechniqueId = techniqueIdBySlug.get(step.mitre_technique_id) ?? null;
+    const mitreTechniqueId =
+      techniqueIdBySlug.get(step.mitre_technique_id) ?? null;
 
     applyEventTemplate(step.event_template_id, {
       rng,
@@ -287,8 +328,15 @@ export function generateTelemetry(
   for (const bait of def.noise_profile.false_positive_bait) {
     for (let i = 0; i < bait.count; i++) {
       const decoyIdentity = rng.pick(decoyIdentities);
-      const occurredAt = new Date(worldStart.getTime() + rng.intBetween(0, def.population.world_time_window_hours * 60) * 60 * 1000);
-      const device = bait.device_ref ? deviceByRef.get(bait.device_ref) : undefined;
+      const occurredAt = new Date(
+        worldStart.getTime() +
+          rng.intBetween(0, def.population.world_time_window_hours * 60) *
+            60 *
+            1000,
+      );
+      const device = bait.device_ref
+        ? deviceByRef.get(bait.device_ref)
+        : undefined;
       applyEventTemplate(bait.event_template_id, {
         rng,
         sessionId,
@@ -366,7 +414,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         bodyHtml:
           '<p>Your recent invoice requires verification before payment can be processed. Please sign in to review and confirm.</p>',
         headersRaw: {
-          'Received-Chain': [`mail.${MALICIOUS_DOMAIN}`, 'edge-relay-03.example-mx.net'],
+          'Received-Chain': [
+            `mail.${MALICIOUS_DOMAIN}`,
+            'edge-relay-03.example-mx.net',
+          ],
           'Authentication-Results': `spf=fail smtp.mailfrom=${MALICIOUS_DOMAIN}; dkim=none; dmarc=fail`,
         },
         spfResult: 'fail',
@@ -437,7 +488,8 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         senderDisplayName: 'IT Notifications',
         recipientAddresses: [ctx.identity.userPrincipalName as string],
         subject: 'Scheduled Maintenance Window This Weekend',
-        bodyHtml: '<p>Reminder: IT will perform scheduled maintenance on internal systems this weekend. No action needed.</p>',
+        bodyHtml:
+          '<p>Reminder: IT will perform scheduled maintenance on internal systems this weekend. No action needed.</p>',
         headersRaw: {
           'Received-Chain': [`mail.${LOOKALIKE_INTERNAL_DOMAIN}`],
           'Authentication-Results': `spf=fail smtp.mailfrom=${LOOKALIKE_INTERNAL_DOMAIN}; dkim=none; dmarc=fail`,
@@ -461,7 +513,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
           ctx.signInEvents.push({
             id: randomUUID(),
             sessionId: ctx.sessionId,
-            occurredAt: new Date(ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000),
+            occurredAt: new Date(
+              ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000,
+            ),
             correlationId: ctx.correlationId,
             raw: { source: 'ground_truth', pattern: 'password_spray_attempt' },
             isGroundTruthEvidence: ctx.isGroundTruthEvidence,
@@ -516,10 +570,12 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
         recipientAddresses: [ctx.identity.userPrincipalName as string],
         subject: 'URGENT: Confidential Wire Transfer — Approval Needed Today',
-        bodyHtml:
-          `<p>I need you to process a wire transfer to a new vendor today — this is time-sensitive and confidential, so please don't discuss it with anyone else on the team yet. I'm in meetings all day and won't be reachable by phone. Reply here with the transfer confirmation once it's done.</p>`,
+        bodyHtml: `<p>I need you to process a wire transfer to a new vendor today — this is time-sensitive and confidential, so please don't discuss it with anyone else on the team yet. I'm in meetings all day and won't be reachable by phone. Reply here with the transfer confirmation once it's done.</p>`,
         headersRaw: {
-          'Received-Chain': [`mail.${EXEC_LOOKALIKE_DOMAIN}`, 'edge-relay-01.example-mx.net'],
+          'Received-Chain': [
+            `mail.${EXEC_LOOKALIKE_DOMAIN}`,
+            'edge-relay-01.example-mx.net',
+          ],
           'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
         },
         spfResult: 'fail',
@@ -541,11 +597,14 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
         senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
         recipientAddresses: [ctx.identity.userPrincipalName as string],
-        subject: 'Re: URGENT: Confidential Wire Transfer — Approval Needed Today',
-        bodyHtml:
-          `<p>Following up — I need this completed before end of day. Please confirm as soon as the transfer is sent.</p>`,
+        subject:
+          'Re: URGENT: Confidential Wire Transfer — Approval Needed Today',
+        bodyHtml: `<p>Following up — I need this completed before end of day. Please confirm as soon as the transfer is sent.</p>`,
         headersRaw: {
-          'Received-Chain': [`mail.${EXEC_LOOKALIKE_DOMAIN}`, 'edge-relay-01.example-mx.net'],
+          'Received-Chain': [
+            `mail.${EXEC_LOOKALIKE_DOMAIN}`,
+            'edge-relay-01.example-mx.net',
+          ],
           'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
         },
         spfResult: 'fail',
@@ -557,14 +616,18 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'mfa_fatigue_batch_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'mfa-fatigue');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'mfa-fatigue',
+      );
       const denialCount = ctx.rng.intBetween(6, 9);
       for (let i = 0; i < denialCount; i++) {
         const offsetMinutes = i * ctx.rng.intBetween(1, 3);
         ctx.signInEvents.push({
           id: randomUUID(),
           sessionId: ctx.sessionId,
-          occurredAt: new Date(ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000),
+          occurredAt: new Date(
+            ctx.occurredAt.getTime() + offsetMinutes * 60 * 1000,
+          ),
           correlationId: ctx.correlationId,
           raw: { source: 'ground_truth', pattern: 'mfa_fatigue_denial' },
           isGroundTruthEvidence: ctx.isGroundTruthEvidence,
@@ -582,7 +645,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'mfa_fatigue_success_signin_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'mfa-fatigue');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'mfa-fatigue',
+      );
       ctx.signInEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
@@ -603,7 +668,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'impossible_travel_first_signin_v1': {
-      const home = HOME_COUNTRIES.find((c) => c.country === ctx.identity.homeCountry) ?? HOME_COUNTRIES[0];
+      const home =
+        HOME_COUNTRIES.find((c) => c.country === ctx.identity.homeCountry) ??
+        HOME_COUNTRIES[0];
       ctx.signInEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
@@ -649,7 +716,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'insider_data_exfil_email_v1': {
       const emailId = randomUUID();
-      const personalLocalPart = (ctx.identity.displayName as string).toLowerCase().replace(/\s+/g, '.') + ctx.rng.intBetween(10, 999);
+      const personalLocalPart =
+        (ctx.identity.displayName as string)
+          .toLowerCase()
+          .replace(/\s+/g, '.') + ctx.rng.intBetween(10, 999);
       const personalAddress = `${personalLocalPart}@${PERSONAL_EMAIL_DOMAIN_FOR_GENERATION}`;
       const filename = ctx.rng.pick(SENSITIVE_ATTACHMENT_FILENAMES);
       ctx.emailMessages.push({
@@ -680,9 +750,12 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         id: randomUUID(),
         emailMessageId: emailId,
         filename,
-        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         sizeBytes: ctx.rng.intBetween(20_000, 500_000),
-        hashSha256: Array.from({ length: 64 }, () => ctx.rng.intBetween(0, 15).toString(16)).join(''),
+        hashSha256: Array.from({ length: 64 }, () =>
+          ctx.rng.intBetween(0, 15).toString(16),
+        ).join(''),
         sandboxVerdict: 'benign',
       });
       break;
@@ -703,7 +776,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         bodyHtml:
           '<p>Please find your statement attached. Open the document and click "Enable Content" to view the full report.</p>',
         headersRaw: {
-          'Received-Chain': [`mail.${MALWARE_DELIVERY_DOMAIN}`, 'edge-relay-02.example-mx.net'],
+          'Received-Chain': [
+            `mail.${MALWARE_DELIVERY_DOMAIN}`,
+            'edge-relay-02.example-mx.net',
+          ],
           'Authentication-Results': `spf=fail smtp.mailfrom=${MALWARE_DELIVERY_DOMAIN}; dkim=none; dmarc=fail`,
         },
         spfResult: 'fail',
@@ -725,7 +801,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'malicious_process_execution_v1': {
       if (!ctx.device) break;
-      const parentGuid = deterministicUuidFromSeed(`${ctx.correlationId}:parent`);
+      const parentGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:parent`,
+      );
       const childGuid = deterministicUuidFromSeed(`${ctx.correlationId}:child`);
 
       ctx.processEvents.push({
@@ -739,8 +817,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         deviceId: ctx.device.id,
         processGuid: parentGuid,
         parentProcessGuid: null,
-        imagePath: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
-        commandLine: '"WINWORD.EXE" /n "C:\\Users\\Public\\Downloads\\Statement_July2026.docm"',
+        imagePath:
+          'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
+        commandLine:
+          '"WINWORD.EXE" /n "C:\\Users\\Public\\Downloads\\Statement_July2026.docm"',
         hashSha256: syntheticHash(ctx.rng),
         integrityLevel: 'Medium',
         identityId: ctx.identity.id,
@@ -758,11 +838,13 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         deviceId: ctx.device.id,
         processGuid: childGuid,
         parentProcessGuid: parentGuid,
-        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        imagePath:
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
         commandLine:
           'powershell.exe -NoProfile -WindowStyle Hidden -EncodedCommand SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcA',
         hashSha256: syntheticHash(ctx.rng),
-        parentImagePath: 'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
+        parentImagePath:
+          'C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE',
         integrityLevel: 'Medium',
         identityId: ctx.identity.id,
       });
@@ -811,7 +893,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'legacy_auth_bypass_signin_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'legacy-auth');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'legacy-auth',
+      );
       ctx.signInEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
@@ -834,7 +918,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     case 'legacy_auth_mailbox_collection_v1': {
       // Derived from the same correlation_id as legacy_auth_bypass_signin_v1 (§7.2 stage 4
       // pattern) so the follow-on mailbox syncs agree with the initial bypass's attacker IP.
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'legacy-auth');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'legacy-auth',
+      );
       const syncCount = ctx.rng.intBetween(4, 6);
       for (let i = 0; i < syncCount; i++) {
         ctx.signInEvents.push({
@@ -886,7 +972,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        raw: { source: 'ground_truth', pattern: 'lateral_movement_smb_connection' },
+        raw: {
+          source: 'ground_truth',
+          pattern: 'lateral_movement_smb_connection',
+        },
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
         deviceId: ctx.device.id,
@@ -904,8 +993,12 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     case 'lateral_movement_remote_exec_v1': {
       if (!ctx.device) break;
       const scmGuid = deterministicUuidFromSeed(`${ctx.correlationId}:scm`);
-      const psexecGuid = deterministicUuidFromSeed(`${ctx.correlationId}:psexecsvc`);
-      const cmdGuid = deterministicUuidFromSeed(`${ctx.correlationId}:remote-cmd`);
+      const psexecGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:psexecsvc`,
+      );
+      const cmdGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:remote-cmd`,
+      );
 
       ctx.processEvents.push({
         id: randomUUID(),
@@ -969,7 +1062,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     case 'mass_file_encryption_v1': {
       if (!ctx.device) break;
       const fileCount = ctx.rng.intBetween(6, 9);
-      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(fileCount, SHARED_FILE_PATHS.length));
+      const paths = ctx.rng.sample(
+        SHARED_FILE_PATHS,
+        Math.min(fileCount, SHARED_FILE_PATHS.length),
+      );
       paths.forEach((path, i) => {
         ctx.fileEvents.push({
           id: randomUUID(),
@@ -990,7 +1086,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       ctx.fileEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
-        occurredAt: new Date(ctx.occurredAt.getTime() + paths.length * 20 * 1000 + 10 * 1000),
+        occurredAt: new Date(
+          ctx.occurredAt.getTime() + paths.length * 20 * 1000 + 10 * 1000,
+        ),
         correlationId: ctx.correlationId,
         raw: { source: 'ground_truth', pattern: 'ransom_note' },
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
@@ -1004,13 +1102,18 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'cloud_malicious_access_key_creation_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'cloud-takeover');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'cloud-takeover',
+      );
       ctx.cloudEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        raw: { source: 'ground_truth', pattern: 'malicious_access_key_creation' },
+        raw: {
+          source: 'ground_truth',
+          pattern: 'malicious_access_key_creation',
+        },
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
         identityId: ctx.identity.id,
@@ -1022,7 +1125,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'cloud_bucket_enumeration_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'cloud-takeover');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'cloud-takeover',
+      );
       const actionCount = ctx.rng.intBetween(6, 9);
       for (let i = 0; i < actionCount; i++) {
         ctx.cloudEvents.push({
@@ -1106,19 +1211,25 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'fileless_powershell_backdoor_v1': {
       if (!ctx.device) break;
-      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:child`);
+      const processGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:child`,
+      );
       ctx.processEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        raw: { source: 'ground_truth', pattern: 'fileless_powershell_backdoor' },
+        raw: {
+          source: 'ground_truth',
+          pattern: 'fileless_powershell_backdoor',
+        },
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
         deviceId: ctx.device.id,
         processGuid,
         parentProcessGuid: null,
-        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        imagePath:
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
         commandLine: FILELESS_MALWARE_COMMAND_LINE,
         hashSha256: syntheticHash(ctx.rng),
         integrityLevel: 'Medium',
@@ -1179,7 +1290,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         processGuid: guid,
         parentProcessGuid: null,
         imagePath: 'C:\\Windows\\System32\\rundll32.exe',
-        commandLine: LSASS_DUMP_COMMAND_LINE_TEMPLATE(targetPid, LSASS_DUMP_FILE_PATH),
+        commandLine: LSASS_DUMP_COMMAND_LINE_TEMPLATE(
+          targetPid,
+          LSASS_DUMP_FILE_PATH,
+        ),
         hashSha256: syntheticHash(ctx.rng),
         integrityLevel: 'High',
         identityId: ctx.identity.id,
@@ -1204,7 +1318,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'insider_bulk_usb_copy_v1': {
       if (!ctx.device) break;
-      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(6, SHARED_FILE_PATHS.length));
+      const paths = ctx.rng.sample(
+        SHARED_FILE_PATHS,
+        Math.min(6, SHARED_FILE_PATHS.length),
+      );
       paths.forEach((path, i) => {
         const filename = path.split('\\').pop();
         ctx.fileEvents.push({
@@ -1226,7 +1343,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'insider_source_file_cleanup_v1': {
       if (!ctx.device) break;
-      const paths = ctx.rng.sample(SHARED_FILE_PATHS, Math.min(6, SHARED_FILE_PATHS.length));
+      const paths = ctx.rng.sample(
+        SHARED_FILE_PATHS,
+        Math.min(6, SHARED_FILE_PATHS.length),
+      );
       paths.forEach((path, i) => {
         ctx.fileEvents.push({
           id: randomUUID(),
@@ -1263,7 +1383,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'cloud_bucket_public_access_burst_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'bucket-exposure');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'bucket-exposure',
+      );
       const actionCount = ctx.rng.intBetween(6, 9);
       for (let i = 0; i < actionCount; i++) {
         ctx.cloudEvents.push({
@@ -1352,8 +1474,12 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'trojan_installer_execution_v1': {
       if (!ctx.device) break;
-      const installerGuid = deterministicUuidFromSeed(`${ctx.correlationId}:installer`);
-      const payloadGuid = deterministicUuidFromSeed(`${ctx.correlationId}:payload`);
+      const installerGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:installer`,
+      );
+      const payloadGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:payload`,
+      );
 
       ctx.processEvents.push({
         id: randomUUID(),
@@ -1412,7 +1538,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'malware_scheduled_task_persistence_v1': {
       if (!ctx.device) break;
-      const payloadGuid = deterministicUuidFromSeed(`${ctx.correlationId}:payload`);
+      const payloadGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:payload`,
+      );
       ctx.processEvents.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
@@ -1449,7 +1577,10 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         bodyHtml:
           '<p>Your mailbox sync was interrupted. To restore access, please reconnect your account and grant permission to the Office Sync Helper app.</p>',
         headersRaw: {
-          'Received-Chain': [`mail.${OAUTH_PHISHING_DOMAIN}`, 'edge-relay-04.example-mx.net'],
+          'Received-Chain': [
+            `mail.${OAUTH_PHISHING_DOMAIN}`,
+            'edge-relay-04.example-mx.net',
+          ],
           'Authentication-Results': `spf=fail smtp.mailfrom=${OAUTH_PHISHING_DOMAIN}; dkim=none; dmarc=fail`,
         },
         spfResult: 'fail',
@@ -1490,7 +1621,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'oauth_app_mailbox_exfil_v1': {
-      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'oauth-consent');
+      const attacker = attackerProfileFromSeed(
+        ctx.correlationId ?? 'oauth-consent',
+      );
       const accessCount = ctx.rng.intBetween(5, 8);
       for (let i = 0; i < accessCount; i++) {
         ctx.cloudEvents.push({
@@ -1521,7 +1654,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
         deviceId: ctx.device.id,
-        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:kerberoast`),
+        processGuid: deterministicUuidFromSeed(
+          `${ctx.correlationId}:kerberoast`,
+        ),
         parentProcessGuid: null,
         imagePath: KERBEROASTING_TOOL_PATH,
         commandLine: KERBEROASTING_COMMAND_LINE,
@@ -1542,7 +1677,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
         deviceId: ctx.device.id,
-        processGuid: deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`),
+        processGuid: deterministicUuidFromSeed(
+          `${ctx.correlationId}:dns-backdoor`,
+        ),
         parentProcessGuid: null,
         imagePath: DNS_BACKDOOR_TOOL_PATH,
         commandLine: DNS_BACKDOOR_COMMAND_LINE,
@@ -1554,7 +1691,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'dns_tunnel_c2_beacon_v1': {
       if (!ctx.device) break;
-      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`);
+      const processGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:dns-backdoor`,
+      );
       const queryCount = ctx.rng.intBetween(10, 14);
       for (let i = 0; i < queryCount; i++) {
         ctx.networkEvents.push({
@@ -1580,7 +1719,9 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'dns_tunnel_data_exfil_v1': {
       if (!ctx.device) break;
-      const processGuid = deterministicUuidFromSeed(`${ctx.correlationId}:dns-backdoor`);
+      const processGuid = deterministicUuidFromSeed(
+        `${ctx.correlationId}:dns-backdoor`,
+      );
       const queryCount = ctx.rng.intBetween(20, 28);
       for (let i = 0; i < queryCount; i++) {
         ctx.networkEvents.push({
@@ -1614,13 +1755,20 @@ function syntheticIp(rng: SeededRng): string {
 }
 
 function syntheticHash(rng: SeededRng): string {
-  return Array.from({ length: 64 }, () => rng.intBetween(0, 15).toString(16)).join('');
+  return Array.from({ length: 64 }, () =>
+    rng.intBetween(0, 15).toString(16),
+  ).join('');
 }
 
-function attackerProfileFromSeed(seed: string): { ip: string; country: string; city: string } {
+function attackerProfileFromSeed(seed: string): {
+  ip: string;
+  country: string;
+  city: string;
+} {
   let hash = 0;
   for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  const country = RISKY_UNFAMILIAR_COUNTRIES[hash % RISKY_UNFAMILIAR_COUNTRIES.length];
+  const country =
+    RISKY_UNFAMILIAR_COUNTRIES[hash % RISKY_UNFAMILIAR_COUNTRIES.length];
   const ip = `${45 + (hash % 150)}.${(hash >>> 3) % 256}.${(hash >>> 7) % 256}.${1 + ((hash >>> 11) % 253)}`;
   return { ip, country: country.country, city: country.city };
 }
@@ -1636,7 +1784,7 @@ function deterministicUuidFromSeed(seed: string): string {
     h1 = (h1 * 31 + seed.charCodeAt(i)) >>> 0;
     h2 = (h2 * 131 + seed.charCodeAt(i)) >>> 0;
   }
-  const hex = (n: number, len: number) => (n >>> 0).toString(16).padStart(8, '0').slice(0, len);
+  const hex = (n: number, len: number) =>
+    (n >>> 0).toString(16).padStart(8, '0').slice(0, len);
   return `${hex(h1, 8)}-${hex(h2, 4)}-4${hex(h1 ^ h2, 3)}-8${hex(h2 ^ h1, 3)}-${hex(h1, 6)}${hex(h2, 6)}`;
 }
-

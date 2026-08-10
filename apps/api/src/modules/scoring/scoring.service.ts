@@ -9,7 +9,9 @@ import type { IncidentVerdict } from '@prisma/client';
 // Pure and exported for direct unit testing (same rationale as computeScore in scorer.ts):
 // an item pinned as evidence AND added to the Timeline must count once, not twice, toward
 // either side of the evidence precision/recall ratio.
-export function dedupeByEvent<T extends { eventTable: string; eventId: string }>(items: T[]): T[] {
+export function dedupeByEvent<
+  T extends { eventTable: string; eventId: string },
+>(items: T[]): T[] {
   const seen = new Set<string>();
   const result: T[] = [];
   for (const item of items) {
@@ -38,9 +40,13 @@ export class ScoringService {
 
   /** §12.4: fetches the facts computeScore needs, scores the session, and persists it. */
   async scoreSession(sessionId: string): Promise<void> {
-    const existing = await this.prisma.score.findUnique({ where: { sessionId } });
+    const existing = await this.prisma.score.findUnique({
+      where: { sessionId },
+    });
     if (existing) {
-      this.logger.log(`Session ${sessionId} already scored; skipping (idempotent).`);
+      this.logger.log(
+        `Session ${sessionId} already scored; skipping (idempotent).`,
+      );
       return;
     }
 
@@ -48,7 +54,8 @@ export class ScoringService {
       where: { id: sessionId },
       include: { scenarioVersion: true },
     });
-    const def = session.scenarioVersion.groundTruthDefinition as unknown as GroundTruthDefinition & {
+    const def = session.scenarioVersion
+      .groundTruthDefinition as unknown as GroundTruthDefinition & {
       scoring_rubric: ScoringRubric;
     };
     const rubric = def.scoring_rubric;
@@ -64,9 +71,15 @@ export class ScoringService {
     });
 
     const taggedTechniqueIds = [
-      ...new Set(closedIncidents.flatMap((i) => i.techniqueLinks.map((t) => t.mitreTechnique.techniqueId))),
+      ...new Set(
+        closedIncidents.flatMap((i) =>
+          i.techniqueLinks.map((t) => t.mitreTechnique.techniqueId),
+        ),
+      ),
     ];
-    const submittedVerdicts = closedIncidents.map((i) => i.verdict).filter((v): v is IncidentVerdict => Boolean(v));
+    const submittedVerdicts = closedIncidents
+      .map((i) => i.verdict)
+      .filter((v): v is IncidentVerdict => Boolean(v));
 
     const [
       groundTruthEmails,
@@ -77,13 +90,27 @@ export class ScoringService {
       groundTruthCloud,
       groundTruthHttp,
     ] = await Promise.all([
-      this.prisma.emailMessage.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.signInEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.processEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.fileEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.networkEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.cloudEvent.count({ where: { sessionId, isGroundTruthEvidence: true } }),
-      this.prisma.httpRequest.count({ where: { sessionId, isGroundTruthEvidence: true } }),
+      this.prisma.emailMessage.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.signInEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.processEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.fileEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.networkEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.cloudEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
+      this.prisma.httpRequest.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
     ]);
     const totalGroundTruthEvidenceCount =
       groundTruthEmails +
@@ -102,34 +129,49 @@ export class ScoringService {
     // timeline-added must count once, not twice, toward either side of the ratio.
     const pinnedEvidence = closedIncidents.flatMap((i) => i.evidenceCollection);
     const timelineItems = closedIncidents.flatMap((i) => i.timelineItems);
-    const curatedEvidence = dedupeByEvent([...pinnedEvidence, ...timelineItems]);
+    const curatedEvidence = dedupeByEvent([
+      ...pinnedEvidence,
+      ...timelineItems,
+    ]);
     const pinnedTotalEvidenceCount = curatedEvidence.length;
-    const pinnedGroundTruthEvidenceCount = await this.countGroundTruthAmong(curatedEvidence);
+    const pinnedGroundTruthEvidenceCount =
+      await this.countGroundTruthAmong(curatedEvidence);
 
     const falsePositiveAlerts = await this.prisma.alert.findMany({
       where: { sessionId, isFalsePositiveByDesign: true },
       include: { evidenceRefs: true },
     });
-    const escalatedAlertIds = new Set(closedIncidents.flatMap((i) => i.alertLinks.map((l) => l.alertId)));
+    const escalatedAlertIds = new Set(
+      closedIncidents.flatMap((i) => i.alertLinks.map((l) => l.alertId)),
+    );
     const pinnedEventIds = new Set(curatedEvidence.map((e) => e.eventId));
 
     let falsePositiveCorrectlyHandledCount = 0;
     let falsePositiveMishandledCount = 0;
     for (const alert of falsePositiveAlerts) {
       const wasEscalatedOrPinned =
-        escalatedAlertIds.has(alert.id) || alert.evidenceRefs.some((ref) => pinnedEventIds.has(ref.eventId));
-      const wasCorrectlyDismissed = alert.status === 'dismissed' && Boolean(alert.dismissalReason);
+        escalatedAlertIds.has(alert.id) ||
+        alert.evidenceRefs.some((ref) => pinnedEventIds.has(ref.eventId));
+      const wasCorrectlyDismissed =
+        alert.status === 'dismissed' && Boolean(alert.dismissalReason);
       if (wasEscalatedOrPinned) falsePositiveMishandledCount += 1;
       else if (wasCorrectlyDismissed) falsePositiveCorrectlyHandledCount += 1;
     }
 
     const timeToResolutionSeconds = session.submittedAt
-      ? Math.round((session.submittedAt.getTime() - session.startedAt.getTime()) / 1000)
+      ? Math.round(
+          (session.submittedAt.getTime() - session.startedAt.getTime()) / 1000,
+        )
       : 0;
 
     // §12.5: sum of every unlocked hint's authored unlock_cost_percent for this session.
-    const hintUnlocks = await this.prisma.hintUnlock.findMany({ where: { sessionId } });
-    const hintPenaltyPercent = hintUnlocks.reduce((sum, u) => sum + Number(u.unlockCostPercent), 0);
+    const hintUnlocks = await this.prisma.hintUnlock.findMany({
+      where: { sessionId },
+    });
+    const hintPenaltyPercent = hintUnlocks.reduce(
+      (sum, u) => sum + Number(u.unlockCostPercent),
+      0,
+    );
 
     const input: ScoringInput = {
       requiredTechniqueIds: rubric.required_techniques,
@@ -155,20 +197,36 @@ export class ScoringService {
     // scored 61%." Computed once here (not recomputed on every results-screen read) and
     // stored alongside the rubric breakdown, through the same Student-safe DTOs every other
     // evidence display uses (§18.3) — never raw ground-truth rows.
-    const missedTechniqueSlugs = rubric.required_techniques.filter((t) => !taggedTechniqueIds.includes(t));
+    const missedTechniqueSlugs = rubric.required_techniques.filter(
+      (t) => !taggedTechniqueIds.includes(t),
+    );
     const missedTechniques = missedTechniqueSlugs.length
-      ? await this.prisma.mitreTechnique.findMany({ where: { techniqueId: { in: missedTechniqueSlugs } } })
+      ? await this.prisma.mitreTechnique.findMany({
+          where: { techniqueId: { in: missedTechniqueSlugs } },
+        })
       : [];
 
-    const missedEvidenceRefs = await this.findMissedGroundTruthEvidence(sessionId, pinnedEventIds);
+    const missedEvidenceRefs = await this.findMissedGroundTruthEvidence(
+      sessionId,
+      pinnedEventIds,
+    );
     const missedEvidence = await Promise.all(
-      missedEvidenceRefs.map((ref) => summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId)),
+      missedEvidenceRefs.map((ref) =>
+        summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId),
+      ),
     );
 
     const rubricBreakdown = {
       ...breakdown,
-      missedTechniques: missedTechniques.map((t) => ({ id: t.id, techniqueId: t.techniqueId, name: t.name })),
-      missedEvidence: missedEvidence.map((e) => ({ eventTable: e.eventTable, summary: e.summary })),
+      missedTechniques: missedTechniques.map((t) => ({
+        id: t.id,
+        techniqueId: t.techniqueId,
+        name: t.name,
+      })),
+      missedEvidence: missedEvidence.map((e) => ({
+        eventTable: e.eventTable,
+        summary: e.summary,
+      })),
     };
 
     await this.prisma.$transaction([
@@ -202,32 +260,66 @@ export class ScoringService {
           scoredAt: new Date(),
         },
       }),
-      this.prisma.investigationSession.update({ where: { id: sessionId }, data: { status: 'scored' } }),
+      this.prisma.investigationSession.update({
+        where: { id: sessionId },
+        data: { status: 'scored' },
+      }),
     ]);
 
     // §13.4: after every scoring run, not just the first — a retry that finally clears a
     // learning path's threshold should issue the certificate then, not only on the attempt
     // that happened to be the one that pushed a scenario's best score over the bar.
-    await this.certificatesService.checkAndIssueForScenario(session.userId, session.scenarioId);
+    await this.certificatesService.checkAndIssueForScenario(
+      session.userId,
+      session.scenarioId,
+    );
 
-    this.logger.log(`Scored session ${sessionId}: ${breakdown.overallPercent}%`);
+    this.logger.log(
+      `Scored session ${sessionId}: ${breakdown.overallPercent}%`,
+    );
   }
 
   // §6.12: every telemetry event table an evidence_collection row can point at (§6.17).
   // Adding a new investigation surface (e.g. Device Portal's process/file/network tables)
   // means adding its table name and Prisma model here, or pinned evidence from it silently
   // never counts toward recall/precision — Device Portal's addition caught exactly this gap.
-  private readonly groundTruthCounters: Record<string, (ids: string[]) => Promise<number>> = {
-    email_messages: (ids) => this.prisma.emailMessage.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    sign_in_events: (ids) => this.prisma.signInEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    process_events: (ids) => this.prisma.processEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    file_events: (ids) => this.prisma.fileEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    network_events: (ids) => this.prisma.networkEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    cloud_events: (ids) => this.prisma.cloudEvent.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
-    http_requests: (ids) => this.prisma.httpRequest.count({ where: { id: { in: ids }, isGroundTruthEvidence: true } }),
+  private readonly groundTruthCounters: Record<
+    string,
+    (ids: string[]) => Promise<number>
+  > = {
+    email_messages: (ids) =>
+      this.prisma.emailMessage.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    sign_in_events: (ids) =>
+      this.prisma.signInEvent.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    process_events: (ids) =>
+      this.prisma.processEvent.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    file_events: (ids) =>
+      this.prisma.fileEvent.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    network_events: (ids) =>
+      this.prisma.networkEvent.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    cloud_events: (ids) =>
+      this.prisma.cloudEvent.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
+    http_requests: (ids) =>
+      this.prisma.httpRequest.count({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+      }),
   };
 
-  private async countGroundTruthAmong(pinnedEvidence: { eventTable: string; eventId: string }[]): Promise<number> {
+  private async countGroundTruthAmong(
+    pinnedEvidence: { eventTable: string; eventId: string }[],
+  ): Promise<number> {
     const idsByTable = new Map<string, string[]>();
     for (const item of pinnedEvidence) {
       const list = idsByTable.get(item.eventTable) ?? [];
@@ -248,53 +340,84 @@ export class ScoringService {
   // Mirrors groundTruthCounters above — same "add a new table here too" maintenance note
   // applies, since a missed table would silently vanish from the debrief instead of the
   // recall score.
-  private readonly missedEvidenceFinders: Record<string, (sessionId: string, excludeIds: string[]) => Promise<string[]>> = {
+  private readonly missedEvidenceFinders: Record<
+    string,
+    (sessionId: string, excludeIds: string[]) => Promise<string[]>
+  > = {
     email_messages: async (sessionId, excludeIds) =>
       (
         await this.prisma.emailMessage.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     sign_in_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.signInEvent.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     process_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.processEvent.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     file_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.fileEvent.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     network_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.networkEvent.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     cloud_events: async (sessionId, excludeIds) =>
       (
         await this.prisma.cloudEvent.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
     http_requests: async (sessionId, excludeIds) =>
       (
         await this.prisma.httpRequest.findMany({
-          where: { sessionId, isGroundTruthEvidence: true, id: { notIn: excludeIds } },
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
           select: { id: true },
         })
       ).map((r) => r.id),
@@ -306,10 +429,12 @@ export class ScoringService {
   ): Promise<{ eventTable: string; eventId: string }[]> {
     const excludeIds = [...pinnedEventIds];
     const results = await Promise.all(
-      Object.entries(this.missedEvidenceFinders).map(async ([eventTable, find]) => {
-        const ids = await find(sessionId, excludeIds);
-        return ids.map((eventId) => ({ eventTable, eventId }));
-      }),
+      Object.entries(this.missedEvidenceFinders).map(
+        async ([eventTable, find]) => {
+          const ids = await find(sessionId, excludeIds);
+          return ids.map((eventId) => ({ eventTable, eventId }));
+        },
+      ),
     );
     return results.flat();
   }

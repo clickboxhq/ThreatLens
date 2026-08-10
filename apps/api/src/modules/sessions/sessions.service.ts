@@ -6,7 +6,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
-import { TELEMETRY_GENERATION_QUEUE, SCORING_QUEUE } from '../../common/queue/queue.module';
+import {
+  TELEMETRY_GENERATION_QUEUE,
+  SCORING_QUEUE,
+} from '../../common/queue/queue.module';
 import { computeSkillRadar } from './skill-radar';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { TelemetryGenerationJobData } from '../telemetry-generator/telemetry-generator.processor';
@@ -21,17 +24,26 @@ export class SessionsService {
     private readonly prisma: PrismaService,
     private readonly sessionAccess: SessionAccessService,
     private readonly investigationActions: InvestigationActionsService,
-    @InjectQueue(TELEMETRY_GENERATION_QUEUE) private readonly telemetryQueue: Queue<TelemetryGenerationJobData>,
-    @InjectQueue(SCORING_QUEUE) private readonly scoringQueue: Queue<ScoringJobData>,
+    @InjectQueue(TELEMETRY_GENERATION_QUEUE)
+    private readonly telemetryQueue: Queue<TelemetryGenerationJobData>,
+    @InjectQueue(SCORING_QUEUE)
+    private readonly scoringQueue: Queue<ScoringJobData>,
   ) {}
 
-  async createSession(user: AuthenticatedUser, scenarioId: string, cohortAssignmentId?: string) {
+  async createSession(
+    user: AuthenticatedUser,
+    scenarioId: string,
+    cohortAssignmentId?: string,
+  ) {
     // §15.1: "email verification required before a self-serve account can start a scored
     // session." Every session in this app feeds the Scoring Engine and leaderboard/certificate
     // eligibility (there's no separate free-tier/unscored session type), so this is the one
     // gating point. Checked fresh against the DB, not a JWT claim, so verifying takes effect
     // immediately without requiring the Student to log in again.
-    const requester = await this.prisma.user.findUnique({ where: { id: user.id }, select: { emailVerifiedAt: true } });
+    const requester = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { emailVerifiedAt: true },
+    });
     if (!requester?.emailVerifiedAt) {
       throw new AppException(
         403,
@@ -40,13 +52,27 @@ export class SessionsService {
       );
     }
 
-    const scenario = await this.prisma.attackScenario.findUnique({ where: { id: scenarioId } });
-    if (!scenario || scenario.status !== 'published' || !scenario.currentVersionId) {
-      throw new AppException(404, 'SCENARIO_NOT_FOUND', 'Scenario not found or not published.');
+    const scenario = await this.prisma.attackScenario.findUnique({
+      where: { id: scenarioId },
+    });
+    if (
+      !scenario ||
+      scenario.status !== 'published' ||
+      !scenario.currentVersionId
+    ) {
+      throw new AppException(
+        404,
+        'SCENARIO_NOT_FOUND',
+        'Scenario not found or not published.',
+      );
     }
 
     if (cohortAssignmentId) {
-      await this.assertValidAssignmentAttempt(user, cohortAssignmentId, scenario.id);
+      await this.assertValidAssignmentAttempt(
+        user,
+        cohortAssignmentId,
+        scenario.id,
+      );
     }
 
     const seed = randomBytes(6).readUIntBE(0, 6);
@@ -120,38 +146,59 @@ export class SessionsService {
 
     const taggedBySessionId = new Map<string, Set<string>>();
     for (const incident of closedIncidents) {
-      const set = taggedBySessionId.get(incident.sessionId) ?? new Set<string>();
-      for (const link of incident.techniqueLinks) set.add(link.mitreTechnique.techniqueId);
+      const set =
+        taggedBySessionId.get(incident.sessionId) ?? new Set<string>();
+      for (const link of incident.techniqueLinks)
+        set.add(link.mitreTechnique.techniqueId);
       taggedBySessionId.set(incident.sessionId, set);
     }
 
-    const outcomes: SessionTechniqueOutcome[] = scoredSessions.map((session) => {
-      const def = session.scenarioVersion.groundTruthDefinition as unknown as {
-        scoring_rubric: { required_techniques: string[] };
-      };
-      return {
-        requiredTechniqueIds: def.scoring_rubric.required_techniques,
-        taggedTechniqueIds: [...(taggedBySessionId.get(session.id) ?? [])],
-      };
-    });
+    const outcomes: SessionTechniqueOutcome[] = scoredSessions.map(
+      (session) => {
+        const def = session.scenarioVersion
+          .groundTruthDefinition as unknown as {
+          scoring_rubric: { required_techniques: string[] };
+        };
+        return {
+          requiredTechniqueIds: def.scoring_rubric.required_techniques,
+          taggedTechniqueIds: [...(taggedBySessionId.get(session.id) ?? [])],
+        };
+      },
+    );
 
-    const allTechniques = await this.prisma.mitreTechnique.findMany({ select: { techniqueId: true, tactic: true } });
-    const tacticByTechniqueId = new Map(allTechniques.map((t) => [t.techniqueId, t.tactic]));
+    const allTechniques = await this.prisma.mitreTechnique.findMany({
+      select: { techniqueId: true, tactic: true },
+    });
+    const tacticByTechniqueId = new Map(
+      allTechniques.map((t) => [t.techniqueId, t.tactic]),
+    );
 
     return computeSkillRadar(outcomes, tacticByTechniqueId);
   }
 
-  async submitSession(sessionId: string, user: AuthenticatedUser, incidentIds: string[]) {
+  async submitSession(
+    sessionId: string,
+    user: AuthenticatedUser,
+    incidentIds: string[],
+  ) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
     if (session.status !== 'active') {
-      throw new AppException(409, 'SESSION_NOT_ACTIVE', 'This session has already been submitted.');
+      throw new AppException(
+        409,
+        'SESSION_NOT_ACTIVE',
+        'This session has already been submitted.',
+      );
     }
 
     const incidents = await this.prisma.incident.findMany({
       where: { id: { in: incidentIds }, sessionId },
     });
     if (incidents.length !== incidentIds.length) {
-      throw new AppException(400, 'INVALID_INCIDENT_IDS', 'One or more incident IDs do not belong to this session.');
+      throw new AppException(
+        400,
+        'INVALID_INCIDENT_IDS',
+        'One or more incident IDs do not belong to this session.',
+      );
     }
 
     await this.prisma.investigationSession.update({
@@ -167,7 +214,11 @@ export class SessionsService {
       targetId: sessionId,
     });
 
-    await this.scoringQueue.add('score', { sessionId }, { jobId: `scoring-${sessionId}` });
+    await this.scoringQueue.add(
+      'score',
+      { sessionId },
+      { jobId: `scoring-${sessionId}` },
+    );
 
     return { scoringStatus: 'queued' };
   }
@@ -176,7 +227,11 @@ export class SessionsService {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const score = await this.prisma.score.findUnique({ where: { sessionId } });
     if (!score) {
-      throw new AppException(404, 'NOT_SCORED_YET', 'This session has not been scored yet.');
+      throw new AppException(
+        404,
+        'NOT_SCORED_YET',
+        'This session has not been scored yet.',
+      );
     }
     return {
       overallPercent: score.overallPercent,
@@ -197,16 +252,28 @@ export class SessionsService {
     cohortAssignmentId: string,
     scenarioId: string,
   ): Promise<void> {
-    const assignment = await this.prisma.cohortScenarioAssignment.findUnique({ where: { id: cohortAssignmentId } });
+    const assignment = await this.prisma.cohortScenarioAssignment.findUnique({
+      where: { id: cohortAssignmentId },
+    });
     if (!assignment || assignment.scenarioId !== scenarioId) {
-      throw new AppException(400, 'INVALID_ASSIGNMENT', 'This assignment does not exist for this scenario.');
+      throw new AppException(
+        400,
+        'INVALID_ASSIGNMENT',
+        'This assignment does not exist for this scenario.',
+      );
     }
 
     const enrollment = await this.prisma.cohortEnrollment.findUnique({
-      where: { cohortId_userId: { cohortId: assignment.cohortId, userId: user.id } },
+      where: {
+        cohortId_userId: { cohortId: assignment.cohortId, userId: user.id },
+      },
     });
     if (!enrollment || enrollment.status !== 'active') {
-      throw new AppException(403, 'NOT_ENROLLED', 'You are not enrolled in this assignment’s cohort.');
+      throw new AppException(
+        403,
+        'NOT_ENROLLED',
+        'You are not enrolled in this assignment’s cohort.',
+      );
     }
 
     if (assignment.attemptLimit != null) {
@@ -214,13 +281,19 @@ export class SessionsService {
         where: { cohortAssignmentId, userId: user.id },
       });
       if (attempts >= assignment.attemptLimit) {
-        throw new AppException(409, 'ATTEMPT_LIMIT_REACHED', 'You have used all attempts for this assignment.');
+        throw new AppException(
+          409,
+          'ATTEMPT_LIMIT_REACHED',
+          'You have used all attempts for this assignment.',
+        );
       }
     }
   }
 
   private async toSessionDto(sessionId: string) {
-    const session = await this.prisma.investigationSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const session = await this.prisma.investigationSession.findUniqueOrThrow({
+      where: { id: sessionId },
+    });
     const alertCount = await this.prisma.alert.count({ where: { sessionId } });
     return {
       id: session.id,

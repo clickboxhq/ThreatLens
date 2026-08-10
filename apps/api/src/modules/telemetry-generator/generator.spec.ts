@@ -6,9 +6,21 @@ function buildDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Accounts Payable Specialist', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Finance',
+            job_title: 'Accounts Payable Specialist',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'FIN-WKS-07', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'FIN-WKS-07', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -55,8 +67,12 @@ describe('generateTelemetry (§7.2)', () => {
     const first = generateTelemetry(sessionId, seed, def, techniqueIdBySlug);
     const second = generateTelemetry(sessionId, seed, def, techniqueIdBySlug);
 
-    expect(first.identities.map((i) => i.displayName)).toEqual(second.identities.map((i) => i.displayName));
-    expect(first.signInEvents.map((e) => e.sourceCountry)).toEqual(second.signInEvents.map((e) => e.sourceCountry));
+    expect(first.identities.map((i) => i.displayName)).toEqual(
+      second.identities.map((i) => i.displayName),
+    );
+    expect(first.signInEvents.map((e) => e.sourceCountry)).toEqual(
+      second.signInEvents.map((e) => e.sourceCountry),
+    );
   });
 
   it('produces the narrative identity plus the full decoy population', () => {
@@ -70,8 +86,12 @@ describe('generateTelemetry (§7.2)', () => {
     const def = buildDefinition();
     const result = generateTelemetry(randomUUID(), 42n, def, techniqueIdBySlug);
 
-    const phishingEmail = result.emailMessages.find((m) => m.isGroundTruthEvidence);
-    const riskySignIn = result.signInEvents.find((s) => s.isGroundTruthEvidence);
+    const phishingEmail = result.emailMessages.find(
+      (m) => m.isGroundTruthEvidence,
+    );
+    const riskySignIn = result.signInEvents.find(
+      (s) => s.isGroundTruthEvidence,
+    );
 
     expect(phishingEmail).toBeDefined();
     expect(riskySignIn).toBeDefined();
@@ -82,12 +102,23 @@ describe('generateTelemetry (§7.2)', () => {
   it('marks ground-truth events with the correct MITRE technique and leaves noise events unmarked', () => {
     const def = buildDefinition();
     const techniqueIdBySlugLocal = techniqueIdBySlug;
-    const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlugLocal);
+    const result = generateTelemetry(
+      randomUUID(),
+      7n,
+      def,
+      techniqueIdBySlugLocal,
+    );
 
-    const phishingEmail = result.emailMessages.find((m) => m.isGroundTruthEvidence)!;
-    expect(phishingEmail.mitreTechniqueId).toEqual(techniqueIdBySlugLocal.get('T1566.002'));
+    const phishingEmail = result.emailMessages.find(
+      (m) => m.isGroundTruthEvidence,
+    )!;
+    expect(phishingEmail.mitreTechniqueId).toEqual(
+      techniqueIdBySlugLocal.get('T1566.002'),
+    );
 
-    const noiseEmails = result.emailMessages.filter((m) => !m.isGroundTruthEvidence);
+    const noiseEmails = result.emailMessages.filter(
+      (m) => !m.isGroundTruthEvidence,
+    );
     expect(noiseEmails).toHaveLength(2);
     for (const email of noiseEmails) {
       expect(email.mitreTechniqueId ?? null).toBeNull();
@@ -98,10 +129,16 @@ describe('generateTelemetry (§7.2)', () => {
     const def = buildDefinition();
     const result = generateTelemetry(randomUUID(), 99n, def, techniqueIdBySlug);
 
-    const noiseSignIns = result.signInEvents.filter((s) => !s.isGroundTruthEvidence && (s.raw as { pattern?: string })?.pattern === 'legitimate_travel_signin');
+    const noiseSignIns = result.signInEvents.filter(
+      (s) =>
+        !s.isGroundTruthEvidence &&
+        (s.raw as { pattern?: string })?.pattern === 'legitimate_travel_signin',
+    );
     expect(noiseSignIns).toHaveLength(1);
 
-    const noiseEmails = result.emailMessages.filter((m) => !m.isGroundTruthEvidence);
+    const noiseEmails = result.emailMessages.filter(
+      (m) => !m.isGroundTruthEvidence,
+    );
     expect(noiseEmails).toHaveLength(2);
   });
 });
@@ -111,7 +148,14 @@ function buildPasswordSprayDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Sales',
+            job_title: 'Account Executive',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 15, devices: 0 },
@@ -151,7 +195,9 @@ describe('generateTelemetry — password spray scenario (§7.2, §8.2)', () => {
     const def = buildPasswordSprayDefinition();
     const result = generateTelemetry(randomUUID(), 55n, def, techniqueIdBySlug);
 
-    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruthSignIns = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
     const failed = groundTruthSignIns.filter((s) => s.result === 'failure');
     const succeeded = groundTruthSignIns.filter((s) => s.result === 'success');
 
@@ -164,20 +210,26 @@ describe('generateTelemetry — password spray scenario (§7.2, §8.2)', () => {
   it('uses the same attacker IP for every failed attempt and the eventual success (correlatable by an investigator)', () => {
     const def = buildPasswordSprayDefinition();
     const result = generateTelemetry(randomUUID(), 55n, def, techniqueIdBySlug);
-    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruthSignIns = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
 
     const distinctIps = new Set(groundTruthSignIns.map((s) => s.sourceIp));
     expect(distinctIps.size).toBe(1);
   });
 
-  it('feeds the Alert Engine\'s password-spray rule correctly end-to-end', async () => {
+  it("feeds the Alert Engine's password-spray rule correctly end-to-end", async () => {
     const { evaluatePasswordSprayRule } = await import('../alert-engine/rules');
     const def = buildPasswordSprayDefinition();
     const result = generateTelemetry(randomUUID(), 55n, def, techniqueIdBySlug);
 
     const candidates = evaluatePasswordSprayRule(
-      result.signInEvents as unknown as Parameters<typeof evaluatePasswordSprayRule>[0],
-      result.identities as unknown as Parameters<typeof evaluatePasswordSprayRule>[1],
+      result.signInEvents as unknown as Parameters<
+        typeof evaluatePasswordSprayRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluatePasswordSprayRule
+      >[1],
     );
 
     expect(candidates).toHaveLength(1);
@@ -190,7 +242,14 @@ function buildBecDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Controller', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Finance',
+            job_title: 'Controller',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 10, devices: 0 },
@@ -216,7 +275,11 @@ function buildBecDefinition(): GroundTruthDefinition {
         is_required_for_full_credit: true,
       },
     ],
-    noise_profile: { false_positive_bait: [{ event_template_id: 'benign_it_admin_email_v1', count: 1 }] },
+    noise_profile: {
+      false_positive_bait: [
+        { event_template_id: 'benign_it_admin_email_v1', count: 1 },
+      ],
+    },
   };
 }
 
@@ -227,7 +290,9 @@ describe('generateTelemetry — BEC wire transfer scenario (§7.2)', () => {
     const def = buildBecDefinition();
     const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
 
-    const groundTruthEmails = result.emailMessages.filter((m) => m.isGroundTruthEvidence);
+    const groundTruthEmails = result.emailMessages.filter(
+      (m) => m.isGroundTruthEvidence,
+    );
     expect(groundTruthEmails).toHaveLength(2);
     expect(new Set(groundTruthEmails.map((m) => m.correlationId)).size).toBe(1);
     expect(result.emailUrls).toHaveLength(0);
@@ -239,10 +304,16 @@ describe('generateTelemetry — BEC wire transfer scenario (§7.2)', () => {
     const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
     const t1656Id = techniqueIdBySlug.get('T1656');
 
-    const groundTruthEmails = result.emailMessages.filter((m) => m.isGroundTruthEvidence);
-    expect(groundTruthEmails.every((m) => m.mitreTechniqueId === t1656Id)).toBe(true);
+    const groundTruthEmails = result.emailMessages.filter(
+      (m) => m.isGroundTruthEvidence,
+    );
+    expect(groundTruthEmails.every((m) => m.mitreTechniqueId === t1656Id)).toBe(
+      true,
+    );
 
-    const noiseEmails = result.emailMessages.filter((m) => !m.isGroundTruthEvidence);
+    const noiseEmails = result.emailMessages.filter(
+      (m) => !m.isGroundTruthEvidence,
+    );
     expect(noiseEmails).toHaveLength(1);
     expect(noiseEmails[0].mitreTechniqueId ?? null).toBeNull();
   });
@@ -253,7 +324,14 @@ function buildMfaFatigueDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Engineering',
+            job_title: 'Software Engineer',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 8, devices: 0 },
@@ -292,7 +370,9 @@ describe('generateTelemetry — MFA fatigue scenario (§7.2, §8.2)', () => {
   it('produces 6-9 mfa_denied attempts for the victim from one IP, then one success from the same IP', () => {
     const def = buildMfaFatigueDefinition();
     const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlug);
-    const groundTruth = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruth = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
 
     const denials = groundTruth.filter((s) => s.result === 'mfa_denied');
     const successes = groundTruth.filter((s) => s.result === 'success');
@@ -302,14 +382,18 @@ describe('generateTelemetry — MFA fatigue scenario (§7.2, §8.2)', () => {
     expect(new Set(groundTruth.map((s) => s.sourceIp)).size).toBe(1);
   });
 
-  it('feeds the Alert Engine\'s MFA-fatigue rule correctly end-to-end', async () => {
+  it("feeds the Alert Engine's MFA-fatigue rule correctly end-to-end", async () => {
     const { evaluateMfaFatigueRule } = await import('../alert-engine/rules');
     const def = buildMfaFatigueDefinition();
     const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlug);
 
     const candidates = evaluateMfaFatigueRule(
-      result.signInEvents as unknown as Parameters<typeof evaluateMfaFatigueRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateMfaFatigueRule>[1],
+      result.signInEvents as unknown as Parameters<
+        typeof evaluateMfaFatigueRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateMfaFatigueRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
   });
@@ -320,7 +404,14 @@ function buildImpossibleTravelDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Legal', job_title: 'Compliance Analyst', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Legal',
+            job_title: 'Compliance Analyst',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 8, devices: 0 },
@@ -346,7 +437,11 @@ function buildImpossibleTravelDefinition(): GroundTruthDefinition {
         is_required_for_full_credit: true,
       },
     ],
-    noise_profile: { false_positive_bait: [{ event_template_id: 'legitimate_travel_signin_v1', count: 1 }] },
+    noise_profile: {
+      false_positive_bait: [
+        { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+      ],
+    },
   };
 }
 
@@ -356,22 +451,33 @@ describe('generateTelemetry — impossible travel scenario (§7.2, §8.2, §9.6)
   it('produces two ground-truth sign-ins from different cities close together in time', () => {
     const def = buildImpossibleTravelDefinition();
     const result = generateTelemetry(randomUUID(), 13n, def, techniqueIdBySlug);
-    const groundTruth = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruth = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
 
     expect(groundTruth).toHaveLength(2);
     expect(groundTruth[0].sourceCity).not.toBe(groundTruth[1].sourceCity);
-    const minutesApart = Math.abs(new Date(groundTruth[1].occurredAt).getTime() - new Date(groundTruth[0].occurredAt).getTime()) / 60000;
+    const minutesApart =
+      Math.abs(
+        new Date(groundTruth[1].occurredAt).getTime() -
+          new Date(groundTruth[0].occurredAt).getTime(),
+      ) / 60000;
     expect(minutesApart).toBeLessThanOrEqual(60);
   });
 
-  it('feeds the Alert Engine\'s impossible-travel rule correctly end-to-end', async () => {
-    const { evaluateImpossibleTravelRule } = await import('../alert-engine/rules');
+  it("feeds the Alert Engine's impossible-travel rule correctly end-to-end", async () => {
+    const { evaluateImpossibleTravelRule } =
+      await import('../alert-engine/rules');
     const def = buildImpossibleTravelDefinition();
     const result = generateTelemetry(randomUUID(), 13n, def, techniqueIdBySlug);
 
     const candidates = evaluateImpossibleTravelRule(
-      result.signInEvents as unknown as Parameters<typeof evaluateImpossibleTravelRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateImpossibleTravelRule>[1],
+      result.signInEvents as unknown as Parameters<
+        typeof evaluateImpossibleTravelRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateImpossibleTravelRule
+      >[1],
     );
     expect(candidates.length).toBeGreaterThanOrEqual(1);
   });
@@ -382,7 +488,14 @@ function buildInsiderExfilDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Sales',
+            job_title: 'Account Executive',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 8, devices: 0 },
@@ -409,32 +522,45 @@ describe('generateTelemetry — insider data exfiltration scenario (§7.2, §8.2
   it('produces one outbound ground-truth email with an attachment, authenticated cleanly (no spoofing)', () => {
     const def = buildInsiderExfilDefinition();
     const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
-    const groundTruthEmails = result.emailMessages.filter((m) => m.isGroundTruthEvidence);
+    const groundTruthEmails = result.emailMessages.filter(
+      (m) => m.isGroundTruthEvidence,
+    );
 
     expect(groundTruthEmails).toHaveLength(1);
     expect(groundTruthEmails[0].direction).toBe('outbound');
     expect(groundTruthEmails[0].spfResult).toBe('pass');
     expect(groundTruthEmails[0].dkimResult).toBe('pass');
     expect(groundTruthEmails[0].dmarcResult).toBe('pass');
-    expect(result.emailAttachments.filter((a) => a.emailMessageId === groundTruthEmails[0].id)).toHaveLength(1);
+    expect(
+      result.emailAttachments.filter(
+        (a) => a.emailMessageId === groundTruthEmails[0].id,
+      ),
+    ).toHaveLength(1);
   });
 
   it('sends to a personal webmail address derived from the victim, not an organizational one', () => {
     const def = buildInsiderExfilDefinition();
     const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
-    const groundTruthEmail = result.emailMessages.find((m) => m.isGroundTruthEvidence)!;
+    const groundTruthEmail = result.emailMessages.find(
+      (m) => m.isGroundTruthEvidence,
+    )!;
 
     expect(groundTruthEmail.recipientAddresses[0]).toContain('@gmail.com');
   });
 
-  it('feeds the Alert Engine\'s outbound-personal-email rule correctly end-to-end', async () => {
-    const { evaluateOutboundPersonalEmailRule } = await import('../alert-engine/rules');
+  it("feeds the Alert Engine's outbound-personal-email rule correctly end-to-end", async () => {
+    const { evaluateOutboundPersonalEmailRule } =
+      await import('../alert-engine/rules');
     const def = buildInsiderExfilDefinition();
     const result = generateTelemetry(randomUUID(), 3n, def, techniqueIdBySlug);
 
     const candidates = evaluateOutboundPersonalEmailRule(
-      result.emailMessages as unknown as Parameters<typeof evaluateOutboundPersonalEmailRule>[0],
-      result.emailAttachments as unknown as Parameters<typeof evaluateOutboundPersonalEmailRule>[1],
+      result.emailMessages as unknown as Parameters<
+        typeof evaluateOutboundPersonalEmailRule
+      >[0],
+      result.emailAttachments as unknown as Parameters<
+        typeof evaluateOutboundPersonalEmailRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
   });
@@ -445,11 +571,24 @@ function buildRansomwareDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'compromised_admin', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+        {
+          ref: 'compromised_admin',
+          attributes: {
+            department: 'IT',
+            job_title: 'Systems Administrator',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [
-        { ref: 'patient_zero_device', attributes: { hostname: 'IT-WKS-04', os_platform: 'windows' } },
-        { ref: 'file_server_device', attributes: { hostname: 'FS-PROD-01', os_platform: 'windows' } },
+        {
+          ref: 'patient_zero_device',
+          attributes: { hostname: 'IT-WKS-04', os_platform: 'windows' },
+        },
+        {
+          ref: 'file_server_device',
+          attributes: { hostname: 'FS-PROD-01', os_platform: 'windows' },
+        },
       ],
       decoy_population_size: { identities: 3, devices: 3 },
       world_time_window_hours: 24,
@@ -502,16 +641,28 @@ describe('generateTelemetry — ransomware lateral-movement scenario (§7.2, §8
     const patientZero = result.devices.find((d) => d.hostname === 'IT-WKS-04')!;
     const fileServer = result.devices.find((d) => d.hostname === 'FS-PROD-01')!;
 
-    expect(result.networkEvents.filter((n) => n.deviceId === patientZero.id)).toHaveLength(1);
-    expect(result.processEvents.filter((p) => p.deviceId === fileServer.id)).toHaveLength(3);
-    expect(result.fileEvents.filter((f) => f.deviceId === fileServer.id && f.action === 'encrypted').length).toBeGreaterThanOrEqual(5);
+    expect(
+      result.networkEvents.filter((n) => n.deviceId === patientZero.id),
+    ).toHaveLength(1);
+    expect(
+      result.processEvents.filter((p) => p.deviceId === fileServer.id),
+    ).toHaveLength(3);
+    expect(
+      result.fileEvents.filter(
+        (f) => f.deviceId === fileServer.id && f.action === 'encrypted',
+      ).length,
+    ).toBeGreaterThanOrEqual(5);
   });
 
   it('shares one correlationId across the network hop, the remote execution, and the encryption burst', () => {
     const def = buildRansomwareDefinition();
     const result = generateTelemetry(randomUUID(), 11n, def, techniqueIdBySlug);
-    const networkEvent = result.networkEvents.find((n) => n.isGroundTruthEvidence)!;
-    const processEvent = result.processEvents.find((p) => p.isGroundTruthEvidence)!;
+    const networkEvent = result.networkEvents.find(
+      (n) => n.isGroundTruthEvidence,
+    )!;
+    const processEvent = result.processEvents.find(
+      (p) => p.isGroundTruthEvidence,
+    )!;
     const fileEvent = result.fileEvents.find((f) => f.isGroundTruthEvidence)!;
 
     expect(networkEvent.correlationId).toBeTruthy();
@@ -520,17 +671,26 @@ describe('generateTelemetry — ransomware lateral-movement scenario (§7.2, §8
   });
 
   it("feeds the Alert Engine's lateral-movement and mass-encryption rules correctly end-to-end", async () => {
-    const { evaluateLateralMovementRule, evaluateMassEncryptionRule } = await import('../alert-engine/rules');
+    const { evaluateLateralMovementRule, evaluateMassEncryptionRule } =
+      await import('../alert-engine/rules');
     const def = buildRansomwareDefinition();
     const result = generateTelemetry(randomUUID(), 11n, def, techniqueIdBySlug);
 
     const lateralMovementCandidates = evaluateLateralMovementRule(
-      result.processEvents as unknown as Parameters<typeof evaluateLateralMovementRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateLateralMovementRule>[1],
+      result.processEvents as unknown as Parameters<
+        typeof evaluateLateralMovementRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateLateralMovementRule
+      >[1],
     );
     const massEncryptionCandidates = evaluateMassEncryptionRule(
-      result.fileEvents as unknown as Parameters<typeof evaluateMassEncryptionRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateMassEncryptionRule>[1],
+      result.fileEvents as unknown as Parameters<
+        typeof evaluateMassEncryptionRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateMassEncryptionRule
+      >[1],
     );
 
     expect(lateralMovementCandidates).toHaveLength(1);
@@ -543,7 +703,14 @@ function buildLegacyAuthDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Financial Analyst', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Finance',
+            job_title: 'Financial Analyst',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 4, devices: 0 },
@@ -569,7 +736,11 @@ function buildLegacyAuthDefinition(): GroundTruthDefinition {
         is_required_for_full_credit: true,
       },
     ],
-    noise_profile: { false_positive_bait: [{ event_template_id: 'legacy_auth_benign_service_v1', count: 3 }] },
+    noise_profile: {
+      false_positive_bait: [
+        { event_template_id: 'legacy_auth_benign_service_v1', count: 3 },
+      ],
+    },
   };
 }
 
@@ -584,23 +755,39 @@ describe('generateTelemetry — legacy auth MFA bypass scenario (§7.2, §8.2, �
     const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
     const victim = result.identities.find((i) => i.isGroundTruthActor)!;
 
-    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruthSignIns = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
     expect(groundTruthSignIns.length).toBeGreaterThanOrEqual(5);
-    expect(groundTruthSignIns.every((s) => s.identityId === victim.id && s.isLegacyAuth && s.result === 'success')).toBe(true);
+    expect(
+      groundTruthSignIns.every(
+        (s) =>
+          s.identityId === victim.id &&
+          s.isLegacyAuth &&
+          s.result === 'success',
+      ),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's legacy-auth-bypass rule correctly end-to-end", async () => {
-    const { evaluateLegacyAuthBypassRule } = await import('../alert-engine/rules');
+    const { evaluateLegacyAuthBypassRule } =
+      await import('../alert-engine/rules');
     const def = buildLegacyAuthDefinition();
     const result = generateTelemetry(randomUUID(), 21n, def, techniqueIdBySlug);
 
     const candidates = evaluateLegacyAuthBypassRule(
-      result.signInEvents as unknown as Parameters<typeof evaluateLegacyAuthBypassRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateLegacyAuthBypassRule>[1],
+      result.signInEvents as unknown as Parameters<
+        typeof evaluateLegacyAuthBypassRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateLegacyAuthBypassRule
+      >[1],
     );
 
     const victim = result.identities.find((i) => i.isGroundTruthActor)!;
-    const victimCandidate = candidates.find((c) => c.primaryEntityId === victim.id);
+    const victimCandidate = candidates.find(
+      (c) => c.primaryEntityId === victim.id,
+    );
     expect(victimCandidate).toBeDefined();
     expect(victimCandidate!.evidenceRefs.length).toBeGreaterThanOrEqual(5);
   });
@@ -611,7 +798,14 @@ function buildCloudTakeoverDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Cloud Platform Engineer',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 6, devices: 0 },
@@ -651,10 +845,16 @@ describe('generateTelemetry — cloud account takeover scenario (§7.2, §8.2)',
     const def = buildCloudTakeoverDefinition();
     const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
     const victim = result.identities.find((i) => i.isGroundTruthActor)!;
-    const groundTruth = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+    const groundTruth = result.cloudEvents.filter(
+      (c) => c.isGroundTruthEvidence,
+    );
 
-    const keyCreation = groundTruth.filter((c) => c.actionName === 'CreateAccessKey');
-    const enumeration = groundTruth.filter((c) => c.actionName !== 'CreateAccessKey');
+    const keyCreation = groundTruth.filter(
+      (c) => c.actionName === 'CreateAccessKey',
+    );
+    const enumeration = groundTruth.filter(
+      (c) => c.actionName !== 'CreateAccessKey',
+    );
     expect(keyCreation).toHaveLength(1);
     expect(enumeration.length).toBeGreaterThanOrEqual(6);
     expect(groundTruth.every((c) => c.identityId === victim.id)).toBe(true);
@@ -663,20 +863,27 @@ describe('generateTelemetry — cloud account takeover scenario (§7.2, §8.2)',
   it('shares one correlationId and one attacker IP across the key creation and the enumeration burst', () => {
     const def = buildCloudTakeoverDefinition();
     const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
-    const groundTruth = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
+    const groundTruth = result.cloudEvents.filter(
+      (c) => c.isGroundTruthEvidence,
+    );
 
     expect(new Set(groundTruth.map((c) => c.correlationId)).size).toBe(1);
     expect(new Set(groundTruth.map((c) => c.sourceIp)).size).toBe(1);
   });
 
   it("feeds the Alert Engine's suspicious-cloud-action rule correctly end-to-end", async () => {
-    const { evaluateSuspiciousCloudActionRule } = await import('../alert-engine/rules');
+    const { evaluateSuspiciousCloudActionRule } =
+      await import('../alert-engine/rules');
     const def = buildCloudTakeoverDefinition();
     const result = generateTelemetry(randomUUID(), 17n, def, techniqueIdBySlug);
 
     const candidates = evaluateSuspiciousCloudActionRule(
-      result.cloudEvents as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[1],
+      result.cloudEvents as unknown as Parameters<
+        typeof evaluateSuspiciousCloudActionRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateSuspiciousCloudActionRule
+      >[1],
     );
 
     // only CreateAccessKey is a "sensitive" action — bucket enumeration (ListBucket/GetObject) is a
@@ -691,9 +898,21 @@ function buildWebShellDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+        {
+          ref: 'web_server_service_account',
+          attributes: {
+            department: 'IT',
+            job_title: 'Service Account',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-01', os_platform: 'linux' } }],
+      narrative_devices: [
+        {
+          ref: 'web_server_device',
+          attributes: { hostname: 'WEB-PROD-01', os_platform: 'linux' },
+        },
+      ],
       decoy_population_size: { identities: 4, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -720,7 +939,13 @@ function buildWebShellDefinition(): GroundTruthDefinition {
       },
     ],
     noise_profile: {
-      false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 4, device_ref: 'web_server_device' }],
+      false_positive_bait: [
+        {
+          event_template_id: 'web_legitimate_monitoring_v1',
+          count: 4,
+          device_ref: 'web_server_device',
+        },
+      ],
     },
   };
 }
@@ -732,11 +957,15 @@ describe('generateTelemetry — web shell scenario (§7.2, §8.2, §10.3)', () =
     const def = buildWebShellDefinition();
     const result = generateTelemetry(randomUUID(), 31n, def, techniqueIdBySlug);
     const webServer = result.devices.find((d) => d.hostname === 'WEB-PROD-01')!;
-    const groundTruth = result.httpRequests.filter((h) => h.isGroundTruthEvidence);
+    const groundTruth = result.httpRequests.filter(
+      (h) => h.isGroundTruthEvidence,
+    );
 
     expect(groundTruth.every((h) => h.deviceId === webServer.id)).toBe(true);
     expect(groundTruth.filter((h) => h.method === 'GET')).toHaveLength(1);
-    expect(groundTruth.filter((h) => h.method === 'POST').length).toBeGreaterThanOrEqual(5);
+    expect(
+      groundTruth.filter((h) => h.method === 'POST').length,
+    ).toBeGreaterThanOrEqual(5);
     expect(new Set(groundTruth.map((h) => h.url)).size).toBe(1);
   });
 
@@ -747,22 +976,35 @@ describe('generateTelemetry — web shell scenario (§7.2, §8.2, §10.3)', () =
 
     const noise = result.httpRequests.filter((h) => !h.isGroundTruthEvidence);
     expect(noise).toHaveLength(4);
-    expect(noise.every((h) => h.deviceId === webServer.id && h.url === '/api/health-check.php')).toBe(true);
+    expect(
+      noise.every(
+        (h) => h.deviceId === webServer.id && h.url === '/api/health-check.php',
+      ),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's web-shell-access rule, firing on both the attack and the ambiguous monitoring bait (§8.6)", async () => {
-    const { evaluateWebShellAccessRule } = await import('../alert-engine/rules');
+    const { evaluateWebShellAccessRule } =
+      await import('../alert-engine/rules');
     const def = buildWebShellDefinition();
     const result = generateTelemetry(randomUUID(), 31n, def, techniqueIdBySlug);
 
     const candidates = evaluateWebShellAccessRule(
-      result.httpRequests as unknown as Parameters<typeof evaluateWebShellAccessRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateWebShellAccessRule>[1],
+      result.httpRequests as unknown as Parameters<
+        typeof evaluateWebShellAccessRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateWebShellAccessRule
+      >[1],
     );
 
     expect(candidates).toHaveLength(2);
-    const webshellCandidate = candidates.find((c) => c.title.includes('x7f2a9c.php'));
-    const monitoringCandidate = candidates.find((c) => c.title.includes('health-check.php'));
+    const webshellCandidate = candidates.find((c) =>
+      c.title.includes('x7f2a9c.php'),
+    );
+    const monitoringCandidate = candidates.find((c) =>
+      c.title.includes('health-check.php'),
+    );
     expect(webshellCandidate).toBeDefined();
     expect(monitoringCandidate).toBeDefined();
     expect(webshellCandidate!.evidenceRefs.length).toBeGreaterThanOrEqual(6);
@@ -774,9 +1016,21 @@ function buildFilelessMalwareDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Systems Administrator',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 6, devices: 6 },
       world_time_window_hours: 24,
     },
@@ -813,7 +1067,13 @@ function buildFilelessMalwareDefinition(): GroundTruthDefinition {
       },
     ],
     noise_profile: {
-      false_positive_bait: [{ event_template_id: 'legitimate_startup_shortcut_v1', count: 2, device_ref: 'victim_device_1' }],
+      false_positive_bait: [
+        {
+          event_template_id: 'legitimate_startup_shortcut_v1',
+          count: 2,
+          device_ref: 'victim_device_1',
+        },
+      ],
     },
   };
 }
@@ -828,22 +1088,36 @@ describe('generateTelemetry — fileless malware scenario (§7.2, §8.2)', () =>
   it('produces one PowerShell process, one persistence file event, and a C2 beacon burst, all on the victim device', () => {
     const def = buildFilelessMalwareDefinition();
     const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'IT-WKS-11',
+    )!;
 
-    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
-    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
-    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const groundTruthProcesses = result.processEvents.filter(
+      (p) => p.isGroundTruthEvidence,
+    );
+    const groundTruthFiles = result.fileEvents.filter(
+      (f) => f.isGroundTruthEvidence,
+    );
+    const groundTruthNetwork = result.networkEvents.filter(
+      (n) => n.isGroundTruthEvidence,
+    );
 
     expect(groundTruthProcesses).toHaveLength(1);
     expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
-    expect(groundTruthProcesses[0].imagePath.toLowerCase()).toContain('powershell.exe');
+    expect(groundTruthProcesses[0].imagePath.toLowerCase()).toContain(
+      'powershell.exe',
+    );
 
     expect(groundTruthFiles).toHaveLength(1);
     expect(groundTruthFiles[0].deviceId).toBe(victimDevice.id);
-    expect(groundTruthFiles[0].filePath).toContain('\\Start Menu\\Programs\\Startup\\');
+    expect(groundTruthFiles[0].filePath).toContain(
+      '\\Start Menu\\Programs\\Startup\\',
+    );
 
     expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
-    expect(groundTruthNetwork.every((n) => n.deviceId === victimDevice.id)).toBe(true);
+    expect(
+      groundTruthNetwork.every((n) => n.deviceId === victimDevice.id),
+    ).toBe(true);
   });
 
   it('threads the same processGuid through the PowerShell process and the C2 beacon (correlatable in the Device Portal)', () => {
@@ -852,32 +1126,51 @@ describe('generateTelemetry — fileless malware scenario (§7.2, §8.2)', () =>
     const process = result.processEvents.find((p) => p.isGroundTruthEvidence)!;
     const beacons = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
 
-    expect(beacons.every((b) => b.processGuid === process.processGuid)).toBe(true);
+    expect(beacons.every((b) => b.processGuid === process.processGuid)).toBe(
+      true,
+    );
   });
 
   it('generates the configured false-positive Startup-shortcut bait on the same device, unmarked as ground truth', () => {
     const def = buildFilelessMalwareDefinition();
     const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'IT-WKS-11',
+    )!;
 
     const noise = result.fileEvents.filter((f) => !f.isGroundTruthEvidence);
     expect(noise).toHaveLength(2);
-    expect(noise.every((f) => f.deviceId === victimDevice.id && f.filePath.includes('\\Start Menu\\Programs\\Startup\\'))).toBe(true);
+    expect(
+      noise.every(
+        (f) =>
+          f.deviceId === victimDevice.id &&
+          f.filePath.includes('\\Start Menu\\Programs\\Startup\\'),
+      ),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's persistence-artifact rule, firing on both the real backdoor and the benign bait (§8.6)", async () => {
-    const { evaluatePersistenceArtifactRule } = await import('../alert-engine/rules');
+    const { evaluatePersistenceArtifactRule } =
+      await import('../alert-engine/rules');
     const def = buildFilelessMalwareDefinition();
     const result = generateTelemetry(randomUUID(), 41n, def, techniqueIdBySlug);
 
     const candidates = evaluatePersistenceArtifactRule(
-      result.fileEvents as unknown as Parameters<typeof evaluatePersistenceArtifactRule>[0],
-      result.devices as unknown as Parameters<typeof evaluatePersistenceArtifactRule>[1],
+      result.fileEvents as unknown as Parameters<
+        typeof evaluatePersistenceArtifactRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluatePersistenceArtifactRule
+      >[1],
     );
 
     expect(candidates).toHaveLength(3);
-    const realCandidate = candidates.find((c) => c.title.includes('WinSvcHelper.lnk'));
-    const baitCandidates = candidates.filter((c) => c.title.includes('OneDrive.lnk'));
+    const realCandidate = candidates.find((c) =>
+      c.title.includes('WinSvcHelper.lnk'),
+    );
+    const baitCandidates = candidates.filter((c) =>
+      c.title.includes('OneDrive.lnk'),
+    );
     expect(realCandidate).toBeDefined();
     expect(baitCandidates).toHaveLength(2);
   });
@@ -888,9 +1181,21 @@ function buildCredentialDumpingDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Systems Administrator',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-07', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'IT-WKS-07', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -929,32 +1234,51 @@ describe('generateTelemetry — credential dumping via LSASS scenario (§7.2, §
   it('produces a rundll32/comsvcs.dll process, a dump file, and a beacon burst, all on the victim device', () => {
     const def = buildCredentialDumpingDefinition();
     const result = generateTelemetry(randomUUID(), 71n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-07')!;
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'IT-WKS-07',
+    )!;
 
-    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
-    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
-    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const groundTruthProcesses = result.processEvents.filter(
+      (p) => p.isGroundTruthEvidence,
+    );
+    const groundTruthFiles = result.fileEvents.filter(
+      (f) => f.isGroundTruthEvidence,
+    );
+    const groundTruthNetwork = result.networkEvents.filter(
+      (n) => n.isGroundTruthEvidence,
+    );
 
     expect(groundTruthProcesses).toHaveLength(1);
     expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
-    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('comsvcs.dll');
-    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('minidump');
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain(
+      'comsvcs.dll',
+    );
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain(
+      'minidump',
+    );
 
     expect(groundTruthFiles).toHaveLength(1);
     expect(groundTruthFiles[0].deviceId).toBe(victimDevice.id);
-    expect(groundTruthFiles[0].filePath).toBe('C:\\Windows\\Temp\\lsass_dbg.dmp');
+    expect(groundTruthFiles[0].filePath).toBe(
+      'C:\\Windows\\Temp\\lsass_dbg.dmp',
+    );
 
     expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
   });
 
   it("feeds the Alert Engine's credential-dumping rule", async () => {
-    const { evaluateCredentialDumpingRule } = await import('../alert-engine/rules');
+    const { evaluateCredentialDumpingRule } =
+      await import('../alert-engine/rules');
     const def = buildCredentialDumpingDefinition();
     const result = generateTelemetry(randomUUID(), 71n, def, techniqueIdBySlug);
 
     const candidates = evaluateCredentialDumpingRule(
-      result.processEvents as unknown as Parameters<typeof evaluateCredentialDumpingRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateCredentialDumpingRule>[1],
+      result.processEvents as unknown as Parameters<
+        typeof evaluateCredentialDumpingRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateCredentialDumpingRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].primaryEntityType).toBe('device');
@@ -966,9 +1290,21 @@ function buildInsiderUsbCopyDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Sales',
+            job_title: 'Account Executive',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'SLS-WKS-09', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'SLS-WKS-09', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1007,26 +1343,45 @@ describe('generateTelemetry — insider bulk USB copy scenario (§7.2, §8.2)', 
   it('produces a burst of removable-media file creations and matching source-file deletions', () => {
     const def = buildInsiderUsbCopyDefinition();
     const result = generateTelemetry(randomUUID(), 91n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'SLS-WKS-09')!;
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'SLS-WKS-09',
+    )!;
 
-    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const groundTruthFiles = result.fileEvents.filter(
+      (f) => f.isGroundTruthEvidence,
+    );
     const copies = groundTruthFiles.filter((f) => f.action === 'created');
     const deletions = groundTruthFiles.filter((f) => f.action === 'deleted');
 
     expect(copies.length).toBeGreaterThanOrEqual(5);
-    expect(copies.every((f) => f.deviceId === victimDevice.id && f.filePath.startsWith('E:\\Backup\\'))).toBe(true);
+    expect(
+      copies.every(
+        (f) =>
+          f.deviceId === victimDevice.id &&
+          f.filePath.startsWith('E:\\Backup\\'),
+      ),
+    ).toBe(true);
     expect(deletions.length).toBeGreaterThanOrEqual(5);
-    expect(deletions.every((f) => f.deviceId === victimDevice.id && !f.filePath.startsWith('E:\\'))).toBe(true);
+    expect(
+      deletions.every(
+        (f) => f.deviceId === victimDevice.id && !f.filePath.startsWith('E:\\'),
+      ),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's removable-media-copy rule but not the source deletions (portal-discoverable only)", async () => {
-    const { evaluateRemovableMediaCopyRule } = await import('../alert-engine/rules');
+    const { evaluateRemovableMediaCopyRule } =
+      await import('../alert-engine/rules');
     const def = buildInsiderUsbCopyDefinition();
     const result = generateTelemetry(randomUUID(), 91n, def, techniqueIdBySlug);
 
     const candidates = evaluateRemovableMediaCopyRule(
-      result.fileEvents as unknown as Parameters<typeof evaluateRemovableMediaCopyRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateRemovableMediaCopyRule>[1],
+      result.fileEvents as unknown as Parameters<
+        typeof evaluateRemovableMediaCopyRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateRemovableMediaCopyRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(5);
@@ -1038,7 +1393,14 @@ function buildCloudBucketExposureDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Cloud Platform Engineer', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Cloud Platform Engineer',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 5, devices: 4 },
@@ -1073,12 +1435,25 @@ describe('generateTelemetry — cloud bucket public exposure scenario (§7.2, §
 
   it('produces a PutBucketPolicy event followed by a burst of object-access events', () => {
     const def = buildCloudBucketExposureDefinition();
-    const result = generateTelemetry(randomUUID(), 111n, def, techniqueIdBySlug);
-    const victim = result.identities.find((i) => i.jobTitle === 'Cloud Platform Engineer')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      111n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victim = result.identities.find(
+      (i) => i.jobTitle === 'Cloud Platform Engineer',
+    )!;
 
-    const groundTruthCloud = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
-    const policyChanges = groundTruthCloud.filter((c) => c.actionName === 'PutBucketPolicy');
-    const accessBurst = groundTruthCloud.filter((c) => c.actionName === 'GetObject' || c.actionName === 'ListBucket');
+    const groundTruthCloud = result.cloudEvents.filter(
+      (c) => c.isGroundTruthEvidence,
+    );
+    const policyChanges = groundTruthCloud.filter(
+      (c) => c.actionName === 'PutBucketPolicy',
+    );
+    const accessBurst = groundTruthCloud.filter(
+      (c) => c.actionName === 'GetObject' || c.actionName === 'ListBucket',
+    );
 
     expect(policyChanges).toHaveLength(1);
     expect(policyChanges[0].identityId).toBe(victim.id);
@@ -1087,15 +1462,27 @@ describe('generateTelemetry — cloud bucket public exposure scenario (§7.2, §
   });
 
   it("feeds the Alert Engine's suspicious-cloud-action rule via the existing PutBucketPolicy signal", async () => {
-    const { evaluateSuspiciousCloudActionRule } = await import('../alert-engine/rules');
+    const { evaluateSuspiciousCloudActionRule } =
+      await import('../alert-engine/rules');
     const def = buildCloudBucketExposureDefinition();
-    const result = generateTelemetry(randomUUID(), 111n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      111n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateSuspiciousCloudActionRule(
-      result.cloudEvents as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateSuspiciousCloudActionRule>[1],
+      result.cloudEvents as unknown as Parameters<
+        typeof evaluateSuspiciousCloudActionRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateSuspiciousCloudActionRule
+      >[1],
     );
-    expect(candidates.some((c) => c.title.includes('PutBucketPolicy'))).toBe(true);
+    expect(candidates.some((c) => c.title.includes('PutBucketPolicy'))).toBe(
+      true,
+    );
   });
 });
 
@@ -1104,9 +1491,21 @@ function buildWebSqliDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'web_server_service_account', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+        {
+          ref: 'web_server_service_account',
+          attributes: {
+            department: 'IT',
+            job_title: 'Service Account',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'web_server_device', attributes: { hostname: 'WEB-PROD-02', os_platform: 'linux' } }],
+      narrative_devices: [
+        {
+          ref: 'web_server_device',
+          attributes: { hostname: 'WEB-PROD-02', os_platform: 'linux' },
+        },
+      ],
       decoy_population_size: { identities: 4, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1132,7 +1531,15 @@ function buildWebSqliDefinition(): GroundTruthDefinition {
         is_required_for_full_credit: true,
       },
     ],
-    noise_profile: { false_positive_bait: [{ event_template_id: 'web_legitimate_monitoring_v1', count: 2, device_ref: 'web_server_device' }] },
+    noise_profile: {
+      false_positive_bait: [
+        {
+          event_template_id: 'web_legitimate_monitoring_v1',
+          count: 2,
+          device_ref: 'web_server_device',
+        },
+      ],
+    },
   };
 }
 
@@ -1141,23 +1548,43 @@ describe('generateTelemetry — web SQL injection scenario (§7.2, §8.2)', () =
 
   it('produces a probe burst and a UNION SELECT exfil request, all on the web server device', () => {
     const def = buildWebSqliDefinition();
-    const result = generateTelemetry(randomUUID(), 131n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      131n,
+      def,
+      techniqueIdBySlug,
+    );
     const webServer = result.devices.find((d) => d.hostname === 'WEB-PROD-02')!;
 
-    const groundTruthHttp = result.httpRequests.filter((h) => h.isGroundTruthEvidence);
+    const groundTruthHttp = result.httpRequests.filter(
+      (h) => h.isGroundTruthEvidence,
+    );
     expect(groundTruthHttp.length).toBeGreaterThanOrEqual(5);
-    expect(groundTruthHttp.every((h) => h.deviceId === webServer.id)).toBe(true);
-    expect(groundTruthHttp.some((h) => h.url.toLowerCase().includes('union'))).toBe(true);
+    expect(groundTruthHttp.every((h) => h.deviceId === webServer.id)).toBe(
+      true,
+    );
+    expect(
+      groundTruthHttp.some((h) => h.url.toLowerCase().includes('union')),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's SQL-injection rule, ignoring unrelated monitoring traffic", async () => {
     const { evaluateSqlInjectionRule } = await import('../alert-engine/rules');
     const def = buildWebSqliDefinition();
-    const result = generateTelemetry(randomUUID(), 131n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      131n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateSqlInjectionRule(
-      result.httpRequests as unknown as Parameters<typeof evaluateSqlInjectionRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateSqlInjectionRule>[1],
+      result.httpRequests as unknown as Parameters<
+        typeof evaluateSqlInjectionRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateSqlInjectionRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(5);
@@ -1169,9 +1596,21 @@ function buildRansomwareDataTheftDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Systems Administrator',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-15', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'IT-WKS-15', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1209,26 +1648,55 @@ describe('generateTelemetry — ransomware double-extortion scenario (§7.2, §8
 
   it('produces a large-volume outbound exfil burst followed by mass file encryption, single device', () => {
     const def = buildRansomwareDataTheftDefinition();
-    const result = generateTelemetry(randomUUID(), 151n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-15')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      151n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'IT-WKS-15',
+    )!;
 
-    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
-    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
+    const groundTruthNetwork = result.networkEvents.filter(
+      (n) => n.isGroundTruthEvidence,
+    );
+    const groundTruthFiles = result.fileEvents.filter(
+      (f) => f.isGroundTruthEvidence,
+    );
 
     expect(groundTruthNetwork.length).toBeGreaterThanOrEqual(4);
-    expect(groundTruthNetwork.every((n) => n.deviceId === victimDevice.id && n.bytesSent >= 50_000_000)).toBe(true);
-    expect(groundTruthFiles.filter((f) => f.action === 'encrypted').length).toBeGreaterThanOrEqual(5);
-    expect(groundTruthFiles.every((f) => f.deviceId === victimDevice.id)).toBe(true);
+    expect(
+      groundTruthNetwork.every(
+        (n) => n.deviceId === victimDevice.id && n.bytesSent >= 50_000_000,
+      ),
+    ).toBe(true);
+    expect(
+      groundTruthFiles.filter((f) => f.action === 'encrypted').length,
+    ).toBeGreaterThanOrEqual(5);
+    expect(groundTruthFiles.every((f) => f.deviceId === victimDevice.id)).toBe(
+      true,
+    );
   });
 
   it("feeds the Alert Engine's existing mass-encryption rule (the exfil step is portal-discoverable only)", async () => {
-    const { evaluateMassEncryptionRule } = await import('../alert-engine/rules');
+    const { evaluateMassEncryptionRule } =
+      await import('../alert-engine/rules');
     const def = buildRansomwareDataTheftDefinition();
-    const result = generateTelemetry(randomUUID(), 151n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      151n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateMassEncryptionRule(
-      result.fileEvents as unknown as Parameters<typeof evaluateMassEncryptionRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateMassEncryptionRule>[1],
+      result.fileEvents as unknown as Parameters<
+        typeof evaluateMassEncryptionRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateMassEncryptionRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
   });
@@ -1239,9 +1707,21 @@ function buildTrojanScheduledTaskDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Software Engineer', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Engineering',
+            job_title: 'Software Engineer',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'ENG-WKS-21', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'ENG-WKS-21', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1290,17 +1770,40 @@ describe('generateTelemetry — trojanized installer + scheduled task scenario (
 
   it('produces installer + dropped payload process events, a scheduled task creation, and a beacon burst', () => {
     const def = buildTrojanScheduledTaskDefinition();
-    const result = generateTelemetry(randomUUID(), 171n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'ENG-WKS-21')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      171n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'ENG-WKS-21',
+    )!;
 
-    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
-    const groundTruthFiles = result.fileEvents.filter((f) => f.isGroundTruthEvidence);
-    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const groundTruthProcesses = result.processEvents.filter(
+      (p) => p.isGroundTruthEvidence,
+    );
+    const groundTruthFiles = result.fileEvents.filter(
+      (f) => f.isGroundTruthEvidence,
+    );
+    const groundTruthNetwork = result.networkEvents.filter(
+      (n) => n.isGroundTruthEvidence,
+    );
 
     expect(groundTruthProcesses).toHaveLength(3); // installer, dropped payload, schtasks.exe
-    expect(groundTruthProcesses.every((p) => p.deviceId === victimDevice.id)).toBe(true);
-    expect(groundTruthProcesses.some((p) => p.imagePath.includes('Adobe_Reader_Update_Setup.exe'))).toBe(true);
-    expect(groundTruthProcesses.some((p) => p.imagePath.toLowerCase().includes('schtasks.exe'))).toBe(true);
+    expect(
+      groundTruthProcesses.every((p) => p.deviceId === victimDevice.id),
+    ).toBe(true);
+    expect(
+      groundTruthProcesses.some((p) =>
+        p.imagePath.includes('Adobe_Reader_Update_Setup.exe'),
+      ),
+    ).toBe(true);
+    expect(
+      groundTruthProcesses.some((p) =>
+        p.imagePath.toLowerCase().includes('schtasks.exe'),
+      ),
+    ).toBe(true);
 
     expect(groundTruthFiles).toHaveLength(1);
     expect(groundTruthFiles[0].filePath).toContain('svc_helper.exe');
@@ -1309,13 +1812,23 @@ describe('generateTelemetry — trojanized installer + scheduled task scenario (
   });
 
   it("feeds the Alert Engine's scheduled-task-persistence rule", async () => {
-    const { evaluateScheduledTaskPersistenceRule } = await import('../alert-engine/rules');
+    const { evaluateScheduledTaskPersistenceRule } =
+      await import('../alert-engine/rules');
     const def = buildTrojanScheduledTaskDefinition();
-    const result = generateTelemetry(randomUUID(), 171n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      171n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateScheduledTaskPersistenceRule(
-      result.processEvents as unknown as Parameters<typeof evaluateScheduledTaskPersistenceRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateScheduledTaskPersistenceRule>[1],
+      result.processEvents as unknown as Parameters<
+        typeof evaluateScheduledTaskPersistenceRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateScheduledTaskPersistenceRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].title).toContain('ENG-WKS-21');
@@ -1327,7 +1840,14 @@ function buildOAuthConsentGrantDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Human Resources', job_title: 'HR Generalist', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Human Resources',
+            job_title: 'HR Generalist',
+            home_country: 'US',
+          },
+        },
       ],
       narrative_devices: [],
       decoy_population_size: { identities: 5, devices: 4 },
@@ -1375,35 +1895,69 @@ describe('generateTelemetry — OAuth illicit consent grant scenario (§7.2, §8
 
   it('produces a phishing email, a consent-grant cloud event, and a mailbox-access burst, all for the victim identity', () => {
     const def = buildOAuthConsentGrantDefinition();
-    const result = generateTelemetry(randomUUID(), 211n, def, techniqueIdBySlug);
-    const victim = result.identities.find((i) => i.jobTitle === 'HR Generalist')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      211n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victim = result.identities.find(
+      (i) => i.jobTitle === 'HR Generalist',
+    )!;
 
-    const groundTruthEmails = result.emailMessages.filter((e) => e.isGroundTruthEvidence);
-    const groundTruthCloud = result.cloudEvents.filter((c) => c.isGroundTruthEvidence);
-    const consentEvents = groundTruthCloud.filter((c) => c.actionName === 'ConsentToApplication');
-    const mailAccessEvents = groundTruthCloud.filter((c) => c.actionName === 'MailItemsAccessed');
+    const groundTruthEmails = result.emailMessages.filter(
+      (e) => e.isGroundTruthEvidence,
+    );
+    const groundTruthCloud = result.cloudEvents.filter(
+      (c) => c.isGroundTruthEvidence,
+    );
+    const consentEvents = groundTruthCloud.filter(
+      (c) => c.actionName === 'ConsentToApplication',
+    );
+    const mailAccessEvents = groundTruthCloud.filter(
+      (c) => c.actionName === 'MailItemsAccessed',
+    );
 
     expect(groundTruthEmails).toHaveLength(1);
-    expect(groundTruthEmails[0].recipientAddresses).toContain(victim.userPrincipalName);
+    expect(groundTruthEmails[0].recipientAddresses).toContain(
+      victim.userPrincipalName,
+    );
 
     expect(consentEvents).toHaveLength(1);
     expect(consentEvents[0].identityId).toBe(victim.id);
     expect(consentEvents[0].resourceId).toBe('Office Sync Helper');
 
     expect(mailAccessEvents.length).toBeGreaterThanOrEqual(5);
-    expect(mailAccessEvents.every((c) => c.identityId === victim.id && c.resourceId === 'Office Sync Helper')).toBe(true);
+    expect(
+      mailAccessEvents.every(
+        (c) =>
+          c.identityId === victim.id && c.resourceId === 'Office Sync Helper',
+      ),
+    ).toBe(true);
     // The consent click is the victim's own action; the subsequent app activity is the attacker's.
-    expect(mailAccessEvents.every((c) => c.sourceIp !== consentEvents[0].sourceIp)).toBe(true);
+    expect(
+      mailAccessEvents.every((c) => c.sourceIp !== consentEvents[0].sourceIp),
+    ).toBe(true);
   });
 
   it("feeds the Alert Engine's OAuth-consent-grant rule", async () => {
-    const { evaluateOAuthConsentGrantRule } = await import('../alert-engine/rules');
+    const { evaluateOAuthConsentGrantRule } =
+      await import('../alert-engine/rules');
     const def = buildOAuthConsentGrantDefinition();
-    const result = generateTelemetry(randomUUID(), 211n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      211n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateOAuthConsentGrantRule(
-      result.cloudEvents as unknown as Parameters<typeof evaluateOAuthConsentGrantRule>[0],
-      result.identities as unknown as Parameters<typeof evaluateOAuthConsentGrantRule>[1],
+      result.cloudEvents as unknown as Parameters<
+        typeof evaluateOAuthConsentGrantRule
+      >[0],
+      result.identities as unknown as Parameters<
+        typeof evaluateOAuthConsentGrantRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].primaryEntityType).toBe('identity');
@@ -1416,10 +1970,29 @@ function buildKerberoastingDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
-        { ref: 'service_account_identity_1', attributes: { department: 'IT', job_title: 'Service Account', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Systems Administrator',
+            home_country: 'US',
+          },
+        },
+        {
+          ref: 'service_account_identity_1',
+          attributes: {
+            department: 'IT',
+            job_title: 'Service Account',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'IT-WKS-11', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1456,16 +2029,31 @@ describe('generateTelemetry — Kerberoasting service-account pivot scenario (§
 
   it('produces a Rubeus-style ticket request on the admin workstation and a risky sign-in for the service account', () => {
     const def = buildKerberoastingDefinition();
-    const result = generateTelemetry(randomUUID(), 231n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'IT-WKS-11')!;
-    const serviceAccount = result.identities.find((i) => i.jobTitle === 'Service Account')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      231n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'IT-WKS-11',
+    )!;
+    const serviceAccount = result.identities.find(
+      (i) => i.jobTitle === 'Service Account',
+    )!;
 
-    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
-    const groundTruthSignIns = result.signInEvents.filter((s) => s.isGroundTruthEvidence);
+    const groundTruthProcesses = result.processEvents.filter(
+      (p) => p.isGroundTruthEvidence,
+    );
+    const groundTruthSignIns = result.signInEvents.filter(
+      (s) => s.isGroundTruthEvidence,
+    );
 
     expect(groundTruthProcesses).toHaveLength(1);
     expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
-    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain('kerberoast');
+    expect(groundTruthProcesses[0].commandLine.toLowerCase()).toContain(
+      'kerberoast',
+    );
 
     expect(groundTruthSignIns).toHaveLength(1);
     expect(groundTruthSignIns[0].identityId).toBe(serviceAccount.id);
@@ -1475,11 +2063,20 @@ describe('generateTelemetry — Kerberoasting service-account pivot scenario (§
   it("feeds the Alert Engine's Kerberoasting rule", async () => {
     const { evaluateKerberoastingRule } = await import('../alert-engine/rules');
     const def = buildKerberoastingDefinition();
-    const result = generateTelemetry(randomUUID(), 231n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      231n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateKerberoastingRule(
-      result.processEvents as unknown as Parameters<typeof evaluateKerberoastingRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateKerberoastingRule>[1],
+      result.processEvents as unknown as Parameters<
+        typeof evaluateKerberoastingRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateKerberoastingRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].primaryEntityType).toBe('device');
@@ -1491,9 +2088,21 @@ function buildDnsTunnelingDefinition(): GroundTruthDefinition {
     metadata: {},
     population: {
       narrative_identities: [
-        { ref: 'victim_identity_1', attributes: { department: 'Marketing', job_title: 'Marketing Coordinator', home_country: 'US' } },
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Marketing',
+            job_title: 'Marketing Coordinator',
+            home_country: 'US',
+          },
+        },
       ],
-      narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'MKT-WKS-04', os_platform: 'windows' } }],
+      narrative_devices: [
+        {
+          ref: 'victim_device_1',
+          attributes: { hostname: 'MKT-WKS-04', os_platform: 'windows' },
+        },
+      ],
       decoy_population_size: { identities: 5, devices: 4 },
       world_time_window_hours: 24,
     },
@@ -1542,18 +2151,33 @@ describe('generateTelemetry — DNS tunneling scenario (§7.2, §8.2)', () => {
 
   it('produces a backdoor execution followed by a DNS beacon and a higher-volume DNS exfil burst, all on the victim device', () => {
     const def = buildDnsTunnelingDefinition();
-    const result = generateTelemetry(randomUUID(), 251n, def, techniqueIdBySlug);
-    const victimDevice = result.devices.find((d) => d.hostname === 'MKT-WKS-04')!;
+    const result = generateTelemetry(
+      randomUUID(),
+      251n,
+      def,
+      techniqueIdBySlug,
+    );
+    const victimDevice = result.devices.find(
+      (d) => d.hostname === 'MKT-WKS-04',
+    )!;
 
-    const groundTruthProcesses = result.processEvents.filter((p) => p.isGroundTruthEvidence);
-    const groundTruthNetwork = result.networkEvents.filter((n) => n.isGroundTruthEvidence);
+    const groundTruthProcesses = result.processEvents.filter(
+      (p) => p.isGroundTruthEvidence,
+    );
+    const groundTruthNetwork = result.networkEvents.filter(
+      (n) => n.isGroundTruthEvidence,
+    );
     const dnsEvents = groundTruthNetwork.filter((n) => n.remotePort === 53);
 
     expect(groundTruthProcesses).toHaveLength(1);
     expect(groundTruthProcesses[0].deviceId).toBe(victimDevice.id);
 
     expect(dnsEvents.length).toBeGreaterThanOrEqual(30);
-    expect(dnsEvents.every((n) => n.deviceId === victimDevice.id && n.protocol === 'udp')).toBe(true);
+    expect(
+      dnsEvents.every(
+        (n) => n.deviceId === victimDevice.id && n.protocol === 'udp',
+      ),
+    ).toBe(true);
 
     const totalSent = dnsEvents.reduce((sum, n) => sum + n.bytesSent, 0);
     const avgSent = totalSent / dnsEvents.length;
@@ -1563,11 +2187,20 @@ describe('generateTelemetry — DNS tunneling scenario (§7.2, §8.2)', () => {
   it("feeds the Alert Engine's DNS-tunneling rule, citing both the beacon and exfil bursts as one alert", async () => {
     const { evaluateDnsTunnelingRule } = await import('../alert-engine/rules');
     const def = buildDnsTunnelingDefinition();
-    const result = generateTelemetry(randomUUID(), 251n, def, techniqueIdBySlug);
+    const result = generateTelemetry(
+      randomUUID(),
+      251n,
+      def,
+      techniqueIdBySlug,
+    );
 
     const candidates = evaluateDnsTunnelingRule(
-      result.networkEvents as unknown as Parameters<typeof evaluateDnsTunnelingRule>[0],
-      result.devices as unknown as Parameters<typeof evaluateDnsTunnelingRule>[1],
+      result.networkEvents as unknown as Parameters<
+        typeof evaluateDnsTunnelingRule
+      >[0],
+      result.devices as unknown as Parameters<
+        typeof evaluateDnsTunnelingRule
+      >[1],
     );
     expect(candidates).toHaveLength(1);
     expect(candidates[0].primaryEntityType).toBe('device');

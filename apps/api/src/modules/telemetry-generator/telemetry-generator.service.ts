@@ -16,7 +16,9 @@ export class TelemetryGeneratorService {
   async generateForSession(sessionId: string): Promise<void> {
     const existing = await this.prisma.identity.count({ where: { sessionId } });
     if (existing > 0) {
-      this.logger.log(`Session ${sessionId} already has telemetry; skipping (idempotent).`);
+      this.logger.log(
+        `Session ${sessionId} already has telemetry; skipping (idempotent).`,
+      );
       return;
     }
 
@@ -25,15 +27,25 @@ export class TelemetryGeneratorService {
       include: { scenarioVersion: true },
     });
 
-    const def = session.scenarioVersion.groundTruthDefinition as unknown as GroundTruthDefinition;
+    const def = session.scenarioVersion
+      .groundTruthDefinition as unknown as GroundTruthDefinition;
 
-    const requiredTechniqueSlugs = new Set(def.kill_chain.map((step) => step.mitre_technique_id));
+    const requiredTechniqueSlugs = new Set(
+      def.kill_chain.map((step) => step.mitre_technique_id),
+    );
     const techniques = await this.prisma.mitreTechnique.findMany({
       where: { techniqueId: { in: [...requiredTechniqueSlugs] } },
     });
-    const techniqueIdBySlug = new Map(techniques.map((t) => [t.techniqueId, t.id]));
+    const techniqueIdBySlug = new Map(
+      techniques.map((t) => [t.techniqueId, t.id]),
+    );
 
-    const telemetry = generateTelemetry(sessionId, session.seed, def, techniqueIdBySlug);
+    const telemetry = generateTelemetry(
+      sessionId,
+      session.seed,
+      def,
+      techniqueIdBySlug,
+    );
 
     await this.prisma.$transaction([
       this.prisma.identity.createMany({ data: telemetry.identities }),
@@ -53,9 +65,14 @@ export class TelemetryGeneratorService {
       this.prisma.emailMessage.createMany({ data: telemetry.emailMessages }),
     ]);
 
-    if (telemetry.emailAttachments.length > 0 || telemetry.emailUrls.length > 0) {
+    if (
+      telemetry.emailAttachments.length > 0 ||
+      telemetry.emailUrls.length > 0
+    ) {
       await this.prisma.$transaction([
-        this.prisma.emailAttachment.createMany({ data: telemetry.emailAttachments }),
+        this.prisma.emailAttachment.createMany({
+          data: telemetry.emailAttachments,
+        }),
         this.prisma.emailUrl.createMany({ data: telemetry.emailUrls }),
       ]);
     }

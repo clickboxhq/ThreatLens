@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { generateSecret as generateTotpSecret, generateURI as generateTotpUri, verify as verifyTotp } from 'otplib';
+import {
+  generateSecret as generateTotpSecret,
+  generateURI as generateTotpUri,
+  verify as verifyTotp,
+} from 'otplib';
 import * as QRCode from 'qrcode';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -23,7 +27,14 @@ export interface TokenPair {
 }
 
 export type LoginResult =
-  | (TokenPair & { user: { id: string; displayName: string; role: string; emailVerified: boolean } })
+  | (TokenPair & {
+      user: {
+        id: string;
+        displayName: string;
+        role: string;
+        emailVerified: boolean;
+      };
+    })
   | { mfaRequired: true; mfaChallengeId: string };
 
 const MFA_ISSUER = 'SOCVerse';
@@ -37,7 +48,11 @@ async function verifyTotpCode(code: string, secret: string): Promise<boolean> {
   try {
     // otplib throws (rather than returning { valid: false }) for malformed input — e.g. a
     // pasted recovery code, which isn't 6 digits. Any such input is simply an invalid code.
-    const result = await verifyTotp({ secret, token: code, epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS });
+    const result = await verifyTotp({
+      secret,
+      token: code,
+      epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS,
+    });
     return result.valid;
   } catch {
     return false;
@@ -62,12 +77,20 @@ export class AuthService {
   ) {}
 
   async signup(dto: SignupDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (existing) {
-      throw new AppException(409, 'EMAIL_TAKEN', 'An account with this email already exists.');
+      throw new AppException(
+        409,
+        'EMAIL_TAKEN',
+        'An account with this email already exists.',
+      );
     }
 
-    const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id,
+    });
 
     const user = await this.prisma.user.create({
       data: {
@@ -93,10 +116,15 @@ export class AuthService {
    * milestone, same gap noted on password reset) — the verification link is logged
    * server-side as a stand-in for the email that would otherwise deliver it.
    */
-  private async sendVerificationEmail(userId: string, email: string): Promise<void> {
+  private async sendVerificationEmail(
+    userId: string,
+    email: string,
+  ): Promise<void> {
     const token = await this.emailVerificationTokens.create(userId);
     const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email?token=${token}`;
-    this.logger.log(`Email verification requested for ${email}. Link (stands in for an emailed link): ${verifyUrl}`);
+    this.logger.log(
+      `Email verification requested for ${email}. Link (stands in for an emailed link): ${verifyUrl}`,
+    );
   }
 
   /** §16.2 `POST /auth/email-verification/request`: resend for the currently authenticated user. */
@@ -104,19 +132,34 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
     if (user.emailVerifiedAt) {
-      throw new AppException(409, 'EMAIL_ALREADY_VERIFIED', 'This email address is already verified.');
+      throw new AppException(
+        409,
+        'EMAIL_ALREADY_VERIFIED',
+        'This email address is already verified.',
+      );
     }
     await this.sendVerificationEmail(user.id, user.email);
   }
 
   /** §16.2 `POST /auth/email-verification/confirm`. */
-  async confirmEmailVerification(token: string, sourceIp?: string, correlationId?: string): Promise<void> {
+  async confirmEmailVerification(
+    token: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<void> {
     const userId = await this.emailVerificationTokens.consume(token);
     if (!userId) {
-      throw new AppException(401, 'INVALID_VERIFICATION_TOKEN', 'This verification link is invalid or has expired.');
+      throw new AppException(
+        401,
+        'INVALID_VERIFICATION_TOKEN',
+        'This verification link is invalid or has expired.',
+      );
     }
 
-    await this.prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { emailVerifiedAt: new Date() },
+    });
     await this.auditLog.record({
       actorUserId: userId,
       actorIp: sourceIp,
@@ -127,10 +170,17 @@ export class AuthService {
     });
   }
 
-  async login(dto: LoginDto, sourceIp: string, correlationId?: string): Promise<LoginResult> {
+  async login(
+    dto: LoginDto,
+    sourceIp: string,
+    correlationId?: string,
+  ): Promise<LoginResult> {
     // §15.1: checked before touching the password at all — a locked-out (account, IP) pair
     // gets rejected outright, so a lockout can't be probed away by simply retrying faster.
-    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(dto.email, sourceIp);
+    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(
+      dto.email,
+      sourceIp,
+    );
     if (lockoutSeconds > 0) {
       throw new AppException(
         423,
@@ -140,20 +190,39 @@ export class AuthService {
       );
     }
 
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (!user || !user.passwordHash) {
       await this.recordLoginFailure(dto.email, sourceIp, correlationId, null);
-      throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
+      throw new AppException(
+        401,
+        'INVALID_CREDENTIALS',
+        'Invalid email or password.',
+      );
     }
 
     const passwordValid = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordValid) {
-      await this.recordLoginFailure(dto.email, sourceIp, correlationId, user.id);
-      throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
+      await this.recordLoginFailure(
+        dto.email,
+        sourceIp,
+        correlationId,
+        user.id,
+      );
+      throw new AppException(
+        401,
+        'INVALID_CREDENTIALS',
+        'Invalid email or password.',
+      );
     }
 
     if (user.status !== 'active') {
-      throw new AppException(403, 'ACCOUNT_NOT_ACTIVE', 'This account is not active.');
+      throw new AppException(
+        403,
+        'ACCOUNT_NOT_ACTIVE',
+        'This account is not active.',
+      );
     }
 
     await this.loginAttempts.clear(dto.email, sourceIp);
@@ -166,7 +235,10 @@ export class AuthService {
       return { mfaRequired: true, mfaChallengeId };
     }
 
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
     await this.auditLog.record({
       actorUserId: user.id,
       actorIp: sourceIp,
@@ -179,7 +251,12 @@ export class AuthService {
     const tokens = await this.issueTokenPair(user);
     return {
       ...tokens,
-      user: { id: user.id, displayName: user.displayName, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) },
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: Boolean(user.emailVerifiedAt),
+      },
     };
   }
 
@@ -189,7 +266,12 @@ export class AuthService {
    * lockout (it wasn't locked when `login()` checked moments ago, so if it's locked now, this
    * attempt caused it) and records a distinct `account_locked` entry for that case.
    */
-  private async recordLoginFailure(email: string, sourceIp: string, correlationId: string | undefined, userId: string | null): Promise<void> {
+  private async recordLoginFailure(
+    email: string,
+    sourceIp: string,
+    correlationId: string | undefined,
+    userId: string | null,
+  ): Promise<void> {
     await this.loginAttempts.recordFailure(email, sourceIp);
     await this.auditLog.record({
       actorUserId: userId,
@@ -201,7 +283,10 @@ export class AuthService {
       correlationId,
     });
 
-    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(email, sourceIp);
+    const lockoutSeconds = await this.loginAttempts.lockoutSecondsRemaining(
+      email,
+      sourceIp,
+    );
     if (lockoutSeconds > 0) {
       await this.auditLog.record({
         actorUserId: userId,
@@ -221,23 +306,52 @@ export class AuthService {
     code: string,
     sourceIp?: string,
     correlationId?: string,
-  ): Promise<TokenPair & { user: { id: string; displayName: string; role: string; emailVerified: boolean } }> {
+  ): Promise<
+    TokenPair & {
+      user: {
+        id: string;
+        displayName: string;
+        role: string;
+        emailVerified: boolean;
+      };
+    }
+  > {
     const userId = await this.mfaChallenges.consume(mfaChallengeId);
     if (!userId) {
-      throw new AppException(401, 'MFA_CHALLENGE_EXPIRED', 'This MFA challenge has expired or was already used. Please log in again.');
+      throw new AppException(
+        401,
+        'MFA_CHALLENGE_EXPIRED',
+        'This MFA challenge has expired or was already used. Please log in again.',
+      );
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.mfaEnabled || !user.mfaSecret || user.status !== 'active') {
-      throw new AppException(401, 'INVALID_CREDENTIALS', 'Unable to complete sign-in.');
+    if (
+      !user ||
+      !user.mfaEnabled ||
+      !user.mfaSecret ||
+      user.status !== 'active'
+    ) {
+      throw new AppException(
+        401,
+        'INVALID_CREDENTIALS',
+        'Unable to complete sign-in.',
+      );
     }
 
     const usedRecoveryCode = await this.tryConsumeRecoveryCode(user, code);
     if (!usedRecoveryCode && !(await verifyTotpCode(code, user.mfaSecret))) {
-      throw new AppException(401, 'INVALID_MFA_CODE', 'That code is incorrect or has expired.');
+      throw new AppException(
+        401,
+        'INVALID_MFA_CODE',
+        'That code is incorrect or has expired.',
+      );
     }
 
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
     await this.auditLog.record({
       actorUserId: user.id,
       actorIp: sourceIp,
@@ -251,34 +365,65 @@ export class AuthService {
     const tokens = await this.issueTokenPair(user);
     return {
       ...tokens,
-      user: { id: user.id, displayName: user.displayName, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) },
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: Boolean(user.emailVerifiedAt),
+      },
     };
   }
 
   /** §16.2 `POST /auth/mfa/setup`: generates a pending secret; MFA only takes effect once mfaEnable() verifies it. */
-  async mfaSetup(userId: string): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
+  async mfaSetup(
+    userId: string,
+  ): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
 
     const secret = generateTotpSecret();
-    await this.prisma.user.update({ where: { id: userId }, data: { mfaSecret: secret } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaSecret: secret },
+    });
 
-    const otpauthUrl = generateTotpUri({ issuer: MFA_ISSUER, label: user.email, secret });
+    const otpauthUrl = generateTotpUri({
+      issuer: MFA_ISSUER,
+      label: user.email,
+      secret,
+    });
     const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
     return { secret, otpauthUrl, qrCodeDataUrl };
   }
 
   /** §16.2 `POST /auth/mfa/enable`: verifies the pending secret and turns MFA on, issuing one-time recovery codes. */
-  async mfaEnable(userId: string, code: string, sourceIp?: string, correlationId?: string): Promise<{ recoveryCodes: string[] }> {
+  async mfaEnable(
+    userId: string,
+    code: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<{ recoveryCodes: string[] }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.mfaSecret) {
-      throw new AppException(400, 'MFA_NOT_SET_UP', 'Call /auth/mfa/setup first.');
+      throw new AppException(
+        400,
+        'MFA_NOT_SET_UP',
+        'Call /auth/mfa/setup first.',
+      );
     }
     if (user.mfaEnabled) {
-      throw new AppException(409, 'MFA_ALREADY_ENABLED', 'MFA is already enabled on this account.');
+      throw new AppException(
+        409,
+        'MFA_ALREADY_ENABLED',
+        'MFA is already enabled on this account.',
+      );
     }
     if (!(await verifyTotpCode(code, user.mfaSecret))) {
-      throw new AppException(401, 'INVALID_MFA_CODE', 'That code is incorrect or has expired.');
+      throw new AppException(
+        401,
+        'INVALID_MFA_CODE',
+        'That code is incorrect or has expired.',
+      );
     }
 
     const recoveryCodes = generateRecoveryCodes();
@@ -303,13 +448,22 @@ export class AuthService {
   }
 
   /** §16.2 `POST /auth/mfa/disable`. Blocked for the roles §15.1 makes MFA mandatory for. */
-  async mfaDisable(userId: string, password: string, sourceIp?: string, correlationId?: string): Promise<void> {
+  async mfaDisable(
+    userId: string,
+    password: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.passwordHash) {
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid password.');
     }
     if (MFA_MANDATORY_ROLES.has(user.role)) {
-      throw new AppException(403, 'MFA_MANDATORY_FOR_ROLE', 'MFA cannot be disabled for this account\'s role.');
+      throw new AppException(
+        403,
+        'MFA_MANDATORY_FOR_ROLE',
+        "MFA cannot be disabled for this account's role.",
+      );
     }
     if (!(await argon2.verify(user.passwordHash, password))) {
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid password.');
@@ -334,10 +488,15 @@ export class AuthService {
     });
   }
 
-  async mfaStatus(userId: string): Promise<{ enabled: boolean; mandatory: boolean }> {
+  async mfaStatus(
+    userId: string,
+  ): Promise<{ enabled: boolean; mandatory: boolean }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
-    return { enabled: user.mfaEnabled, mandatory: MFA_MANDATORY_ROLES.has(user.role) };
+    return {
+      enabled: user.mfaEnabled,
+      mandatory: MFA_MANDATORY_ROLES.has(user.role),
+    };
   }
 
   /**
@@ -357,17 +516,30 @@ export class AuthService {
 
     const token = await this.passwordResetTokens.create(user.id);
     const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password?token=${token}`;
-    this.logger.log(`Password reset requested for ${user.email}. Link (stands in for an emailed link): ${resetUrl}`);
+    this.logger.log(
+      `Password reset requested for ${user.email}. Link (stands in for an emailed link): ${resetUrl}`,
+    );
   }
 
   /** §16.2 `POST /auth/password-reset/confirm`. Consumes the token and revokes every other active session. */
-  async confirmPasswordReset(token: string, newPassword: string, sourceIp?: string, correlationId?: string): Promise<void> {
+  async confirmPasswordReset(
+    token: string,
+    newPassword: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<void> {
     const userId = await this.passwordResetTokens.consume(token);
     if (!userId) {
-      throw new AppException(401, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired.');
+      throw new AppException(
+        401,
+        'INVALID_RESET_TOKEN',
+        'This reset link is invalid or has expired.',
+      );
     }
 
-    const passwordHash = await argon2.hash(newPassword, { type: argon2.argon2id });
+    const passwordHash = await argon2.hash(newPassword, {
+      type: argon2.argon2id,
+    });
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -390,7 +562,10 @@ export class AuthService {
     });
   }
 
-  private async tryConsumeRecoveryCode(user: User, code: string): Promise<boolean> {
+  private async tryConsumeRecoveryCode(
+    user: User,
+    code: string,
+  ): Promise<boolean> {
     if (user.mfaRecoveryCodesHash.length === 0) return false;
     const hash = hashRecoveryCode(code);
     const index = user.mfaRecoveryCodesHash.indexOf(hash);
@@ -398,32 +573,55 @@ export class AuthService {
 
     const remaining = [...user.mfaRecoveryCodesHash];
     remaining.splice(index, 1);
-    await this.prisma.user.update({ where: { id: user.id }, data: { mfaRecoveryCodesHash: remaining } });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { mfaRecoveryCodesHash: remaining },
+    });
     return true;
   }
 
   async refresh(rawToken: string): Promise<TokenPair> {
     const tokenHash = hashToken(rawToken);
-    const existing = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    const existing = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
 
     if (!existing) {
-      throw new AppException(401, 'INVALID_REFRESH_TOKEN', 'Refresh token not recognized.');
+      throw new AppException(
+        401,
+        'INVALID_REFRESH_TOKEN',
+        'Refresh token not recognized.',
+      );
     }
 
     if (existing.revokedAt || existing.expiresAt < new Date()) {
-      throw new AppException(401, 'INVALID_REFRESH_TOKEN', 'Refresh token has been revoked or expired.');
+      throw new AppException(
+        401,
+        'INVALID_REFRESH_TOKEN',
+        'Refresh token has been revoked or expired.',
+      );
     }
 
     if (existing.replacedByTokenId) {
       // §15.7: presenting an already-rotated-away token indicates theft/replay.
       // Revoke the entire chain and force re-authentication.
       await this.revokeChainFrom(existing.id);
-      throw new AppException(401, 'REFRESH_TOKEN_REUSE_DETECTED', 'This refresh token was already used. Please log in again.');
+      throw new AppException(
+        401,
+        'REFRESH_TOKEN_REUSE_DETECTED',
+        'This refresh token was already used. Please log in again.',
+      );
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: existing.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: existing.userId },
+    });
     if (!user || user.status !== 'active') {
-      throw new AppException(401, 'INVALID_REFRESH_TOKEN', 'Account is not active.');
+      throw new AppException(
+        401,
+        'INVALID_REFRESH_TOKEN',
+        'Account is not active.',
+      );
     }
 
     const tokens = await this.issueTokenPair(user, existing.id);
@@ -438,7 +636,11 @@ export class AuthService {
     });
   }
 
-  async logoutAll(userId: string, sourceIp?: string, correlationId?: string): Promise<void> {
+  async logoutAll(
+    userId: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ): Promise<void> {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
@@ -459,9 +661,16 @@ export class AuthService {
     });
   }
 
-  private async issueTokenPair(user: User, replacesTokenId?: string): Promise<TokenPair> {
-    const accessTtlSeconds = Number(this.config.get('JWT_ACCESS_TTL_SECONDS') ?? 900);
-    const refreshTtlDays = Number(this.config.get('JWT_REFRESH_TTL_DAYS') ?? 30);
+  private async issueTokenPair(
+    user: User,
+    replacesTokenId?: string,
+  ): Promise<TokenPair> {
+    const accessTtlSeconds = Number(
+      this.config.get('JWT_ACCESS_TTL_SECONDS') ?? 900,
+    );
+    const refreshTtlDays = Number(
+      this.config.get('JWT_REFRESH_TTL_DAYS') ?? 30,
+    );
 
     const accessToken = this.jwt.sign(
       {
@@ -475,7 +684,9 @@ export class AuthService {
 
     const rawRefreshToken = randomBytes(32).toString('hex');
     const tokenHash = hashToken(rawRefreshToken);
-    const expiresAt = new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000,
+    );
 
     const newToken = await this.prisma.refreshToken.create({
       data: { userId: user.id, tokenHash, expiresAt },
@@ -488,11 +699,17 @@ export class AuthService {
       });
     }
 
-    return { accessToken, refreshToken: rawRefreshToken, expiresIn: accessTtlSeconds };
+    return {
+      accessToken,
+      refreshToken: rawRefreshToken,
+      expiresIn: accessTtlSeconds,
+    };
   }
 
   private async revokeChainFrom(tokenId: string): Promise<void> {
-    let current = await this.prisma.refreshToken.findUnique({ where: { id: tokenId } });
+    let current = await this.prisma.refreshToken.findUnique({
+      where: { id: tokenId },
+    });
     const visited = new Set<string>();
     while (current && !visited.has(current.id)) {
       visited.add(current.id);
@@ -503,7 +720,9 @@ export class AuthService {
         });
       }
       current = current.replacedByTokenId
-        ? await this.prisma.refreshToken.findUnique({ where: { id: current.replacedByTokenId } })
+        ? await this.prisma.refreshToken.findUnique({
+            where: { id: current.replacedByTokenId },
+          })
         : null;
     }
   }

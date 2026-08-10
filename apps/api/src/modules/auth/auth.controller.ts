@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RateLimiterService } from '../../common/rate-limiter/rate-limiter.service';
@@ -36,15 +45,27 @@ export class AuthController {
 
   @Post('signup')
   async signup(@Body() dto: SignupDto, @Req() req: Request) {
-    await this.rateLimiter.enforce(`signup:${req.ip}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
+    await this.rateLimiter.enforce(
+      `signup:${req.ip}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
     return this.authService.signup(dto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: Request) {
-    await this.rateLimiter.enforce(`login:${req.ip}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
-    return this.authService.login(dto, req.ip ?? 'unknown', correlationIdOf(req));
+    await this.rateLimiter.enforce(
+      `login:${req.ip}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
+    return this.authService.login(
+      dto,
+      req.ip ?? 'unknown',
+      correlationIdOf(req),
+    );
   }
 
   @Post('refresh')
@@ -69,7 +90,12 @@ export class AuthController {
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
   async mfaVerify(@Body() dto: MfaVerifyDto, @Req() req: Request) {
-    return this.authService.mfaVerify(dto.mfaChallengeId, dto.code, req.ip, correlationIdOf(req));
+    return this.authService.mfaVerify(
+      dto.mfaChallengeId,
+      dto.code,
+      req.ip,
+      correlationIdOf(req),
+    );
   }
 
   @Get('mfa/status')
@@ -86,28 +112,61 @@ export class AuthController {
 
   @Post('mfa/enable')
   @UseGuards(JwtAuthGuard)
-  async mfaEnable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaEnableDto, @Req() req: Request) {
-    return this.authService.mfaEnable(user.id, dto.code, req.ip, correlationIdOf(req));
+  async mfaEnable(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: MfaEnableDto,
+    @Req() req: Request,
+  ) {
+    return this.authService.mfaEnable(
+      user.id,
+      dto.code,
+      req.ip,
+      correlationIdOf(req),
+    );
   }
 
   @Post('mfa/disable')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async mfaDisable(@CurrentUser() user: AuthenticatedUser, @Body() dto: MfaDisableDto, @Req() req: Request) {
-    await this.authService.mfaDisable(user.id, dto.password, req.ip, correlationIdOf(req));
+  async mfaDisable(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: MfaDisableDto,
+    @Req() req: Request,
+  ) {
+    await this.authService.mfaDisable(
+      user.id,
+      dto.password,
+      req.ip,
+      correlationIdOf(req),
+    );
   }
 
   @Post('password-reset/request')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async requestPasswordReset(@Body() dto: PasswordResetRequestDto, @Req() req: Request) {
-    await this.rateLimiter.enforce(`password-reset:${req.ip}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
+  async requestPasswordReset(
+    @Body() dto: PasswordResetRequestDto,
+    @Req() req: Request,
+  ) {
+    await this.rateLimiter.enforce(
+      `password-reset:${req.ip}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
     await this.authService.requestPasswordReset(dto.email);
   }
 
   @Post('password-reset/confirm')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async confirmPasswordReset(@Body() dto: PasswordResetConfirmDto, @Req() req: Request) {
-    await this.authService.confirmPasswordReset(dto.token, dto.newPassword, req.ip, correlationIdOf(req));
+  async confirmPasswordReset(
+    @Body() dto: PasswordResetConfirmDto,
+    @Req() req: Request,
+  ) {
+    await this.authService.confirmPasswordReset(
+      dto.token,
+      dto.newPassword,
+      req.ip,
+      correlationIdOf(req),
+    );
   }
 
   @Post('email-verification/request')
@@ -116,13 +175,24 @@ export class AuthController {
   async requestEmailVerification(@CurrentUser() user: AuthenticatedUser) {
     // Keyed by user_id, not IP: this is an authenticated endpoint (§5.2's keying rule), unlike
     // the enumeration-prone unauthenticated request endpoints above.
-    await this.rateLimiter.enforce(`email-verification-request:${user.id}`, AUTH_RATE_LIMIT, AUTH_RATE_LIMIT_WINDOW_SECONDS);
+    await this.rateLimiter.enforce(
+      `email-verification-request:${user.id}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
     await this.authService.requestEmailVerification(user.id);
   }
 
   @Post('email-verification/confirm')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async confirmEmailVerification(@Body() dto: EmailVerificationConfirmDto, @Req() req: Request) {
-    await this.authService.confirmEmailVerification(dto.token, req.ip, correlationIdOf(req));
+  async confirmEmailVerification(
+    @Body() dto: EmailVerificationConfirmDto,
+    @Req() req: Request,
+  ) {
+    await this.authService.confirmEmailVerification(
+      dto.token,
+      req.ip,
+      correlationIdOf(req),
+    );
   }
 }

@@ -1,12 +1,35 @@
-import type { Alert, CloudEvent, Device, EmailMessage, FileEvent, HttpRequest, Identity, MitreTechnique, NetworkEvent, ProcessEvent, SignInEvent } from '@prisma/client';
+import type {
+  Alert,
+  CloudEvent,
+  Device,
+  EmailMessage,
+  FileEvent,
+  HttpRequest,
+  Identity,
+  MitreTechnique,
+  NetworkEvent,
+  ProcessEvent,
+  SignInEvent,
+} from '@prisma/client';
 import { toStudentIdentityDto } from './identity.dto';
 import { toStudentSignInDto } from './sign-in.dto';
 import { toStudentEmailDto } from './email.dto';
 import { toStudentAlertDto } from './alert.dto';
-import { toStudentDeviceDto, toStudentFileEventDto, toStudentHttpRequestDto, toStudentNetworkEventDto, toStudentProcessEventDto } from './device.dto';
+import {
+  toStudentDeviceDto,
+  toStudentFileEventDto,
+  toStudentHttpRequestDto,
+  toStudentNetworkEventDto,
+  toStudentProcessEventDto,
+} from './device.dto';
 import { toStudentCloudEventDto } from './cloud.dto';
 
-const FORBIDDEN_SUBSTRINGS = ['isGroundTruthEvidence', 'isGroundTruthActor', 'isFalsePositiveByDesign', 'correlationId'];
+const FORBIDDEN_SUBSTRINGS = [
+  'isGroundTruthEvidence',
+  'isGroundTruthActor',
+  'isFalsePositiveByDesign',
+  'correlationId',
+];
 
 function assertNoForbiddenFields(value: unknown) {
   const json = JSON.stringify(value);
@@ -278,7 +301,9 @@ describe('Email HTML sanitization (§15.6, §11.10)', () => {
   }
 
   it('strips a <script> tag and its contents entirely', () => {
-    const dto = toStudentEmailDto(email('<p>Hello</p><script>alert(document.cookie)</script>'));
+    const dto = toStudentEmailDto(
+      email('<p>Hello</p><script>alert(document.cookie)</script>'),
+    );
     expect(dto.bodyHtml).not.toContain('script');
     expect(dto.bodyHtml).not.toContain('alert');
     expect(dto.bodyHtml).toContain('Hello');
@@ -292,19 +317,27 @@ describe('Email HTML sanitization (§15.6, §11.10)', () => {
   });
 
   it('strips a javascript: href instead of just passing it through', () => {
-    const dto = toStudentEmailDto(email('<a href="javascript:alert(1)">Link</a>'));
+    const dto = toStudentEmailDto(
+      email('<a href="javascript:alert(1)">Link</a>'),
+    );
     expect(dto.bodyHtml).not.toContain('javascript:');
   });
 
   it('drops an <iframe>, which a script-tag-only regex would miss', () => {
-    const dto = toStudentEmailDto(email('<p>Before</p><iframe src="https://evil.example.com"></iframe><p>After</p>'));
+    const dto = toStudentEmailDto(
+      email(
+        '<p>Before</p><iframe src="https://evil.example.com"></iframe><p>After</p>',
+      ),
+    );
     expect(dto.bodyHtml).not.toContain('iframe');
     expect(dto.bodyHtml).toContain('Before');
     expect(dto.bodyHtml).toContain('After');
   });
 
   it('drops an <svg onload>, which a script-tag-only regex would also miss', () => {
-    const dto = toStudentEmailDto(email('<svg onload="alert(1)"></svg><p>Safe</p>'));
+    const dto = toStudentEmailDto(
+      email('<svg onload="alert(1)"></svg><p>Safe</p>'),
+    );
     expect(dto.bodyHtml).not.toContain('onload');
     expect(dto.bodyHtml).not.toContain('svg');
     expect(dto.bodyHtml).toContain('Safe');
@@ -312,7 +345,9 @@ describe('Email HTML sanitization (§15.6, §11.10)', () => {
 
   it('preserves ordinary formatting markup used by real scenario content', () => {
     const dto = toStudentEmailDto(
-      email('<p>Please <b>review</b> the attached <a href="https://example.com/invoice">invoice</a>.</p>'),
+      email(
+        '<p>Please <b>review</b> the attached <a href="https://example.com/invoice">invoice</a>.</p>',
+      ),
     );
     expect(dto.bodyHtml).toContain('<b>review</b>');
     expect(dto.bodyHtml).toContain('href="https://example.com/invoice"');

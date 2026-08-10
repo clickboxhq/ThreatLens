@@ -24,7 +24,9 @@ export class HintsService {
   async list(sessionId: string, user: AuthenticatedUser) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
     const hints = await this.getAuthoredHints(session.scenarioVersionId);
-    const unlocks = await this.prisma.hintUnlock.findMany({ where: { sessionId } });
+    const unlocks = await this.prisma.hintUnlock.findMany({
+      where: { sessionId },
+    });
     const unlockedIndexes = new Set(unlocks.map((u) => u.hintIndex));
 
     return hints.map((hint, index) => ({
@@ -40,7 +42,11 @@ export class HintsService {
     const hints = await this.getAuthoredHints(session.scenarioVersionId);
     const hint = hints[index];
     if (!hint) {
-      throw new AppException(404, 'HINT_NOT_FOUND', 'No hint exists at this index for this scenario.');
+      throw new AppException(
+        404,
+        'HINT_NOT_FOUND',
+        'No hint exists at this index for this scenario.',
+      );
     }
 
     const existing = await this.prisma.hintUnlock.findUnique({
@@ -49,7 +55,11 @@ export class HintsService {
 
     if (!existing) {
       const unlock = await this.prisma.hintUnlock.create({
-        data: { sessionId, hintIndex: index, unlockCostPercent: hint.unlock_cost_percent },
+        data: {
+          sessionId,
+          hintIndex: index,
+          unlockCostPercent: hint.unlock_cost_percent,
+        },
       });
       await this.investigationActions.record({
         sessionId,
@@ -57,16 +67,25 @@ export class HintsService {
         actionType: 'request_hint',
         targetType: 'hint',
         targetId: unlock.id,
-        metadata: { hintIndex: index, unlockCostPercent: hint.unlock_cost_percent },
+        metadata: {
+          hintIndex: index,
+          unlockCostPercent: hint.unlock_cost_percent,
+        },
       });
     }
 
     return this.list(sessionId, user);
   }
 
-  private async getAuthoredHints(scenarioVersionId: string): Promise<AuthoredHint[]> {
-    const version = await this.prisma.scenarioVersion.findUniqueOrThrow({ where: { id: scenarioVersionId } });
-    const def = version.groundTruthDefinition as unknown as { hints?: AuthoredHint[] };
+  private async getAuthoredHints(
+    scenarioVersionId: string,
+  ): Promise<AuthoredHint[]> {
+    const version = await this.prisma.scenarioVersion.findUniqueOrThrow({
+      where: { id: scenarioVersionId },
+    });
+    const def = version.groundTruthDefinition as unknown as {
+      hints?: AuthoredHint[];
+    };
     return def.hints ?? [];
   }
 }

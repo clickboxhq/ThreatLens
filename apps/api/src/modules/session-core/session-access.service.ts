@@ -10,8 +10,13 @@ import type { InvestigationSession } from '@prisma/client';
 export class SessionAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOwnedSession(sessionId: string, user: AuthenticatedUser): Promise<InvestigationSession> {
-    const session = await this.prisma.investigationSession.findUnique({ where: { id: sessionId } });
+  async getOwnedSession(
+    sessionId: string,
+    user: AuthenticatedUser,
+  ): Promise<InvestigationSession> {
+    const session = await this.prisma.investigationSession.findUnique({
+      where: { id: sessionId },
+    });
     if (!session) {
       throw new AppException(404, 'NOT_FOUND', 'Session not found.');
     }
@@ -30,6 +35,10 @@ export class SessionAccessService {
       if (assignment && assignment.cohort.ownerId === user.id) return session;
     }
 
-    throw new AppException(403, 'FORBIDDEN', 'You do not have access to this session.');
+    throw new AppException(
+      403,
+      'FORBIDDEN',
+      'You do not have access to this session.',
+    );
   }
 }

@@ -29,9 +29,14 @@ interface RealtimeGatewayDeps {
 // into server logs/proxies) after the client connects with `?sessionId=`; the connection
 // is authorized using the exact same SessionAccessService check every REST endpoint uses
 // (§15.2), so an instructor's cohort-scoped access works here too, not just over REST.
-export function attachRealtimeGateway(httpServer: HttpServer, deps: RealtimeGatewayDeps): void {
+export function attachRealtimeGateway(
+  httpServer: HttpServer,
+  deps: RealtimeGatewayDeps,
+): void {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  const subscriber = new Redis(deps.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379');
+  const subscriber = new Redis(
+    deps.config.get<string>('REDIS_URL') ?? 'redis://localhost:6379',
+  );
   const socketsBySession = new Map<string, Set<WebSocket>>();
 
   subscriber.on('message', (channel: string, raw: string) => {
@@ -65,9 +70,12 @@ export function attachRealtimeGateway(httpServer: HttpServer, deps: RealtimeGate
           return;
         }
 
-        const payload = deps.jwtService.verify<{ sub: string; role: string; org_id: string | null; session_version: number }>(
-          frame.accessToken,
-        );
+        const payload = deps.jwtService.verify<{
+          sub: string;
+          role: string;
+          org_id: string | null;
+          session_version: number;
+        }>(frame.accessToken);
         const user: AuthenticatedUser = {
           id: payload.sub,
           role: payload.role,

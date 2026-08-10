@@ -14,7 +14,10 @@ export class CertificatesService {
   // threshold on every scenario in the path, and no certificate exists yet, issues one.
   // Deliberately no PDF/object-storage step here (§18.1's certificate rendering pipeline) —
   // see the Certificate model's comment for why this scope stops at the verification page.
-  async checkAndIssueForScenario(userId: string, scenarioId: string): Promise<void> {
+  async checkAndIssueForScenario(
+    userId: string,
+    scenarioId: string,
+  ): Promise<void> {
     const memberships = await this.prisma.learningPathScenario.findMany({
       where: { scenarioId },
       select: { learningPathId: true },
@@ -26,7 +29,10 @@ export class CertificatesService {
     }
   }
 
-  private async checkAndIssueForPath(userId: string, learningPathId: string): Promise<void> {
+  private async checkAndIssueForPath(
+    userId: string,
+    learningPathId: string,
+  ): Promise<void> {
     const existing = await this.prisma.certificate.findUnique({
       where: { userId_learningPathId: { userId, learningPathId } },
     });
@@ -43,29 +49,47 @@ export class CertificatesService {
       include: { score: true, scenario: true },
     });
 
-    const bestByScenario = new Map<string, { percent: number; scenarioTitle: string }>();
+    const bestByScenario = new Map<
+      string,
+      { percent: number; scenarioTitle: string }
+    >();
     for (const session of sessions) {
       if (!session.score) continue;
       const percent = Number(session.score.overallPercent);
       const best = bestByScenario.get(session.scenarioId);
       if (!best || percent > best.percent) {
-        bestByScenario.set(session.scenarioId, { percent, scenarioTitle: session.scenario.title });
+        bestByScenario.set(session.scenarioId, {
+          percent,
+          scenarioTitle: session.scenario.title,
+        });
       }
     }
 
     const threshold = Number(path.passThresholdPercent);
     const allPassed =
-      scenarioIds.length > 0 && scenarioIds.every((id) => (bestByScenario.get(id)?.percent ?? -1) >= threshold);
+      scenarioIds.length > 0 &&
+      scenarioIds.every(
+        (id) => (bestByScenario.get(id)?.percent ?? -1) >= threshold,
+      );
     if (!allPassed) return;
 
     const scoreSnapshot = Object.fromEntries(
-      [...bestByScenario.entries()].map(([scenarioId, v]) => [scenarioId, { title: v.scenarioTitle, percent: v.percent }]),
+      [...bestByScenario.entries()].map(([scenarioId, v]) => [
+        scenarioId,
+        { title: v.scenarioTitle, percent: v.percent },
+      ]),
     );
 
     await this.prisma.certificate.create({
-      data: { userId, learningPathId, scoreSnapshot: scoreSnapshot as unknown as object },
+      data: {
+        userId,
+        learningPathId,
+        scoreSnapshot: scoreSnapshot as unknown as object,
+      },
     });
-    this.logger.log(`Issued certificate for user ${userId}, learning path ${learningPathId}.`);
+    this.logger.log(
+      `Issued certificate for user ${userId}, learning path ${learningPathId}.`,
+    );
   }
 
   async myCertificates(user: AuthenticatedUser) {
@@ -90,7 +114,8 @@ export class CertificatesService {
       where: { id: certificateId },
       include: { learningPath: true, user: true },
     });
-    if (!certificate) throw new AppException(404, 'NOT_FOUND', 'Certificate not found.');
+    if (!certificate)
+      throw new AppException(404, 'NOT_FOUND', 'Certificate not found.');
 
     return {
       id: certificate.id,

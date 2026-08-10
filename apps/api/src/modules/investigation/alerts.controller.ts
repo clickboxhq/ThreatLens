@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AlertsService } from './alerts.service';
 import { UpdateAlertStatusDto } from './dto/dismiss-alert.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';

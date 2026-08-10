@@ -1,7 +1,12 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { toStudentEmailDto } from './email.dto';
 import { toStudentSignInDto } from './sign-in.dto';
-import { toStudentProcessEventDto, toStudentFileEventDto, toStudentNetworkEventDto, toStudentHttpRequestDto } from './device.dto';
+import {
+  toStudentProcessEventDto,
+  toStudentFileEventDto,
+  toStudentNetworkEventDto,
+  toStudentHttpRequestDto,
+} from './device.dto';
 import { toStudentCloudEventDto } from './cloud.dto';
 
 export interface EvidenceRefSummary {
@@ -22,55 +27,78 @@ export async function summarizeEvidenceRef(
   eventId: string,
 ): Promise<EvidenceRefSummary> {
   if (eventTable === 'email_messages') {
-    const email = await prisma.emailMessage.findUnique({ where: { id: eventId }, include: { attachments: true, urls: true } });
+    const email = await prisma.emailMessage.findUnique({
+      where: { id: eventId },
+      include: { attachments: true, urls: true },
+    });
     return {
       eventTable,
       eventId,
       occurredAt: email?.occurredAt ?? null,
-      summary: email ? `Email from "${email.senderAddress}": "${email.subject}"` : 'Event no longer available.',
+      summary: email
+        ? `Email from "${email.senderAddress}": "${email.subject}"`
+        : 'Event no longer available.',
       detail: email ? toStudentEmailDto(email) : null,
     };
   }
 
   if (eventTable === 'sign_in_events') {
-    const event = await prisma.signInEvent.findUnique({ where: { id: eventId } });
+    const event = await prisma.signInEvent.findUnique({
+      where: { id: eventId },
+    });
     return {
       eventTable,
       eventId,
       occurredAt: event?.occurredAt ?? null,
-      summary: event ? `Sign-in from ${event.sourceCity}, ${event.sourceCountry} to "${event.application}"` : 'Event no longer available.',
+      summary: event
+        ? `Sign-in from ${event.sourceCity}, ${event.sourceCountry} to "${event.application}"`
+        : 'Event no longer available.',
       detail: event ? toStudentSignInDto(event) : null,
     };
   }
 
   if (eventTable === 'process_events') {
-    const event = await prisma.processEvent.findUnique({ where: { id: eventId } });
-    const device = event ? await prisma.device.findUnique({ where: { id: event.deviceId } }) : null;
+    const event = await prisma.processEvent.findUnique({
+      where: { id: eventId },
+    });
+    const device = event
+      ? await prisma.device.findUnique({ where: { id: event.deviceId } })
+      : null;
     const imageName = event?.imagePath.split(/[\\/]/).pop() ?? '';
     return {
       eventTable,
       eventId,
       occurredAt: event?.occurredAt ?? null,
-      summary: event ? `Process "${imageName}" launched on ${device?.hostname ?? 'a device'}` : 'Event no longer available.',
+      summary: event
+        ? `Process "${imageName}" launched on ${device?.hostname ?? 'a device'}`
+        : 'Event no longer available.',
       detail: event ? toStudentProcessEventDto(event) : null,
     };
   }
 
   if (eventTable === 'file_events') {
     const event = await prisma.fileEvent.findUnique({ where: { id: eventId } });
-    const device = event ? await prisma.device.findUnique({ where: { id: event.deviceId } }) : null;
+    const device = event
+      ? await prisma.device.findUnique({ where: { id: event.deviceId } })
+      : null;
     return {
       eventTable,
       eventId,
       occurredAt: event?.occurredAt ?? null,
-      summary: event ? `File ${event.action} on ${device?.hostname ?? 'a device'}: ${event.filePath}` : 'Event no longer available.',
+      summary: event
+        ? `File ${event.action} on ${device?.hostname ?? 'a device'}: ${event.filePath}`
+        : 'Event no longer available.',
       detail: event ? toStudentFileEventDto(event) : null,
     };
   }
 
   if (eventTable === 'network_events') {
-    const event = await prisma.networkEvent.findUnique({ where: { id: eventId } });
-    const device = event ? await prisma.device.findUnique({ where: { id: event.deviceId } }) : null;
+    const event = await prisma.networkEvent.findUnique({
+      where: { id: eventId },
+    });
+    const device = event
+      ? await prisma.device.findUnique({ where: { id: event.deviceId } })
+      : null;
     return {
       eventTable,
       eventId,
@@ -83,7 +111,10 @@ export async function summarizeEvidenceRef(
   }
 
   if (eventTable === 'cloud_events') {
-    const event = await prisma.cloudEvent.findUnique({ where: { id: eventId }, include: { identity: true } });
+    const event = await prisma.cloudEvent.findUnique({
+      where: { id: eventId },
+      include: { identity: true },
+    });
     return {
       eventTable,
       eventId,
@@ -96,8 +127,12 @@ export async function summarizeEvidenceRef(
   }
 
   if (eventTable === 'http_requests') {
-    const event = await prisma.httpRequest.findUnique({ where: { id: eventId } });
-    const device = event?.deviceId ? await prisma.device.findUnique({ where: { id: event.deviceId } }) : null;
+    const event = await prisma.httpRequest.findUnique({
+      where: { id: eventId },
+    });
+    const device = event?.deviceId
+      ? await prisma.device.findUnique({ where: { id: event.deviceId } })
+      : null;
     return {
       eventTable,
       eventId,
@@ -109,5 +144,11 @@ export async function summarizeEvidenceRef(
     };
   }
 
-  return { eventTable, eventId, occurredAt: null, summary: 'Unknown event type.', detail: null };
+  return {
+    eventTable,
+    eventId,
+    occurredAt: null,
+    summary: 'Unknown event type.',
+    detail: null,
+  };
 }

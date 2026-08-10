@@ -11,7 +11,9 @@ export interface StudentCloudEventDto {
   sourceIp: string;
 }
 
-export function toStudentCloudEventDto(event: CloudEvent): StudentCloudEventDto {
+export function toStudentCloudEventDto(
+  event: CloudEvent,
+): StudentCloudEventDto {
   return {
     id: event.id,
     occurredAt: event.occurredAt,

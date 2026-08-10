@@ -1,7 +1,20 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { InstructorService } from './instructor.service';
-import { CreateAssignmentDto, CreateCohortDto, SubmitInstructorFeedbackDto } from './dto/instructor.dto';
+import {
+  CreateAssignmentDto,
+  CreateCohortDto,
+  SubmitInstructorFeedbackDto,
+} from './dto/instructor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -18,7 +31,10 @@ export class InstructorController {
   constructor(private readonly instructorService: InstructorService) {}
 
   @Post('cohorts')
-  async createCohort(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateCohortDto) {
+  async createCohort(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateCohortDto,
+  ) {
     return this.instructorService.createCohort(user, dto);
   }
 
@@ -28,7 +44,10 @@ export class InstructorController {
   }
 
   @Get('cohorts/:id/roster')
-  async getRoster(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async getRoster(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.instructorService.getRoster(user, id);
   }
 
@@ -42,12 +61,18 @@ export class InstructorController {
   }
 
   @Get('cohorts/:id/assignments')
-  async listAssignments(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async listAssignments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.instructorService.listAssignments(user, id);
   }
 
   @Get('cohorts/:id/review-queue')
-  async reviewQueue(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async reviewQueue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.instructorService.reviewQueue(user, id);
   }
 
@@ -68,7 +93,10 @@ export class InstructorController {
   ) {
     const csv = await this.instructorService.gradebookCsv(user, id);
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="gradebook-${id}.csv"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="gradebook-${id}.csv"`,
+    );
     res.send(csv);
   }
 }

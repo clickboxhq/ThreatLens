@@ -1,9 +1,20 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { IdentityPortalService } from './identity-portal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
-import type { IdentityRiskLevel, MfaStatus, SignInResult } from '@prisma/client';
+import type {
+  IdentityRiskLevel,
+  MfaStatus,
+  SignInResult,
+} from '@prisma/client';
 
 // §16.9
 @Controller('sessions/:sessionId/identities')
@@ -19,7 +30,11 @@ export class IdentityPortalController {
     @Query('department') department?: string,
     @Query('mfaStatus') mfaStatus?: MfaStatus,
   ) {
-    return this.service.list(sessionId, user, { riskLevel, department, mfaStatus });
+    return this.service.list(sessionId, user, {
+      riskLevel,
+      department,
+      mfaStatus,
+    });
   }
 
   @Get(':id')
@@ -39,7 +54,10 @@ export class IdentityPortalController {
     @Query('result') result?: SignInResult,
     @Query('riskyOnly') riskyOnly?: string,
   ) {
-    return this.service.getSignIns(sessionId, id, user, { result, riskyOnly: riskyOnly === 'true' });
+    return this.service.getSignIns(sessionId, id, user, {
+      result,
+      riskyOnly: riskyOnly === 'true',
+    });
   }
 
   @Get(':id/cloud-events')

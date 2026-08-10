@@ -11,7 +11,19 @@ import { ReportController } from './report.controller';
 import { ReportService } from './report.service';
 
 @Module({
-  controllers: [AlertsController, IncidentsController, EvidenceNotesController, TimelineController, ReportController],
-  providers: [AlertsService, IncidentsService, EvidenceNotesService, TimelineService, ReportService],
+  controllers: [
+    AlertsController,
+    IncidentsController,
+    EvidenceNotesController,
+    TimelineController,
+    ReportController,
+  ],
+  providers: [
+    AlertsService,
+    IncidentsService,
+    EvidenceNotesService,
+    TimelineService,
+    ReportService,
+  ],
 })
 export class InvestigationModule {}

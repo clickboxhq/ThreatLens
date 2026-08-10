@@ -29,10 +29,19 @@ export class LeaderboardService {
   // `leaderboard_entries` table refreshed by a scheduled rollup job (§5.12) — at this
   // platform's scale a live aggregate is fast enough, and it avoids standing up a new
   // queue/cron/table for a number a handful of concurrent users are reading.
-  async get(user: AuthenticatedUser, period: Period, scope: Scope, cohortId?: string) {
+  async get(
+    user: AuthenticatedUser,
+    period: Period,
+    scope: Scope,
+    cohortId?: string,
+  ) {
     if (scope === 'cohort') {
       if (!cohortId) {
-        throw new AppException(400, 'COHORT_ID_REQUIRED', 'cohortId is required when scope=cohort.');
+        throw new AppException(
+          400,
+          'COHORT_ID_REQUIRED',
+          'cohortId is required when scope=cohort.',
+        );
       }
       await this.assertCohortAccess(cohortId, user);
     }
@@ -51,7 +60,8 @@ export class LeaderboardService {
     const byUser = new Map<string, Accumulator>();
     for (const session of sessions) {
       if (!session.score) continue;
-      const multiplier = DIFFICULTY_MULTIPLIER[session.scenario.difficulty] ?? 1;
+      const multiplier =
+        DIFFICULTY_MULTIPLIER[session.scenario.difficulty] ?? 1;
       const percent = Number(session.score.overallPercent);
       const entry = byUser.get(session.userId) ?? {
         displayName: session.user.displayName,
@@ -71,7 +81,8 @@ export class LeaderboardService {
         displayName: e.displayName,
         points: Math.round(e.points),
         completions: e.completions,
-        averagePercent: Math.round((e.totalPercent / e.completions) * 100) / 100,
+        averagePercent:
+          Math.round((e.totalPercent / e.completions) * 100) / 100,
       }))
       .sort((a, b) => b.points - a.points)
       .map((e, i) => ({ ...e, rank: i + 1 }));
@@ -82,8 +93,13 @@ export class LeaderboardService {
     return { period, scope, entries: top, myEntry };
   }
 
-  private async assertCohortAccess(cohortId: string, user: AuthenticatedUser): Promise<void> {
-    const cohort = await this.prisma.cohort.findUnique({ where: { id: cohortId } });
+  private async assertCohortAccess(
+    cohortId: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    const cohort = await this.prisma.cohort.findUnique({
+      where: { id: cohortId },
+    });
     if (!cohort) throw new AppException(404, 'NOT_FOUND', 'Cohort not found.');
     if (cohort.ownerId === user.id) return;
 
@@ -91,7 +107,11 @@ export class LeaderboardService {
       where: { cohortId_userId: { cohortId, userId: user.id } },
     });
     if (!enrollment || enrollment.status !== 'active') {
-      throw new AppException(403, 'FORBIDDEN', 'You do not have access to this cohort leaderboard.');
+      throw new AppException(
+        403,
+        'FORBIDDEN',
+        'You do not have access to this cohort leaderboard.',
+      );
     }
   }
 }

@@ -6,7 +6,11 @@ import { RealtimeEventsService } from '../../common/realtime/realtime-events.ser
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
-import type { CloseIncidentDto, LinkAlertsDto, UpdateIncidentStatusDto } from './dto/incident.dto';
+import type {
+  CloseIncidentDto,
+  LinkAlertsDto,
+  UpdateIncidentStatusDto,
+} from './dto/incident.dto';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 
 @Injectable()
@@ -21,7 +25,9 @@ export class IncidentsService {
 
   async create(sessionId: string, user: AuthenticatedUser, title: string) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    const incident = await this.prisma.incident.create({ data: { sessionId, title } });
+    const incident = await this.prisma.incident.create({
+      data: { sessionId, title },
+    });
     await this.publishStatusChanged(sessionId, incident.id, incident.status);
     return this.toDto(incident.id);
   }
@@ -50,13 +56,24 @@ export class IncidentsService {
     }));
   }
 
-  async linkAlerts(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: LinkAlertsDto) {
+  async linkAlerts(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: LinkAlertsDto,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const incident = await this.getIncidentOrThrow(sessionId, incidentId);
 
-    const alerts = await this.prisma.alert.findMany({ where: { id: { in: dto.alertIds }, sessionId } });
+    const alerts = await this.prisma.alert.findMany({
+      where: { id: { in: dto.alertIds }, sessionId },
+    });
     if (alerts.length !== dto.alertIds.length) {
-      throw new AppException(400, 'INVALID_ALERT_IDS', 'One or more alert IDs do not belong to this session.');
+      throw new AppException(
+        400,
+        'INVALID_ALERT_IDS',
+        'One or more alert IDs do not belong to this session.',
+      );
     }
 
     await this.prisma.$transaction([
@@ -86,26 +103,44 @@ export class IncidentsService {
     return this.toDto(incident.id);
   }
 
-  async updateStatus(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: UpdateIncidentStatusDto) {
+  async updateStatus(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: UpdateIncidentStatusDto,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getIncidentOrThrow(sessionId, incidentId);
-    await this.prisma.incident.update({ where: { id: incidentId }, data: { status: dto.status } });
+    await this.prisma.incident.update({
+      where: { id: incidentId },
+      data: { status: dto.status },
+    });
     await this.publishStatusChanged(sessionId, incidentId, dto.status);
     return this.toDto(incidentId);
   }
 
-  async close(sessionId: string, incidentId: string, user: AuthenticatedUser, dto: CloseIncidentDto) {
+  async close(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: CloseIncidentDto,
+  ) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.getIncidentOrThrow(sessionId, incidentId);
 
-    const scenarioVersion = await this.prisma.scenarioVersion.findUniqueOrThrow({
-      where: { id: session.scenarioVersionId },
-    });
-    const def = scenarioVersion.groundTruthDefinition as unknown as GroundTruthDefinition & {
-      scoring_rubric: { min_evidence_items: number };
-    };
+    const scenarioVersion = await this.prisma.scenarioVersion.findUniqueOrThrow(
+      {
+        where: { id: session.scenarioVersionId },
+      },
+    );
+    const def =
+      scenarioVersion.groundTruthDefinition as unknown as GroundTruthDefinition & {
+        scoring_rubric: { min_evidence_items: number };
+      };
 
-    const evidenceCount = await this.prisma.evidenceCollection.count({ where: { incidentId } });
+    const evidenceCount = await this.prisma.evidenceCollection.count({
+      where: { incidentId },
+    });
     if (evidenceCount < def.scoring_rubric.min_evidence_items) {
       throw new AppException(
         409,
@@ -117,11 +152,18 @@ export class IncidentsService {
     await this.prisma.$transaction([
       this.prisma.incident.update({
         where: { id: incidentId },
-        data: { status: 'closed', verdict: dto.verdict, summary: dto.summary, closedAt: new Date() },
+        data: {
+          status: 'closed',
+          verdict: dto.verdict,
+          summary: dto.summary,
+          closedAt: new Date(),
+        },
       }),
       ...dto.mitreTechniqueIds.map((mitreTechniqueId) =>
         this.prisma.incidentTechnique.upsert({
-          where: { incidentId_mitreTechniqueId: { incidentId, mitreTechniqueId } },
+          where: {
+            incidentId_mitreTechniqueId: { incidentId, mitreTechniqueId },
+          },
           update: {},
           create: { incidentId, mitreTechniqueId },
         }),
@@ -156,20 +198,33 @@ export class IncidentsService {
   // incident.status_changed — unlike alert.new (which pushes the full DTO so a new row can
   // render immediately), a status flip is cheap for the client to react to by just refetching
   // incident detail over REST, keeping REST as the single place that DTO-shapes an incident.
-  private async publishStatusChanged(sessionId: string, incidentId: string, status: string): Promise<void> {
-    await this.realtimeEvents.publish(sessionId, { type: 'incident.status_changed', payload: { id: incidentId, status } });
+  private async publishStatusChanged(
+    sessionId: string,
+    incidentId: string,
+    status: string,
+  ): Promise<void> {
+    await this.realtimeEvents.publish(sessionId, {
+      type: 'incident.status_changed',
+      payload: { id: incidentId, status },
+    });
   }
 
   private async getIncidentOrThrow(sessionId: string, incidentId: string) {
-    const incident = await this.prisma.incident.findFirst({ where: { id: incidentId, sessionId } });
-    if (!incident) throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
+    const incident = await this.prisma.incident.findFirst({
+      where: { id: incidentId, sessionId },
+    });
+    if (!incident)
+      throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
     return incident;
   }
 
   private async toDto(incidentId: string) {
     const incident = await this.prisma.incident.findUniqueOrThrow({
       where: { id: incidentId },
-      include: { alertLinks: true, techniqueLinks: { include: { mitreTechnique: true } } },
+      include: {
+        alertLinks: true,
+        techniqueLinks: { include: { mitreTechnique: true } },
+      },
     });
     return {
       id: incident.id,

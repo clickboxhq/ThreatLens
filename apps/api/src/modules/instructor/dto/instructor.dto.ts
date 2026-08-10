@@ -1,5 +1,15 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsObject, IsOptional, IsString, IsUUID, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateCohortDto {
   @IsString()

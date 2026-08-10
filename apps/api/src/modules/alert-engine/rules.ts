@@ -11,7 +11,10 @@ import type {
   ProcessEvent,
   SignInEvent,
 } from '@prisma/client';
-import { distanceBetweenCitiesKm, impliedTravelSpeedKmh } from '../../common/geo';
+import {
+  distanceBetweenCitiesKm,
+  impliedTravelSpeedKmh,
+} from '../../common/geo';
 
 // A detection firing, before it's turned into a persisted Alert row. Kept separate from
 // the Prisma model so rule logic is a pure function of already-fetched data and is
@@ -31,49 +34,100 @@ export interface AlertCandidate {
   occurredAt: Date;
 }
 
-export const SPF_FAIL_RULE_NAME = 'Email: SPF Fail with Lookalike Sender Domain';
+export const SPF_FAIL_RULE_NAME =
+  'Email: SPF Fail with Lookalike Sender Domain';
 export const NEW_COUNTRY_RULE_NAME = 'Identity: Sign-in From New Country';
-export const PASSWORD_SPRAY_RULE_NAME = 'Identity: Password Spray Campaign Detected';
+export const PASSWORD_SPRAY_RULE_NAME =
+  'Identity: Password Spray Campaign Detected';
 export const MFA_FATIGUE_RULE_NAME = 'Identity: MFA Fatigue Pattern Detected';
-export const IMPOSSIBLE_TRAVEL_RULE_NAME = 'Identity: Impossible Travel Detected';
-export const OUTBOUND_PERSONAL_EMAIL_RULE_NAME = 'Email: Outbound Message to Personal Webmail with Attachment';
-export const SUSPICIOUS_PROCESS_RULE_NAME = 'Device: Office Application Spawned a Script Interpreter';
-export const LATERAL_MOVEMENT_RULE_NAME = 'Device: Remote Service Execution Consistent with Lateral Movement';
-export const MASS_ENCRYPTION_RULE_NAME = 'Device: Mass File Encryption Detected';
-export const LEGACY_AUTH_BYPASS_RULE_NAME = 'Identity: Legacy Authentication Bypassed Enforced MFA';
-export const SUSPICIOUS_CLOUD_ACTION_RULE_NAME = 'Cloud: Sensitive API Action Detected';
-export const WEBSHELL_ACCESS_RULE_NAME = 'Web: Non-Browser Client Accessed a Script Path';
-export const PERSISTENCE_ARTIFACT_RULE_NAME = 'Device: Persistence Artifact Written to Startup Location';
-export const CREDENTIAL_DUMPING_RULE_NAME = 'Device: LSASS Memory Access via comsvcs.dll';
-export const REMOVABLE_MEDIA_COPY_RULE_NAME = 'Device: Bulk File Copy to Removable Media';
+export const IMPOSSIBLE_TRAVEL_RULE_NAME =
+  'Identity: Impossible Travel Detected';
+export const OUTBOUND_PERSONAL_EMAIL_RULE_NAME =
+  'Email: Outbound Message to Personal Webmail with Attachment';
+export const SUSPICIOUS_PROCESS_RULE_NAME =
+  'Device: Office Application Spawned a Script Interpreter';
+export const LATERAL_MOVEMENT_RULE_NAME =
+  'Device: Remote Service Execution Consistent with Lateral Movement';
+export const MASS_ENCRYPTION_RULE_NAME =
+  'Device: Mass File Encryption Detected';
+export const LEGACY_AUTH_BYPASS_RULE_NAME =
+  'Identity: Legacy Authentication Bypassed Enforced MFA';
+export const SUSPICIOUS_CLOUD_ACTION_RULE_NAME =
+  'Cloud: Sensitive API Action Detected';
+export const WEBSHELL_ACCESS_RULE_NAME =
+  'Web: Non-Browser Client Accessed a Script Path';
+export const PERSISTENCE_ARTIFACT_RULE_NAME =
+  'Device: Persistence Artifact Written to Startup Location';
+export const CREDENTIAL_DUMPING_RULE_NAME =
+  'Device: LSASS Memory Access via comsvcs.dll';
+export const REMOVABLE_MEDIA_COPY_RULE_NAME =
+  'Device: Bulk File Copy to Removable Media';
 export const SQL_INJECTION_RULE_NAME = 'Web: SQL Injection Payload Detected';
-export const SCHEDULED_TASK_PERSISTENCE_RULE_NAME = 'Device: Scheduled Task Created for Persistence';
-export const OAUTH_CONSENT_GRANT_RULE_NAME = 'Cloud: Suspicious OAuth App Consent Followed by Mailbox Access';
-export const KERBEROASTING_RULE_NAME = 'Device: Kerberoasting Ticket Request Detected';
-export const DNS_TUNNELING_RULE_NAME = 'Device: High-Frequency DNS Traffic to a Single External Address';
+export const SCHEDULED_TASK_PERSISTENCE_RULE_NAME =
+  'Device: Scheduled Task Created for Persistence';
+export const OAUTH_CONSENT_GRANT_RULE_NAME =
+  'Cloud: Suspicious OAuth App Consent Followed by Mailbox Access';
+export const KERBEROASTING_RULE_NAME =
+  'Device: Kerberoasting Ticket Request Detected';
+export const DNS_TUNNELING_RULE_NAME =
+  'Device: High-Frequency DNS Traffic to a Single External Address';
 
 const PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD = 5;
 const MFA_FATIGUE_DENIAL_THRESHOLD = 5;
 // Faster than sustained commercial subsonic flight (~880-926 km/h) — a comfortable margin
 // so the rule never mistakes a fast-but-feasible trip for an impossible one.
 const IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH = 900;
-const PERSONAL_EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
-const OFFICE_APP_IMAGE_NAMES = ['WINWORD.EXE', 'EXCEL.EXE', 'OUTLOOK.EXE', 'POWERPNT.EXE'];
-const SCRIPT_INTERPRETER_IMAGE_NAMES = ['POWERSHELL.EXE', 'CMD.EXE', 'WSCRIPT.EXE', 'CSCRIPT.EXE', 'MSHTA.EXE'];
+const PERSONAL_EMAIL_DOMAINS = [
+  'gmail.com',
+  'yahoo.com',
+  'outlook.com',
+  'hotmail.com',
+  'icloud.com',
+];
+const OFFICE_APP_IMAGE_NAMES = [
+  'WINWORD.EXE',
+  'EXCEL.EXE',
+  'OUTLOOK.EXE',
+  'POWERPNT.EXE',
+];
+const SCRIPT_INTERPRETER_IMAGE_NAMES = [
+  'POWERSHELL.EXE',
+  'CMD.EXE',
+  'WSCRIPT.EXE',
+  'CSCRIPT.EXE',
+  'MSHTA.EXE',
+];
 const LATERAL_MOVEMENT_SERVICE_IMAGE_NAME = 'PSEXESVC.EXE';
 const MASS_ENCRYPTION_COUNT_THRESHOLD = 5;
 const MASS_ENCRYPTION_WINDOW_MINUTES = 15;
 // A curated, deliberately narrow list — real cloud detection content typically ships a much
 // larger sensitive-action catalog, but this is enough to be a realistic, single-signal rule.
-const SENSITIVE_CLOUD_ACTION_NAMES = ['CreateAccessKey', 'PutBucketPolicy', 'DeleteTrail', 'DisableKey'];
-const NON_BROWSER_CLIENT_MARKERS = ['curl/', 'python-requests/', 'Wget/', 'PowerShell/'];
+const SENSITIVE_CLOUD_ACTION_NAMES = [
+  'CreateAccessKey',
+  'PutBucketPolicy',
+  'DeleteTrail',
+  'DisableKey',
+];
+const NON_BROWSER_CLIENT_MARKERS = [
+  'curl/',
+  'python-requests/',
+  'Wget/',
+  'PowerShell/',
+];
 const STARTUP_LOCATION_MARKER = '\\Start Menu\\Programs\\Startup\\';
 const SCRIPT_PATH_EXTENSIONS = ['.php', '.asp', '.aspx', '.jsp'];
 const LSASS_DUMP_COMMAND_MARKERS = ['comsvcs.dll', 'minidump'];
 const REMOVABLE_MEDIA_PATH_MARKERS = ['E:\\', 'F:\\'];
 const REMOVABLE_MEDIA_COPY_COUNT_THRESHOLD = 5;
 const REMOVABLE_MEDIA_COPY_WINDOW_MINUTES = 15;
-const SQLI_PAYLOAD_MARKERS = ["' or '", "or 1=1", "union select", "drop table", "sleep(", "--"];
+const SQLI_PAYLOAD_MARKERS = [
+  "' or '",
+  'or 1=1',
+  'union select',
+  'drop table',
+  'sleep(',
+  '--',
+];
 const SCHEDULED_TASK_IMAGE_NAME = 'SCHTASKS.EXE';
 const SCHEDULED_TASK_CREATE_MARKER = '/create';
 const OAUTH_CONSENT_ACTION_NAME = 'ConsentToApplication';
@@ -94,13 +148,22 @@ function imageBaseName(imagePath: string): string {
  * omniscient), so it also fires on the seeded benign_it_admin_email_v1 noise message
  * (§8.6's intentional false positive), not only on the ground-truth phishing email.
  */
-export function evaluateSpfFailRule(emails: EmailMessage[], identities: Identity[]): AlertCandidate[] {
-  const identityByUpn = new Map(identities.map((i) => [i.userPrincipalName.toLowerCase(), i]));
+export function evaluateSpfFailRule(
+  emails: EmailMessage[],
+  identities: Identity[],
+): AlertCandidate[] {
+  const identityByUpn = new Map(
+    identities.map((i) => [i.userPrincipalName.toLowerCase(), i]),
+  );
 
   return emails
-    .filter((email) => email.direction === 'inbound' && email.spfResult === 'fail')
+    .filter(
+      (email) => email.direction === 'inbound' && email.spfResult === 'fail',
+    )
     .map((email) => {
-      const recipient = identityByUpn.get((email.recipientAddresses[0] ?? '').toLowerCase());
+      const recipient = identityByUpn.get(
+        (email.recipientAddresses[0] ?? '').toLowerCase(),
+      );
       return {
         id: randomUUID(),
         detectionRuleName: SPF_FAIL_RULE_NAME,
@@ -122,7 +185,10 @@ export function evaluateSpfFailRule(emails: EmailMessage[], identities: Identity
  * home_country. This is deliberately the same pattern for both an account-takeover
  * sign-in and legitimate business travel (§8.6) — the Student has to tell them apart.
  */
-export function evaluateNewCountryRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateNewCountryRule(
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
 
   return signIns
@@ -154,7 +220,10 @@ export function evaluateNewCountryRule(signIns: SignInEvent[], identities: Ident
  * citing every supporting event (every failed attempt, plus a successful one if the spray
  * ultimately compromised an account) rather than one alert per event (§8.2).
  */
-export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluatePasswordSprayRule(
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
   const bySourceIp = new Map<string, SignInEvent[]>();
   for (const event of signIns) {
@@ -166,12 +235,22 @@ export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Id
   const candidates: AlertCandidate[] = [];
   for (const [sourceIp, events] of bySourceIp) {
     const failedEvents = events.filter((e) => e.result === 'failure');
-    const distinctFailedIdentityIds = new Set(failedEvents.map((e) => e.identityId));
-    if (distinctFailedIdentityIds.size < PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD) continue;
+    const distinctFailedIdentityIds = new Set(
+      failedEvents.map((e) => e.identityId),
+    );
+    if (
+      distinctFailedIdentityIds.size <
+      PASSWORD_SPRAY_DISTINCT_IDENTITY_THRESHOLD
+    )
+      continue;
 
     const successEvent = events.find((e) => e.result === 'success');
-    const representativeIdentity = identityById.get(successEvent?.identityId ?? failedEvents[0].identityId)!;
-    const latestEvent = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const representativeIdentity = identityById.get(
+      successEvent?.identityId ?? failedEvents[0].identityId,
+    )!;
+    const latestEvent = [...events].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -184,7 +263,10 @@ export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Id
         : `${distinctFailedIdentityIds.size} accounts received failed sign-in attempts from ${sourceIp} in a short window. No successful sign-in from this address was observed.`,
       primaryEntityType: 'identity' as const,
       primaryEntityId: representativeIdentity.id,
-      evidenceRefs: events.map((e) => ({ eventTable: 'sign_in_events', eventId: e.id })),
+      evidenceRefs: events.map((e) => ({
+        eventTable: 'sign_in_events',
+        eventId: e.id,
+      })),
       correlationId: null,
       occurredAt: latestEvent.occurredAt,
     });
@@ -198,7 +280,10 @@ export function evaluatePasswordSprayRule(signIns: SignInEvent[], identities: Id
  * succeeds. Unlike password spraying (many identities, one IP), this is one identity
  * hit repeatedly (§8.2).
  */
-export function evaluateMfaFatigueRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateMfaFatigueRule(
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
   const byIdentityAndIp = new Map<string, SignInEvent[]>();
   for (const event of signIns) {
@@ -216,7 +301,9 @@ export function evaluateMfaFatigueRule(signIns: SignInEvent[], identities: Ident
     const identity = identityById.get(deniedEvents[0].identityId);
     if (!identity) continue;
     const successEvent = events.find((e) => e.result === 'success');
-    const latestEvent = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const latestEvent = [...events].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -245,7 +332,10 @@ export function evaluateMfaFatigueRule(signIns: SignInEvent[], identities: Ident
  * (§9.6), computed with the same geo helper the Identity Portal itself uses so an
  * investigator's manual reasoning and the automated alert agree.
  */
-export function evaluateImpossibleTravelRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateImpossibleTravelRule(
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
   const byIdentity = new Map<string, SignInEvent[]>();
   for (const event of signIns) {
@@ -257,7 +347,9 @@ export function evaluateImpossibleTravelRule(signIns: SignInEvent[], identities:
 
   const candidates: AlertCandidate[] = [];
   for (const [identityId, events] of byIdentity) {
-    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+    const sorted = [...events].sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+    );
     const identity = identityById.get(identityId);
     if (!identity) continue;
 
@@ -266,11 +358,16 @@ export function evaluateImpossibleTravelRule(signIns: SignInEvent[], identities:
       const curr = sorted[i];
       if (prev.sourceCity === curr.sourceCity) continue;
 
-      const distanceKm = distanceBetweenCitiesKm(prev.sourceCity, curr.sourceCity);
+      const distanceKm = distanceBetweenCitiesKm(
+        prev.sourceCity,
+        curr.sourceCity,
+      );
       if (distanceKm === null) continue;
-      const minutesElapsed = (curr.occurredAt.getTime() - prev.occurredAt.getTime()) / 60000;
+      const minutesElapsed =
+        (curr.occurredAt.getTime() - prev.occurredAt.getTime()) / 60000;
       const speedKmh = impliedTravelSpeedKmh(distanceKm, minutesElapsed);
-      if (speedKmh === null || speedKmh < IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH) continue;
+      if (speedKmh === null || speedKmh < IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH)
+        continue;
 
       candidates.push({
         id: randomUUID(),
@@ -297,13 +394,24 @@ export function evaluateImpossibleTravelRule(signIns: SignInEvent[], identities:
  * do with a spoofed sender (§8.2): the message is genuinely sent by the organization's own
  * mail system, so SPF/DKIM/DMARC all legitimately pass, unlike every other rule so far.
  */
-export function evaluateOutboundPersonalEmailRule(emails: EmailMessage[], attachments: EmailAttachment[]): AlertCandidate[] {
-  const emailIdsWithAttachments = new Set(attachments.map((a) => a.emailMessageId));
+export function evaluateOutboundPersonalEmailRule(
+  emails: EmailMessage[],
+  attachments: EmailAttachment[],
+): AlertCandidate[] {
+  const emailIdsWithAttachments = new Set(
+    attachments.map((a) => a.emailMessageId),
+  );
 
   return emails
     .filter((email) => email.direction === 'outbound')
     .filter((email) => emailIdsWithAttachments.has(email.id))
-    .filter((email) => email.recipientAddresses.some((addr) => PERSONAL_EMAIL_DOMAINS.some((d) => addr.toLowerCase().endsWith(`@${d}`))))
+    .filter((email) =>
+      email.recipientAddresses.some((addr) =>
+        PERSONAL_EMAIL_DOMAINS.some((d) =>
+          addr.toLowerCase().endsWith(`@${d}`),
+        ),
+      ),
+    )
     .map((email) => ({
       id: randomUUID(),
       detectionRuleName: OUTBOUND_PERSONAL_EMAIL_RULE_NAME,
@@ -323,7 +431,10 @@ export function evaluateOutboundPersonalEmailRule(emails: EmailMessage[], attach
  * document spawning PowerShell/cmd/wscript), and the first rule scoped to a device rather
  * than an identity or mailbox (§8.2, §10.3).
  */
-export function evaluateSuspiciousProcessRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateSuspiciousProcessRule(
+  processEvents: ProcessEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const byGuid = new Map(processEvents.map((p) => [p.processGuid, p]));
 
@@ -335,7 +446,11 @@ export function evaluateSuspiciousProcessRule(processEvents: ProcessEvent[], dev
 
     const parentName = imageBaseName(parent.imagePath);
     const childName = imageBaseName(child.imagePath);
-    if (!OFFICE_APP_IMAGE_NAMES.includes(parentName) || !SCRIPT_INTERPRETER_IMAGE_NAMES.includes(childName)) continue;
+    if (
+      !OFFICE_APP_IMAGE_NAMES.includes(parentName) ||
+      !SCRIPT_INTERPRETER_IMAGE_NAMES.includes(childName)
+    )
+      continue;
 
     const device = deviceById.get(child.deviceId);
     if (!device) continue;
@@ -367,7 +482,10 @@ export function evaluateSuspiciousProcessRule(processEvents: ProcessEvent[], dev
  * without needing to know which device the connection originated from (§10.3, ransomware
  * lateral-movement narrative).
  */
-export function evaluateLateralMovementRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateLateralMovementRule(
+  processEvents: ProcessEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const byGuid = new Map(processEvents.map((p) => [p.processGuid, p]));
   const childrenByParentGuid = new Map<string, ProcessEvent[]>();
@@ -380,11 +498,14 @@ export function evaluateLateralMovementRule(processEvents: ProcessEvent[], devic
 
   const candidates: AlertCandidate[] = [];
   for (const event of processEvents) {
-    if (imageBaseName(event.imagePath) !== LATERAL_MOVEMENT_SERVICE_IMAGE_NAME) continue;
+    if (imageBaseName(event.imagePath) !== LATERAL_MOVEMENT_SERVICE_IMAGE_NAME)
+      continue;
     const device = deviceById.get(event.deviceId);
     if (!device) continue;
 
-    const parent = event.parentProcessGuid ? byGuid.get(event.parentProcessGuid) : undefined;
+    const parent = event.parentProcessGuid
+      ? byGuid.get(event.parentProcessGuid)
+      : undefined;
     const children = childrenByParentGuid.get(event.processGuid) ?? [];
 
     candidates.push({
@@ -395,9 +516,14 @@ export function evaluateLateralMovementRule(processEvents: ProcessEvent[], devic
       primaryEntityType: 'device' as const,
       primaryEntityId: device.id,
       evidenceRefs: [
-        ...(parent ? [{ eventTable: 'process_events', eventId: parent.id }] : []),
+        ...(parent
+          ? [{ eventTable: 'process_events', eventId: parent.id }]
+          : []),
         { eventTable: 'process_events', eventId: event.id },
-        ...children.map((c) => ({ eventTable: 'process_events', eventId: c.id })),
+        ...children.map((c) => ({
+          eventTable: 'process_events',
+          eventId: c.id,
+        })),
       ],
       correlationId: event.correlationId,
       occurredAt: event.occurredAt,
@@ -411,7 +537,10 @@ export function evaluateLateralMovementRule(processEvents: ProcessEvent[], devic
  * the observable signature of ransomware working through a file share, independent of any
  * single file's content (§10.5's `encrypted` action exists specifically for this).
  */
-export function evaluateMassEncryptionRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateMassEncryptionRule(
+  fileEvents: FileEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const byDevice = new Map<string, FileEvent[]>();
   for (const event of fileEvents) {
@@ -425,10 +554,15 @@ export function evaluateMassEncryptionRule(fileEvents: FileEvent[], devices: Dev
   for (const [deviceId, events] of byDevice) {
     const device = deviceById.get(deviceId);
     if (!device) continue;
-    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+    const sorted = [...events].sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+    );
 
     for (let i = 0; i < sorted.length; i++) {
-      const windowEnd = new Date(sorted[i].occurredAt.getTime() + MASS_ENCRYPTION_WINDOW_MINUTES * 60 * 1000);
+      const windowEnd = new Date(
+        sorted[i].occurredAt.getTime() +
+          MASS_ENCRYPTION_WINDOW_MINUTES * 60 * 1000,
+      );
       const cluster = sorted.slice(i).filter((e) => e.occurredAt <= windowEnd);
       if (cluster.length < MASS_ENCRYPTION_COUNT_THRESHOLD) continue;
 
@@ -440,7 +574,10 @@ export function evaluateMassEncryptionRule(fileEvents: FileEvent[], devices: Dev
         description: `${cluster.length} files were encrypted on ${device.hostname} within ${MASS_ENCRYPTION_WINDOW_MINUTES} minutes — consistent with ransomware working through a file share.`,
         primaryEntityType: 'device' as const,
         primaryEntityId: device.id,
-        evidenceRefs: cluster.map((e) => ({ eventTable: 'file_events', eventId: e.id })),
+        evidenceRefs: cluster.map((e) => ({
+          eventTable: 'file_events',
+          eventId: e.id,
+        })),
         correlationId: latest.correlationId,
         occurredAt: latest.occurredAt,
       });
@@ -458,7 +595,10 @@ export function evaluateMassEncryptionRule(fileEvents: FileEvent[], devices: Dev
  * identity into one alert, the same shape as the MFA-fatigue and password-spray rules,
  * since a single bypass is rarely a one-off (§9's identity investigation surface).
  */
-export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateLegacyAuthBypassRule(
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
   const byIdentity = new Map<string, SignInEvent[]>();
   for (const event of signIns) {
@@ -473,7 +613,9 @@ export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities:
   const candidates: AlertCandidate[] = [];
   for (const [identityId, events] of byIdentity) {
     const identity = identityById.get(identityId)!;
-    const latest = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const latest = [...events].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -482,7 +624,10 @@ export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities:
       description: `${events.length} successful sign-in${events.length === 1 ? '' : 's'} to "${events[0].application}" via ${events[0].clientApp} bypassed this identity's enforced MFA policy — legacy authentication protocols don't support modern MFA challenges.`,
       primaryEntityType: 'identity' as const,
       primaryEntityId: identity.id,
-      evidenceRefs: events.map((e) => ({ eventTable: 'sign_in_events', eventId: e.id })),
+      evidenceRefs: events.map((e) => ({
+        eventTable: 'sign_in_events',
+        eventId: e.id,
+      })),
       correlationId: latest.correlationId,
       occurredAt: latest.occurredAt,
     });
@@ -496,7 +641,10 @@ export function evaluateLegacyAuthBypassRule(signIns: SignInEvent[], identities:
  * of who called it or from where. Real cloud-security tooling flags these the same way: the
  * action itself is rare and consequential enough to warrant review on its own (§8.2, §1.8).
  */
-export function evaluateSuspiciousCloudActionRule(cloudEvents: CloudEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateSuspiciousCloudActionRule(
+  cloudEvents: CloudEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
 
   return cloudEvents
@@ -524,14 +672,24 @@ export function evaluateSuspiciousCloudActionRule(cloudEvents: CloudEvent[], ide
  * into one alert, the same shape as the mass-encryption/password-spray rules, since a real
  * webshell interaction is a burst of requests, not a single hit (§8.2, §10.3).
  */
-export function evaluateWebShellAccessRule(httpRequests: HttpRequest[], devices: Device[]): AlertCandidate[] {
+export function evaluateWebShellAccessRule(
+  httpRequests: HttpRequest[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
-  const isNonBrowserClient = (userAgent: string) => NON_BROWSER_CLIENT_MARKERS.some((marker) => userAgent.startsWith(marker));
-  const isScriptPath = (url: string) => SCRIPT_PATH_EXTENSIONS.some((ext) => url.split('?')[0].endsWith(ext));
+  const isNonBrowserClient = (userAgent: string) =>
+    NON_BROWSER_CLIENT_MARKERS.some((marker) => userAgent.startsWith(marker));
+  const isScriptPath = (url: string) =>
+    SCRIPT_PATH_EXTENSIONS.some((ext) => url.split('?')[0].endsWith(ext));
 
   const grouped = new Map<string, HttpRequest[]>();
   for (const request of httpRequests) {
-    if (!request.deviceId || !isNonBrowserClient(request.userAgent) || !isScriptPath(request.url)) continue;
+    if (
+      !request.deviceId ||
+      !isNonBrowserClient(request.userAgent) ||
+      !isScriptPath(request.url)
+    )
+      continue;
     const key = `${request.deviceId}::${request.url}`;
     const group = grouped.get(key) ?? [];
     group.push(request);
@@ -542,7 +700,9 @@ export function evaluateWebShellAccessRule(httpRequests: HttpRequest[], devices:
   for (const requests of grouped.values()) {
     const device = deviceById.get(requests[0].deviceId!);
     if (!device) continue;
-    const latest = [...requests].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const latest = [...requests].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -551,7 +711,10 @@ export function evaluateWebShellAccessRule(httpRequests: HttpRequest[], devices:
       description: `${requests.length} request${requests.length === 1 ? '' : 's'} from a scripted client ("${requests[0].userAgent}") targeted "${requests[0].url}" on ${device.hostname} — consistent with web shell interaction.`,
       primaryEntityType: 'device' as const,
       primaryEntityId: device.id,
-      evidenceRefs: requests.map((r) => ({ eventTable: 'http_requests', eventId: r.id })),
+      evidenceRefs: requests.map((r) => ({
+        eventTable: 'http_requests',
+        eventId: r.id,
+      })),
       correlationId: latest.correlationId,
       occurredAt: latest.occurredAt,
     });
@@ -566,10 +729,17 @@ export function evaluateWebShellAccessRule(httpRequests: HttpRequest[], devices:
  * the same location, so the rule alone can't distinguish the two — the Student has to look at
  * what the artifact actually is.
  */
-export function evaluatePersistenceArtifactRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluatePersistenceArtifactRule(
+  fileEvents: FileEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   return fileEvents
-    .filter((event) => event.action === 'created' && event.filePath.includes(STARTUP_LOCATION_MARKER))
+    .filter(
+      (event) =>
+        event.action === 'created' &&
+        event.filePath.includes(STARTUP_LOCATION_MARKER),
+    )
     .map((event) => {
       const device = deviceById.get(event.deviceId);
       const filename = event.filePath.split('\\').pop();
@@ -593,12 +763,17 @@ export function evaluatePersistenceArtifactRule(fileEvents: FileEvent[], devices
  * memory (and, with it, cached credentials) without touching a dedicated dumping tool that
  * antivirus would flag by name (T1003.001).
  */
-export function evaluateCredentialDumpingRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateCredentialDumpingRule(
+  processEvents: ProcessEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   return processEvents
     .filter((event) => {
       const commandLine = event.commandLine.toLowerCase();
-      return LSASS_DUMP_COMMAND_MARKERS.every((marker) => commandLine.includes(marker));
+      return LSASS_DUMP_COMMAND_MARKERS.every((marker) =>
+        commandLine.includes(marker),
+      );
     })
     .map((event) => {
       const device = deviceById.get(event.deviceId);
@@ -622,12 +797,20 @@ export function evaluateCredentialDumpingRule(processEvents: ProcessEvent[], dev
  * copy to a USB drive (T1052.001), the same windowed-count-threshold shape as
  * evaluateMassEncryptionRule.
  */
-export function evaluateRemovableMediaCopyRule(fileEvents: FileEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateRemovableMediaCopyRule(
+  fileEvents: FileEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const byDevice = new Map<string, FileEvent[]>();
   for (const event of fileEvents) {
     if (event.action !== 'created') continue;
-    if (!REMOVABLE_MEDIA_PATH_MARKERS.some((marker) => event.filePath.startsWith(marker))) continue;
+    if (
+      !REMOVABLE_MEDIA_PATH_MARKERS.some((marker) =>
+        event.filePath.startsWith(marker),
+      )
+    )
+      continue;
     const group = byDevice.get(event.deviceId) ?? [];
     group.push(event);
     byDevice.set(event.deviceId, group);
@@ -637,10 +820,15 @@ export function evaluateRemovableMediaCopyRule(fileEvents: FileEvent[], devices:
   for (const [deviceId, events] of byDevice) {
     const device = deviceById.get(deviceId);
     if (!device) continue;
-    const sorted = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+    const sorted = [...events].sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+    );
 
     for (let i = 0; i < sorted.length; i++) {
-      const windowEnd = new Date(sorted[i].occurredAt.getTime() + REMOVABLE_MEDIA_COPY_WINDOW_MINUTES * 60 * 1000);
+      const windowEnd = new Date(
+        sorted[i].occurredAt.getTime() +
+          REMOVABLE_MEDIA_COPY_WINDOW_MINUTES * 60 * 1000,
+      );
       const cluster = sorted.slice(i).filter((e) => e.occurredAt <= windowEnd);
       if (cluster.length < REMOVABLE_MEDIA_COPY_COUNT_THRESHOLD) continue;
 
@@ -652,7 +840,10 @@ export function evaluateRemovableMediaCopyRule(fileEvents: FileEvent[], devices:
         description: `${cluster.length} files were copied to a removable drive on ${device.hostname} within ${REMOVABLE_MEDIA_COPY_WINDOW_MINUTES} minutes.`,
         primaryEntityType: 'device' as const,
         primaryEntityId: device.id,
-        evidenceRefs: cluster.map((e) => ({ eventTable: 'file_events', eventId: e.id })),
+        evidenceRefs: cluster.map((e) => ({
+          eventTable: 'file_events',
+          eventId: e.id,
+        })),
         correlationId: latest.correlationId,
         occurredAt: latest.occurredAt,
       });
@@ -669,7 +860,10 @@ export function evaluateRemovableMediaCopyRule(fileEvents: FileEvent[], devices:
  * attack is a burst of probes followed by a successful exploit, not a single request
  * (T1190).
  */
-export function evaluateSqlInjectionRule(httpRequests: HttpRequest[], devices: Device[]): AlertCandidate[] {
+export function evaluateSqlInjectionRule(
+  httpRequests: HttpRequest[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const containsSqliMarker = (url: string) => {
     const decoded = decodeURIComponent(url).toLowerCase();
@@ -688,7 +882,9 @@ export function evaluateSqlInjectionRule(httpRequests: HttpRequest[], devices: D
   for (const requests of grouped.values()) {
     const device = deviceById.get(requests[0].deviceId!);
     if (!device) continue;
-    const latest = [...requests].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const latest = [...requests].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -697,7 +893,10 @@ export function evaluateSqlInjectionRule(httpRequests: HttpRequest[], devices: D
       description: `${requests.length} request${requests.length === 1 ? '' : 's'} to ${device.hostname} contained SQL-injection markers in the request URL.`,
       primaryEntityType: 'device' as const,
       primaryEntityId: device.id,
-      evidenceRefs: requests.map((r) => ({ eventTable: 'http_requests', eventId: r.id })),
+      evidenceRefs: requests.map((r) => ({
+        eventTable: 'http_requests',
+        eventId: r.id,
+      })),
       correlationId: latest.correlationId,
       occurredAt: latest.occurredAt,
     });
@@ -710,11 +909,18 @@ export function evaluateSqlInjectionRule(httpRequests: HttpRequest[], devices: D
  * mechanism (T1053.005) that survives a reboot without needing a Startup-folder artifact
  * (contrast with evaluatePersistenceArtifactRule's T1547.001 path-based heuristic).
  */
-export function evaluateScheduledTaskPersistenceRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateScheduledTaskPersistenceRule(
+  processEvents: ProcessEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   return processEvents
-    .filter((event) => imageBaseName(event.imagePath) === SCHEDULED_TASK_IMAGE_NAME)
-    .filter((event) => event.commandLine.toLowerCase().includes(SCHEDULED_TASK_CREATE_MARKER))
+    .filter(
+      (event) => imageBaseName(event.imagePath) === SCHEDULED_TASK_IMAGE_NAME,
+    )
+    .filter((event) =>
+      event.commandLine.toLowerCase().includes(SCHEDULED_TASK_CREATE_MARKER),
+    )
     .map((event) => {
       const device = deviceById.get(event.deviceId);
       return {
@@ -738,7 +944,10 @@ export function evaluateScheduledTaskPersistenceRule(processEvents: ProcessEvent
  * sign-in. The two-step, windowed-correlation shape mirrors evaluateLegacyAuthBypassRule's
  * bypass-then-collection pattern, but within a single cloud-events table instead of two.
  */
-export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identities: Identity[]): AlertCandidate[] {
+export function evaluateOAuthConsentGrantRule(
+  cloudEvents: CloudEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
   const identityById = new Map(identities.map((i) => [i.id, i]));
   const byIdentity = new Map<string, CloudEvent[]>();
   for (const event of cloudEvents) {
@@ -752,8 +961,13 @@ export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identit
     const identity = identityById.get(identityId);
     if (!identity) continue;
 
-    for (const consent of events.filter((e) => e.actionName === OAUTH_CONSENT_ACTION_NAME)) {
-      const windowEnd = new Date(consent.occurredAt.getTime() + OAUTH_MAILBOX_ACCESS_WINDOW_MINUTES * 60 * 1000);
+    for (const consent of events.filter(
+      (e) => e.actionName === OAUTH_CONSENT_ACTION_NAME,
+    )) {
+      const windowEnd = new Date(
+        consent.occurredAt.getTime() +
+          OAUTH_MAILBOX_ACCESS_WINDOW_MINUTES * 60 * 1000,
+      );
       const mailAccessEvents = events.filter(
         (e) =>
           e.actionName === OAUTH_MAILBOX_ACCESS_ACTION_NAME &&
@@ -763,7 +977,9 @@ export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identit
       );
       if (mailAccessEvents.length < OAUTH_MAILBOX_ACCESS_THRESHOLD) continue;
 
-      const latest = [...mailAccessEvents].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+      const latest = [...mailAccessEvents].sort(
+        (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+      )[0];
       candidates.push({
         id: randomUUID(),
         detectionRuleName: OAUTH_CONSENT_GRANT_RULE_NAME,
@@ -773,7 +989,10 @@ export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identit
         primaryEntityId: identity.id,
         evidenceRefs: [
           { eventTable: 'cloud_events', eventId: consent.id },
-          ...mailAccessEvents.map((e) => ({ eventTable: 'cloud_events', eventId: e.id })),
+          ...mailAccessEvents.map((e) => ({
+            eventTable: 'cloud_events',
+            eventId: e.id,
+          })),
         ],
         correlationId: latest.correlationId,
         occurredAt: latest.occurredAt,
@@ -789,12 +1008,17 @@ export function evaluateOAuthConsentGrantRule(cloudEvents: CloudEvent[], identit
  * evaluateCredentialDumpingRule, for a technique (T1558.003) that targets service-account
  * Kerberos tickets rather than LSASS memory directly.
  */
-export function evaluateKerberoastingRule(processEvents: ProcessEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateKerberoastingRule(
+  processEvents: ProcessEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   return processEvents
     .filter((event) => {
       const commandLine = event.commandLine.toLowerCase();
-      return KERBEROASTING_COMMAND_MARKERS.some((marker) => commandLine.includes(marker));
+      return KERBEROASTING_COMMAND_MARKERS.some((marker) =>
+        commandLine.includes(marker),
+      );
     })
     .map((event) => {
       const device = deviceById.get(event.deviceId);
@@ -821,7 +1045,10 @@ export function evaluateKerberoastingRule(processEvents: ProcessEvent[], devices
  * a sustained DNS C2/exfil channel spans the whole session, not a short burst (T1071.004,
  * T1041). This is also the first rule to read the network_events table (§10.3).
  */
-export function evaluateDnsTunnelingRule(networkEvents: NetworkEvent[], devices: Device[]): AlertCandidate[] {
+export function evaluateDnsTunnelingRule(
+  networkEvents: NetworkEvent[],
+  devices: Device[],
+): AlertCandidate[] {
   const deviceById = new Map(devices.map((d) => [d.id, d]));
   const grouped = new Map<string, NetworkEvent[]>();
   for (const event of networkEvents) {
@@ -839,7 +1066,9 @@ export function evaluateDnsTunnelingRule(networkEvents: NetworkEvent[], devices:
     if (!device) continue;
 
     const totalBytesSent = events.reduce((sum, e) => sum + e.bytesSent, 0);
-    const latest = [...events].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    const latest = [...events].sort(
+      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+    )[0];
 
     candidates.push({
       id: randomUUID(),
@@ -848,7 +1077,10 @@ export function evaluateDnsTunnelingRule(networkEvents: NetworkEvent[], devices:
       description: `${events.length} DNS-port (53) queries to ${events[0].remoteIp} were observed from ${device.hostname}, totaling ${totalBytesSent.toLocaleString()} bytes sent — consistent with DNS tunneling used as a covert command-and-control or exfiltration channel.`,
       primaryEntityType: 'device' as const,
       primaryEntityId: device.id,
-      evidenceRefs: events.map((e) => ({ eventTable: 'network_events', eventId: e.id })),
+      evidenceRefs: events.map((e) => ({
+        eventTable: 'network_events',
+        eventId: e.id,
+      })),
       correlationId: latest.correlationId,
       occurredAt: latest.occurredAt,
     });
@@ -860,7 +1092,9 @@ export function evaluateDnsTunnelingRule(networkEvents: NetworkEvent[], devices:
  * §8.3: link two candidates that share a correlation_id (assigned by the Telemetry
  * Generator, §7.2 stage 4) into a related pair, returned as [fromId, toId] tuples.
  */
-export function correlateCandidates(candidates: AlertCandidate[]): [string, string][] {
+export function correlateCandidates(
+  candidates: AlertCandidate[],
+): [string, string][] {
   const byCorrelationId = new Map<string, AlertCandidate[]>();
   for (const candidate of candidates) {
     if (!candidate.correlationId) continue;

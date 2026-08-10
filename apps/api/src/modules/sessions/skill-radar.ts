@@ -61,22 +61,27 @@ export function computeSkillRadar(
     for (const techniqueId of session.requiredTechniqueIds) {
       const tactic = tacticByTechniqueId.get(techniqueId);
       if (!tactic) continue;
-      requiredCountByTactic.set(tactic, (requiredCountByTactic.get(tactic) ?? 0) + 1);
+      requiredCountByTactic.set(
+        tactic,
+        (requiredCountByTactic.get(tactic) ?? 0) + 1,
+      );
       if (taggedSet.has(techniqueId)) {
         hitCountByTactic.set(tactic, (hitCountByTactic.get(tactic) ?? 0) + 1);
       }
     }
   }
 
-  return TACTIC_ORDER.filter((tactic) => requiredCountByTactic.has(tactic)).map((tactic) => {
-    const requiredCount = requiredCountByTactic.get(tactic)!;
-    const hitCount = hitCountByTactic.get(tactic) ?? 0;
-    return {
-      tactic,
-      tacticName: TACTIC_NAMES[tactic] ?? tactic,
-      requiredCount,
-      hitCount,
-      percent: Math.round((hitCount / requiredCount) * 1000) / 10,
-    };
-  });
+  return TACTIC_ORDER.filter((tactic) => requiredCountByTactic.has(tactic)).map(
+    (tactic) => {
+      const requiredCount = requiredCountByTactic.get(tactic)!;
+      const hitCount = hitCountByTactic.get(tactic) ?? 0;
+      return {
+        tactic,
+        tacticName: TACTIC_NAMES[tactic] ?? tactic,
+        requiredCount,
+        hitCount,
+        percent: Math.round((hitCount / requiredCount) * 1000) / 10,
+      };
+    },
+  );
 }

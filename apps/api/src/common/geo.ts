@@ -21,7 +21,10 @@ function toRadians(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-export function distanceBetweenCitiesKm(cityA: string, cityB: string): number | null {
+export function distanceBetweenCitiesKm(
+  cityA: string,
+  cityB: string,
+): number | null {
   const a = CITY_COORDINATES[cityA];
   const b = CITY_COORDINATES[cityB];
   if (!a || !b) return null;
@@ -31,12 +34,17 @@ export function distanceBetweenCitiesKm(cityA: string, cityB: string): number | 
   const lat1 = toRadians(a.lat);
   const lat2 = toRadians(b.lat);
 
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return EARTH_RADIUS_KM * 2 * Math.asin(Math.sqrt(h));
 }
 
 /** §9.6: implied travel speed between two consecutive sign-ins, for impossible-travel reasoning. */
-export function impliedTravelSpeedKmh(distanceKm: number, minutesElapsed: number): number | null {
+export function impliedTravelSpeedKmh(
+  distanceKm: number,
+  minutesElapsed: number,
+): number | null {
   if (minutesElapsed <= 0) return null;
   return distanceKm / (minutesElapsed / 60);
 }

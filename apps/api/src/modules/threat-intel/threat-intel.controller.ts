@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -24,10 +31,20 @@ export class ThreatIntelController {
   ) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
     const indicator = await this.prisma.threatIntelIndicator.findFirst({
-      where: { scenarioVersionId: session.scenarioVersionId, indicatorType: type, value },
+      where: {
+        scenarioVersionId: session.scenarioVersionId,
+        indicatorType: type,
+        value,
+      },
     });
     if (!indicator) {
-      return { value, type, reputation: 'unknown', actorAttribution: null, context: null };
+      return {
+        value,
+        type,
+        reputation: 'unknown',
+        actorAttribution: null,
+        context: null,
+      };
     }
     return {
       value: indicator.value,

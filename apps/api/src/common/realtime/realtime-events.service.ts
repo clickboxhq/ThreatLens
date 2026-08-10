@@ -17,11 +17,16 @@ export class RealtimeEventsService implements OnModuleDestroy {
   private readonly publisher: Redis;
 
   constructor(config: ConfigService) {
-    this.publisher = new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379');
+    this.publisher = new Redis(
+      config.get<string>('REDIS_URL') ?? 'redis://localhost:6379',
+    );
   }
 
   async publish(sessionId: string, message: RealtimeMessage): Promise<void> {
-    await this.publisher.publish(`session:${sessionId}`, JSON.stringify(message));
+    await this.publisher.publish(
+      `session:${sessionId}`,
+      JSON.stringify(message),
+    );
   }
 
   async onModuleDestroy(): Promise<void> {

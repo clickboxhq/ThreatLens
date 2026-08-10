@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { EmailPortalService } from './email-portal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -20,7 +27,12 @@ export class EmailPortalController {
     @Query('sender') senderContains?: string,
     @Query('subject') subjectContains?: string,
   ) {
-    return this.service.list(sessionId, user, { direction, spfResult, senderContains, subjectContains });
+    return this.service.list(sessionId, user, {
+      direction,
+      spfResult,
+      senderContains,
+      subjectContains,
+    });
   }
 
   @Get(':id')

@@ -1,4 +1,11 @@
-import { Body, Controller, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { SearchService } from './search.service';
 import { SearchDto } from './dto/search.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -16,6 +23,11 @@ export class SearchController {
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: SearchDto,
   ) {
-    return this.searchService.search(sessionId, user, dto.filters ?? [], dto.freetext);
+    return this.searchService.search(
+      sessionId,
+      user,
+      dto.filters ?? [],
+      dto.freetext,
+    );
   }
 }

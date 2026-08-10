@@ -14,7 +14,9 @@ export const SCORING_QUEUE = 'scoring';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: { url: config.get<string>('REDIS_URL') ?? 'redis://localhost:6379' },
+        connection: {
+          url: config.get<string>('REDIS_URL') ?? 'redis://localhost:6379',
+        },
       }),
     }),
     BullModule.registerQueue(

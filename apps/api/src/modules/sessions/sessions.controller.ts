@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { SubmitSessionDto } from './dto/submit-session.dto';
@@ -28,13 +36,20 @@ export class SessionsController {
   ) {}
 
   @Post()
-  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateSessionDto) {
+  async create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateSessionDto,
+  ) {
     await this.rateLimiter.enforce(
       `session-create:${user.id}`,
       SESSION_CREATE_RATE_LIMIT,
       SESSION_CREATE_RATE_LIMIT_WINDOW_SECONDS,
     );
-    return this.sessionsService.createSession(user, dto.scenarioId, dto.cohortAssignmentId);
+    return this.sessionsService.createSession(
+      user,
+      dto.scenarioId,
+      dto.cohortAssignmentId,
+    );
   }
 
   @Get()
@@ -50,7 +65,10 @@ export class SessionsController {
   }
 
   @Get(':id')
-  async get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.sessionsService.getSession(id, user);
   }
 
@@ -69,7 +87,10 @@ export class SessionsController {
   }
 
   @Get(':id/score')
-  async getScore(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async getScore(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.sessionsService.getScore(id, user);
   }
 }

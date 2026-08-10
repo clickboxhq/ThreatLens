@@ -1,4 +1,12 @@
-import { ArrayNotEmpty, IsArray, IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 
 export class CreateIncidentDto {
   @IsString()

@@ -18,14 +18,27 @@ export class EmailPortalService {
   async list(
     sessionId: string,
     user: AuthenticatedUser,
-    filters: { direction?: EmailDirection; spfResult?: SpfResult; senderContains?: string; subjectContains?: string },
+    filters: {
+      direction?: EmailDirection;
+      spfResult?: SpfResult;
+      senderContains?: string;
+      subjectContains?: string;
+    },
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const where: Prisma.EmailMessageWhereInput = { sessionId };
     if (filters.direction) where.direction = filters.direction;
     if (filters.spfResult) where.spfResult = filters.spfResult;
-    if (filters.senderContains) where.senderAddress = { contains: filters.senderContains, mode: 'insensitive' };
-    if (filters.subjectContains) where.subject = { contains: filters.subjectContains, mode: 'insensitive' };
+    if (filters.senderContains)
+      where.senderAddress = {
+        contains: filters.senderContains,
+        mode: 'insensitive',
+      };
+    if (filters.subjectContains)
+      where.subject = {
+        contains: filters.subjectContains,
+        mode: 'insensitive',
+      };
 
     const emails = await this.prisma.emailMessage.findMany({
       where,
@@ -35,7 +48,11 @@ export class EmailPortalService {
     return emails.map(toStudentEmailDto);
   }
 
-  async getMessage(sessionId: string, emailId: string, user: AuthenticatedUser) {
+  async getMessage(
+    sessionId: string,
+    emailId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const email = await this.prisma.emailMessage.findFirst({
       where: { id: emailId, sessionId },
@@ -54,9 +71,15 @@ export class EmailPortalService {
     return toStudentEmailDto(email);
   }
 
-  async getSimilar(sessionId: string, emailId: string, user: AuthenticatedUser) {
+  async getSimilar(
+    sessionId: string,
+    emailId: string,
+    user: AuthenticatedUser,
+  ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    const email = await this.prisma.emailMessage.findFirst({ where: { id: emailId, sessionId } });
+    const email = await this.prisma.emailMessage.findFirst({
+      where: { id: emailId, sessionId },
+    });
     if (!email) throw new AppException(404, 'NOT_FOUND', 'Email not found.');
 
     const senderDomain = email.senderAddress.split('@')[1];

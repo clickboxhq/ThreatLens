@@ -1,24 +1,31 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { AppModule } from './../src/app.module';
+import { createE2EApp } from './helpers/e2e-app';
 
-describe('AppController (e2e)', () => {
+describe('Health (e2e)', () => {
   let app: INestApplication;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    await app.init();
+  beforeAll(async () => {
+    app = await createE2EApp();
   });
 
-  it('/ (GET)', () => {
+  afterAll(async () => {
+    await app.close();
+  });
+
+  // §3.7: health/ready are deliberately excluded from the /api/v1 prefix (main.ts) so an
+  // external load balancer/orchestrator can probe them without knowing the API's versioning.
+  it('GET /health', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/health')
       .expect(200)
-      .expect('Hello World!');
+      .expect({ status: 'ok' });
+  });
+
+  it('GET /ready', () => {
+    return request(app.getHttpServer())
+      .get('/ready')
+      .expect(200)
+      .expect({ status: 'ok' });
   });
 });

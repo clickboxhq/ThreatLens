@@ -19,7 +19,9 @@ export interface StudentAlertDto {
   lastSeenAt: Date;
 }
 
-export function toStudentAlertDto(alert: Alert & { mitreTechnique?: MitreTechnique | null }): StudentAlertDto {
+export function toStudentAlertDto(
+  alert: Alert & { mitreTechnique?: MitreTechnique | null },
+): StudentAlertDto {
   return {
     id: alert.id,
     title: alert.title,
@@ -30,7 +32,11 @@ export function toStudentAlertDto(alert: Alert & { mitreTechnique?: MitreTechniq
     primaryEntityType: alert.primaryEntityType,
     primaryEntityId: alert.primaryEntityId,
     mitreTechnique: alert.mitreTechnique
-      ? { id: alert.mitreTechnique.id, techniqueId: alert.mitreTechnique.techniqueId, name: alert.mitreTechnique.name }
+      ? {
+          id: alert.mitreTechnique.id,
+          techniqueId: alert.mitreTechnique.techniqueId,
+          name: alert.mitreTechnique.name,
+        }
       : null,
     relatedAlertId: alert.relatedAlertId,
     dedupCount: alert.dedupCount,

@@ -1,6 +1,20 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { IncidentsService } from './incidents.service';
-import { CloseIncidentDto, CreateIncidentDto, LinkAlertsDto, UpdateIncidentStatusDto } from './dto/incident.dto';
+import {
+  CloseIncidentDto,
+  CreateIncidentDto,
+  LinkAlertsDto,
+  UpdateIncidentStatusDto,
+} from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -21,7 +35,10 @@ export class IncidentsController {
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser, @Param('sessionId', ParseUUIDPipe) sessionId: string) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ) {
     return this.incidentsService.list(sessionId, user);
   }
 

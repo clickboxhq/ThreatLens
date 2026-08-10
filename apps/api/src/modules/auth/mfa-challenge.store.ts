@@ -14,12 +14,19 @@ export class MfaChallengeStore implements OnModuleDestroy {
   private readonly redis: Redis;
 
   constructor(config: ConfigService) {
-    this.redis = new Redis(config.get<string>('REDIS_URL') ?? 'redis://localhost:6379');
+    this.redis = new Redis(
+      config.get<string>('REDIS_URL') ?? 'redis://localhost:6379',
+    );
   }
 
   async create(userId: string): Promise<string> {
     const challengeId = randomUUID();
-    await this.redis.set(`mfa-challenge:${challengeId}`, userId, 'EX', CHALLENGE_TTL_SECONDS);
+    await this.redis.set(
+      `mfa-challenge:${challengeId}`,
+      userId,
+      'EX',
+      CHALLENGE_TTL_SECONDS,
+    );
     return challengeId;
   }
 

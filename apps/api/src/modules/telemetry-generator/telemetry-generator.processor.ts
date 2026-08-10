@@ -1,7 +1,10 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
-import { ALERT_CORRELATION_QUEUE, TELEMETRY_GENERATION_QUEUE } from '../../common/queue/queue.module';
+import {
+  ALERT_CORRELATION_QUEUE,
+  TELEMETRY_GENERATION_QUEUE,
+} from '../../common/queue/queue.module';
 import { TelemetryGeneratorService } from './telemetry-generator.service';
 
 export interface TelemetryGenerationJobData {
@@ -15,15 +18,22 @@ export class TelemetryGeneratorProcessor extends WorkerHost {
 
   constructor(
     private readonly telemetryGeneratorService: TelemetryGeneratorService,
-    @InjectQueue(ALERT_CORRELATION_QUEUE) private readonly alertCorrelationQueue: Queue,
+    @InjectQueue(ALERT_CORRELATION_QUEUE)
+    private readonly alertCorrelationQueue: Queue,
   ) {
     super();
   }
 
   async process(job: Job<TelemetryGenerationJobData>): Promise<void> {
     const { sessionId } = job.data;
-    this.logger.log(`Generating telemetry for session ${sessionId} (job ${job.id})`);
+    this.logger.log(
+      `Generating telemetry for session ${sessionId} (job ${job.id})`,
+    );
     await this.telemetryGeneratorService.generateForSession(sessionId);
-    await this.alertCorrelationQueue.add('correlate', { sessionId }, { jobId: `alert-correlation-${sessionId}` });
+    await this.alertCorrelationQueue.add(
+      'correlate',
+      { sessionId },
+      { jobId: `alert-correlation-${sessionId}` },
+    );
   }
 }

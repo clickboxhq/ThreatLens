@@ -21,7 +21,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 // mutates its input. Exported as a pure function so its redaction behavior is directly
 // unit-testable without going through Nest's logger plumbing (same rationale as
 // computeLockoutSeconds/scorer.ts's pure-function extraction elsewhere in this codebase).
-export function scrub(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+export function scrub(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => scrub(item, seen));
   }

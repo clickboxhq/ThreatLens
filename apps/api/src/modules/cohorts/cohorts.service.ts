@@ -13,7 +13,11 @@ export class CohortsService {
   async join(user: AuthenticatedUser, joinCode: string) {
     const cohort = await this.prisma.cohort.findUnique({ where: { joinCode } });
     if (!cohort) {
-      throw new AppException(404, 'INVALID_JOIN_CODE', 'No cohort matches this join code.');
+      throw new AppException(
+        404,
+        'INVALID_JOIN_CODE',
+        'No cohort matches this join code.',
+      );
     }
 
     const enrollment = await this.prisma.cohortEnrollment.upsert({
@@ -22,7 +26,11 @@ export class CohortsService {
       create: { cohortId: cohort.id, userId: user.id, status: 'active' },
     });
 
-    return { cohortId: cohort.id, cohortName: cohort.name, enrolledAt: enrollment.enrolledAt };
+    return {
+      cohortId: cohort.id,
+      cohortName: cohort.name,
+      enrolledAt: enrollment.enrolledAt,
+    };
   }
 
   async listMine(user: AuthenticatedUser) {
@@ -56,10 +64,15 @@ export class CohortsService {
 
     const attemptCounts = await this.prisma.investigationSession.groupBy({
       by: ['cohortAssignmentId'],
-      where: { cohortAssignmentId: { in: assignments.map((a) => a.id) }, userId: user.id },
+      where: {
+        cohortAssignmentId: { in: assignments.map((a) => a.id) },
+        userId: user.id,
+      },
       _count: { _all: true },
     });
-    const attemptsByAssignment = new Map(attemptCounts.map((c) => [c.cohortAssignmentId, c._count._all]));
+    const attemptsByAssignment = new Map(
+      attemptCounts.map((c) => [c.cohortAssignmentId, c._count._all]),
+    );
 
     return assignments.map((a) => ({
       id: a.id,

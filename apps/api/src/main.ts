@@ -11,7 +11,9 @@ async function bootstrap() {
   // §5.2/§15.6: redacts secret-shaped fields from every log line, from the very first
   // bootstrap log onward — passed as a NestFactory option (not app.useLogger() after the
   // fact) specifically so nothing logged during startup bypasses it.
-  const app = await NestFactory.create(AppModule, { logger: new ScrubbingLogger() });
+  const app = await NestFactory.create(AppModule, {
+    logger: new ScrubbingLogger(),
+  });
 
   app.setGlobalPrefix('api/v1', {
     exclude: ['health', 'ready'],

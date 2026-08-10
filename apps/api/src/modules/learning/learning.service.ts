@@ -9,7 +9,9 @@ export class LearningService {
 
   async listCourses() {
     const courses = await this.prisma.course.findMany({
-      include: { learningPaths: { include: { _count: { select: { scenarios: true } } } } },
+      include: {
+        learningPaths: { include: { _count: { select: { scenarios: true } } } },
+      },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -35,14 +37,22 @@ export class LearningService {
       where: { id: pathId },
       include: {
         course: true,
-        scenarios: { include: { scenario: true }, orderBy: { sortOrder: 'asc' } },
+        scenarios: {
+          include: { scenario: true },
+          orderBy: { sortOrder: 'asc' },
+        },
       },
     });
-    if (!path) throw new AppException(404, 'NOT_FOUND', 'Learning path not found.');
+    if (!path)
+      throw new AppException(404, 'NOT_FOUND', 'Learning path not found.');
 
     const scenarioIds = path.scenarios.map((s) => s.scenarioId);
     const sessions = await this.prisma.investigationSession.findMany({
-      where: { userId: user.id, scenarioId: { in: scenarioIds }, status: 'scored' },
+      where: {
+        userId: user.id,
+        scenarioId: { in: scenarioIds },
+        status: 'scored',
+      },
       include: { score: true },
     });
 
@@ -51,7 +61,8 @@ export class LearningService {
       if (!session.score) continue;
       const percent = Number(session.score.overallPercent);
       const best = bestPercentByScenario.get(session.scenarioId) ?? -1;
-      if (percent > best) bestPercentByScenario.set(session.scenarioId, percent);
+      if (percent > best)
+        bestPercentByScenario.set(session.scenarioId, percent);
     }
 
     const threshold = Number(path.passThresholdPercent);
@@ -71,7 +82,9 @@ export class LearningService {
 
     const completedCount = scenarios.filter((s) => s.completed).length;
     const certificate = await this.prisma.certificate.findUnique({
-      where: { userId_learningPathId: { userId: user.id, learningPathId: pathId } },
+      where: {
+        userId_learningPathId: { userId: user.id, learningPathId: pathId },
+      },
     });
 
     return {
