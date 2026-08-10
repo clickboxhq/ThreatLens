@@ -30,6 +30,7 @@ import { LearningModule } from './modules/learning/learning.module';
 import { AuditLogModule } from './common/audit-log/audit-log.module';
 import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { MetricsModule } from './common/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { AdminModule } from './modules/admin/admin.module';
     AuditLogModule,
     RateLimiterModule,
     AdminModule,
+    MetricsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

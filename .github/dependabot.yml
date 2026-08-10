@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  # Single npm workspaces root (apps/api and apps/web share the root
+  # package-lock.json — no separate lockfiles per package) — Dependabot
+  # resolves workspace packages from this one entry.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Routine patch/minor bumps land as one low-noise PR; majors (which can
+      # break APIs, e.g. the react-router-dom v6->v7 bump done by hand) stay
+      # ungrouped so each gets its own PR and explicit review.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

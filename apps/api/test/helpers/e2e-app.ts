@@ -18,7 +18,7 @@ export async function createE2EApp(): Promise<INestApplication> {
     logger: new ScrubbingLogger(),
   });
 
-  app.setGlobalPrefix('api/v1', { exclude: ['health', 'ready'] });
+  app.setGlobalPrefix('api/v1', { exclude: ['health', 'ready', 'metrics'] });
 
   app.useGlobalPipes(
     new ValidationPipe({

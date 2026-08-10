@@ -1,0 +1,257 @@
+# Phase 1 / MVP production topology (docs/SOCVerse-Architecture.md §19.1): single VPS, one
+# `app` container running both the API and the BullMQ workers (splitting them into separate
+# processes is a deferred follow-up, not done here), nginx terminating TLS in front of it and
+# of the static `web` build, postgres/redis/minio self-hosted on the same host, and a `migrate`
+# one-off for running Prisma migrations as an explicit deploy step (not silently at container
+# boot — see apps/api/Dockerfile). Deploy with `docker compose -f docker-compose.prod.yml
+# --env-file ../.env.production up -d`; see infra/DEPLOY.md for the full runbook.
+name: socverse-prod
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: socverse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: socverse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socverse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-off: `docker compose -f docker-compose.prod.yml --env-file ../.env.production run
+  # --rm migrate` before (re)starting `app` on each deploy. Uses the `build` stage, which still
+  # has the `prisma` devDependency the lean `production` stage deliberately drops. Runs
+  # migrations, then rotates socverse_app's password off the migration file's built-in
+  # placeholder — see apps/api/scripts/provision-app-role.sh for why that has to happen here
+  # rather than in the migration itself.
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.prod
+      target: build
+    working_dir: /repo
+    environment:
+      # schema.prisma's datasource block validates DATABASE_URL is present even though
+      # `migrate deploy` actually connects via directUrl (MIGRATE_DATABASE_URL) — see the
+      # comment there. Composed the same way as `app`'s below, from the same APP_DB_PASSWORD
+      # this service is about to set.
+      DATABASE_URL: postgresql://socverse_app:${APP_DB_PASSWORD}@postgres:5432/socverse
+      MIGRATE_DATABASE_URL: postgresql://socverse:${POSTGRES_PASSWORD}@postgres:5432/socverse
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    command: ["sh", "apps/api/scripts/provision-app-role.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.prod
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://socverse_app:${APP_DB_PASSWORD}@postgres:5432/socverse
+      REDIS_URL: redis://redis:6379
+      OBJECT_STORAGE_ENDPOINT: minio
+      OBJECT_STORAGE_PORT: "9000"
+      OBJECT_STORAGE_USE_SSL: "false"
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+      WEB_ORIGIN: https://${DOMAIN}
+      # nginx is the only hop in front of `app` — trust exactly one proxy's X-Forwarded-For.
+      TRUST_PROXY_HOPS: "1"
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile.prod
+      target: production
+      args:
+        VITE_API_BASE_URL: https://${DOMAIN}/api/v1
+    restart: unless-stopped
+    depends_on:
+      - app
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - certbot-conf:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    depends_on:
+      - app
+      - web
+
+  # Renews the cert every 12h (certbot no-ops until inside its ~30-day renewal window). Initial
+  # issuance is done by infra/nginx/init-letsencrypt.sh, not by this loop.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: >-
+      sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done'
+
+  # --- Observability (§5.16, §19.1) ---
+  # None of prometheus/node-exporter/postgres-exporter/alertmanager/loki/promtail/grafana are
+  # reachable through the public nginx edge (no location blocks for them in
+  # infra/nginx/templates/default.conf.template) — only app/web are internet-facing. Grafana is
+  # the one operator-facing piece; it's bound to 127.0.0.1 only, see its own comment below for
+  # how to reach it.
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - app
+      - node-exporter
+      - postgres-exporter
+      - alertmanager
+
+  # Host-level CPU/mem/disk (§3.10's "disk usage threshold on the VPS" alert needs this — the
+  # Node process itself has no way to report host disk usage). Mounts the host's /proc, /sys,
+  # and / read-only; this is the one service in this stack that reaches outside its own
+  # container by design, which is exactly what node-exporter is for.
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+
+  # Connects as the `socverse` superuser (same role `migrate` uses) since postgres_exporter's
+  # default collectors read pg_stat_database/pg_settings, which need broader visibility than
+  # the least-privilege socverse_app app role is deliberately scoped to (§15.9). A dedicated
+  # read-only monitoring role would be a cleaner follow-up; using the existing superuser role
+  # keeps this pass contained.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://socverse:${POSTGRES_PASSWORD}@postgres:5432/socverse?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Evaluates infra/observability/prometheus/alert-rules.yml's conditions and routes firing
+  # alerts here. The receiver is a placeholder — see alertmanager.yml's comment.
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+
+  loki:
+    image: grafana/loki:latest
+    restart: unless-stopped
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+
+  # Ships every container's stdout to Loki via Docker service discovery over the socket (§5.16:
+  # "aggregates ... via Docker's logging driver") — read-only mount, promtail only reads
+  # container metadata/logs, never controls containers.
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # Bound to 127.0.0.1 only, not exposed publicly or through nginx — reach it via an SSH tunnel
+  # (`ssh -L 3001:localhost:3001 <vps>`) or firewall-allowlist your own IP on 3001 if you'd
+  # rather not tunnel. Opening it up further (e.g. an authenticated nginx vhost) is a reasonable
+  # follow-up once there's more than one operator who needs routine access.
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  certbot-conf:
+  certbot-webroot:
+  prometheus-data:
+  alertmanager-data:
+  loki-data:
+  grafana-data:

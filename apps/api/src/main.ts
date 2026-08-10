@@ -16,8 +16,18 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api/v1', {
-    exclude: ['health', 'ready'],
+    exclude: ['health', 'ready', 'metrics'],
   });
+
+  // Behind the production reverse proxy (infra/docker-compose.prod.yml's nginx), req.ip would
+  // otherwise resolve to nginx's own container IP for every request, collapsing rate-limiting
+  // (login-attempt-tracker, rate-limiter.service) and audit-log IPs onto one bucket. Left unset
+  // (0) in dev/CI, where there is no proxy in front and trusting X-Forwarded-For would let a
+  // client spoof its own rate-limit key.
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+  if (trustProxyHops > 0) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxyHops);
+  }
 
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',

@@ -1,0 +1,58 @@
+# The four alert conditions §3.10 names explicitly. Delivery (where these actually notify) is
+# configured in infra/observability/alertmanager/alertmanager.yml — see that file's comment for
+# why the receiver is a placeholder pending your input.
+groups:
+  - name: socverse-golden-signals
+    rules:
+      - alert: APIHighErrorRate
+        expr: >
+          sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx error rate above 5% for 5 minutes"
+          description: >
+            {{ $value | humanizePercentage }} of requests are returning 5xx over the last 5m.
+
+      - alert: QueueBacklogStuck
+        expr: bullmq_jobs{state="waiting"} > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.queue }} has a sustained backlog"
+          description: >
+            {{ $labels.queue }} has had {{ $value }} waiting jobs for 10+ minutes — a stuck
+            worker pool directly delays scenario start for students, so this is a
+            product-quality incident, not just an infra one.
+
+      - alert: DatabaseConnectionSaturation
+        expr: >
+          sum(pg_stat_database_numbackends) / on() pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres connection pool above 80% of max_connections"
+          description: >
+            {{ $value | humanizePercentage }} of max_connections in use for 5+ minutes.
+
+      # mountpoint="/" is standard on a real Linux VPS (verified against node-exporter's
+      # filesystem collector output during dev, though a nested Docker-Desktop/WSL2 dev
+      # environment has no clean "/" to test the exact label against — confirm on first deploy
+      # with `curl localhost:9100/metrics | grep node_filesystem_avail_bytes` on the VPS itself
+      # if this alert never fires as expected).
+      - alert: VPSDiskSpaceLow
+        expr: >
+          node_filesystem_avail_bytes{mountpoint="/"}
+          / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VPS root filesystem below 15% free"
+          description: >
+            Only {{ $value | humanizePercentage }} free on / — postgres-data/minio-data (§20.2:
+            both self-hosted on this same disk at MVP) will hit ENOSPC if this isn't addressed.

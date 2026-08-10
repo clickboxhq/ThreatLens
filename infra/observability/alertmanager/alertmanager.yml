@@ -1,0 +1,22 @@
+# PLACEHOLDER — alerts fire and are visible in Grafana/Alertmanager's own UI (via the SSH
+# tunnel to Grafana, or `docker compose ... exec alertmanager wget -qO- localhost:9093/api/v2/alerts`),
+# but nothing is actually notified anywhere yet. Real delivery needs a decision only you can
+# make: Slack webhook, email/SMTP, PagerDuty, or something else. Once you know which, replace
+# the `null-receiver` below with a real one, e.g. for Slack:
+#
+#   receivers:
+#     - name: default
+#       slack_configs:
+#         - api_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+#           channel: '#socverse-alerts'
+#
+# and change `route.receiver` to match.
+route:
+  receiver: null-receiver
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: null-receiver

@@ -44,7 +44,38 @@ jobs:
 
       - run: npm run build --workspace=apps/api
 
-      - run: npm test --workspace=apps/api -- --ci
+      - run: npm test --workspace=apps/api -- --ci --coverage
+
+      # coverage-summary.json comes from the json-summary reporter (apps/api/package.json's
+      # jest config) — turn its "total" row into a table in the run's summary page so coverage
+      # is visible without downloading the artifact below.
+      - name: Coverage summary
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = 'apps/api/coverage/coverage-summary.json';
+            if (!fs.existsSync(path)) { console.log('No coverage-summary.json found — tests likely failed before coverage was written.'); process.exit(0); }
+            const { total } = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const pct = (m) => total[m].pct.toFixed(2) + '%';
+            const rows = [
+              '| Metric | Coverage | Covered / Total |',
+              '| --- | --- | --- |',
+              \`| Statements | \${pct('statements')} | \${total.statements.covered}/\${total.statements.total} |\`,
+              \`| Branches | \${pct('branches')} | \${total.branches.covered}/\${total.branches.total} |\`,
+              \`| Functions | \${pct('functions')} | \${total.functions.covered}/\${total.functions.total} |\`,
+              \`| Lines | \${pct('lines')} | \${total.lines.covered}/\${total.lines.total} |\`,
+            ];
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '## API coverage\n\n' + rows.join('\n') + '\n');
+          "
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-report
+          path: apps/api/coverage/
+          retention-days: 14
 
   web:
     name: Web — build

@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  # Fixed uids so the provisioned dashboard JSON (../dashboards/socverse-golden-signals.json)
+  # can reference them directly instead of relying on Grafana's name-based lookup.
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
