@@ -1,8 +1,11 @@
 # Production deploy runbook (Phase 1 / MVP — docs/SOCVerse-Architecture.md §19.1)
 
+**Not the current deployment target.** The team moved to Railway — see `infra/RAILWAY.md`.
+This file is kept as a reference/fallback (a self-hosted single-VPS setup remains a valid,
+more portable option later, e.g. once Railway's trial ends), not actively maintained.
+
 Single VPS, Docker Compose. This covers bringing the stack up on a fresh host and redeploying
-after that. It does not cover the CI/CD build-and-push pipeline or observability stack
-(prometheus/grafana/loki, §19.1) — those are separate, not-yet-built follow-ups.
+after that.
 
 ## Prerequisites
 

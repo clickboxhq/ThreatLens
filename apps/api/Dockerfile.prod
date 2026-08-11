@@ -18,12 +18,14 @@ RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 RUN npm run build --workspace=apps/api
 
 # ---- production: runtime only ----
-# Copies the full node_modules from `build` rather than a separate --omit=dev install: the
-# `prisma` CLI stays out of the runtime image's dependency graph either way (migrations run as
-# a one-off `migrate` service, not at app boot — see infra/docker-compose.prod.yml), but a
-# fresh prod-only `npm ci` re-triggers @prisma/client's postinstall generate step without the
+# Copies the full node_modules from `build` rather than a separate --omit=dev install: a fresh
+# prod-only `npm ci` re-triggers @prisma/client's postinstall generate step without the
 # `prisma` devDependency present to run it. Reusing the already-generated node_modules avoids
-# that fragility at the cost of a larger image, a deliberate trade favoring reliability here.
+# that fragility at the cost of a larger image — and as a side effect, the `prisma` CLI is
+# actually present here too (verified: `docker run ... npx prisma --version` works), which
+# infra/docker-compose.prod.yml doesn't rely on (migrations run via the separate `build`-stage
+# `migrate` service there) but infra/RAILWAY.md does, running migrations directly against this
+# image via `railway run` since Railway has no equivalent to a one-off compose service.
 FROM node:22-alpine AS production
 RUN apk add --no-cache openssl
 RUN addgroup -S app && adduser -S app -G app
@@ -37,6 +39,10 @@ COPY --from=build --chown=app:app /repo/apps/api/node_modules ./node_modules
 COPY --from=build --chown=app:app /repo/apps/api/dist ./dist
 COPY --from=build --chown=app:app /repo/apps/api/prisma ./prisma
 COPY --from=build --chown=app:app /repo/apps/api/package.json ./package.json
+# Not used by the api/worker services themselves — present so `railway run --service api sh
+# scripts/provision-app-role.sh` (infra/RAILWAY.md) can run migrations directly against this
+# image, the same script infra/docker-compose.prod.yml's separate `migrate` service runs.
+COPY --from=build --chown=app:app /repo/apps/api/scripts ./scripts
 USER app
 ENV NODE_ENV=production
 EXPOSE 3000
