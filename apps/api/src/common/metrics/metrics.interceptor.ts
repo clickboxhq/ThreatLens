@@ -26,7 +26,8 @@ export class MetricsInterceptor implements NestInterceptor {
       // req.route.path is the matched Express pattern (e.g. "/sessions/:id"), not the literal
       // URL — using the literal path as a label would blow up cardinality with one series per
       // session/incident/etc ID ever requested.
-      const route = (req.route?.path as string | undefined) ?? req.path ?? 'unknown';
+      const route =
+        (req.route?.path as string | undefined) ?? req.path ?? 'unknown';
       const durationSeconds = Number(process.hrtime.bigint() - start) / 1e9;
       const labels = {
         method: req.method,
