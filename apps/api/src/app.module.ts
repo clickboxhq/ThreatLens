@@ -9,8 +9,6 @@ import { JwtSharedModule } from './common/jwt-shared.module';
 import { QueueModule } from './common/queue/queue.module';
 import { SessionCoreModule } from './modules/session-core/session-core.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { TelemetryGeneratorModule } from './modules/telemetry-generator/telemetry-generator.module';
-import { AlertEngineModule } from './modules/alert-engine/alert-engine.module';
 import { ScenarioCatalogModule } from './modules/scenario-catalog/scenario-catalog.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { InvestigationModule } from './modules/investigation/investigation.module';
@@ -19,7 +17,6 @@ import { DevicePortalModule } from './modules/device-portal/device-portal.module
 import { EmailPortalModule } from './modules/email-portal/email-portal.module';
 import { ThreatIntelModule } from './modules/threat-intel/threat-intel.module';
 import { SearchModule } from './modules/search/search.module';
-import { ScoringModule } from './modules/scoring/scoring.module';
 import { MitreModule } from './modules/mitre/mitre.module';
 import { CohortsModule } from './modules/cohorts/cohorts.module';
 import { InstructorModule } from './modules/instructor/instructor.module';
@@ -43,8 +40,6 @@ import { MetricsModule } from './common/metrics/metrics.module';
     QueueModule,
     SessionCoreModule,
     AuthModule,
-    TelemetryGeneratorModule,
-    AlertEngineModule,
     ScenarioCatalogModule,
     SessionsModule,
     InvestigationModule,
@@ -53,7 +48,6 @@ import { MetricsModule } from './common/metrics/metrics.module';
     EmailPortalModule,
     ThreatIntelModule,
     SearchModule,
-    ScoringModule,
     MitreModule,
     CohortsModule,
     InstructorModule,

@@ -62,8 +62,8 @@ docker compose -f docker-compose.prod.yml --env-file ../.env.production up -d
 ```
 
 `up -d` only recreates containers whose image or config actually changed, so this is a brief
-restart of `app`/`web` behind nginx, not a full-stack bounce — postgres/redis/minio/nginx/
-certbot keep running throughout. `depends_on` in docker-compose.prod.yml only gates startup
+restart of `app`/`worker`/`web` behind nginx, not a full-stack bounce —
+postgres/redis/minio/nginx/certbot keep running throughout. `depends_on` in docker-compose.prod.yml only gates startup
 order, not restart order, so `migrate` is intentionally its own explicit step before `up -d`,
 never something the `app` container runs implicitly at boot.
 
@@ -73,9 +73,6 @@ never something the `app` container runs implicitly at boot.
   `git pull`. §19.1's documented flow (CI builds/pushes images, then SSHes in to pull/restart)
   is a natural follow-up once you have a registry and VPS access to wire into
   `.github/workflows/ci.yml`.
-- **`app` runs both the API and the BullMQ workers in one process/container**, not split into
-  separate `app`/`worker` services as §19.1 describes. Fine at MVP traffic levels; revisit if a
-  slow scoring/telemetry job ever starves API request handling.
 - **Zero-downtime deploys aren't automated.** §19.1 describes a health-check-gated rolling
   restart; today's `up -d` briefly drops connections to `app`/`web` while they recreate.
 - **Alerts fire but notify no one.** Prometheus evaluates the four conditions in

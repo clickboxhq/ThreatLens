@@ -71,12 +71,46 @@ services:
     volumes:
       - ../apps/api:/app
       - api-node-modules:/app/node_modules
+      # §19.1: `worker` (below) bind-mounts this same host apps/api directory. Without its own
+      # isolated dist volume, both containers' `nest start --watch` compilers would write to
+      # the same physical dist/ folder and corrupt each other's incremental build state —
+      # reproduced this exact failure while testing the split (two processes racing on one
+      # dist/ directory, "Cannot find module" for a file that genuinely exists in source).
+      - api-dist:/app/dist
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+
+  # §19.1: background-job process — BullMQ workers for telemetry generation, alert
+  # correlation, and scoring, split out of `api` (worker-main.ts / worker.module.ts). Without
+  # this service, sessions would create but never reach `ready` and nothing would ever get
+  # scored, since `api` no longer runs these processors itself.
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    command: ["npm", "run", "start:worker:dev"]
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://socverse_app:socverse_app_dev_password@postgres:5432/socverse
+      MIGRATE_DATABASE_URL: postgresql://socverse:socverse_dev_password@postgres:5432/socverse
+      REDIS_URL: redis://redis:6379
+      WORKER_PORT: "3000"
+    volumes:
+      - ../apps/api:/app
+      - worker-node-modules:/app/node_modules
+      - worker-dist:/app/dist
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   web:
@@ -99,4 +133,7 @@ volumes:
   postgres-data:
   minio-data:
   api-node-modules:
+  api-dist:
+  worker-node-modules:
+  worker-dist:
   web-node-modules:

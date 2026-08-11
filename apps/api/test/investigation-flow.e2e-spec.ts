@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import {
   createE2EApp,
+  createE2EWorker,
   assertNoForbiddenFields,
   pollUntil,
 } from './helpers/e2e-app';
@@ -11,8 +12,9 @@ import { EmailVerificationTokenStore } from '../src/modules/auth/email-verificat
 // The full walking-skeleton flow (§2.1–§2.12) driven entirely over HTTP against a real
 // Postgres + Redis + BullMQ — signup through a scored session — the one path unit tests
 // (every one of which mocks PrismaService directly) structurally cannot cover: that
-// migrations actually apply, that AppModule's real DI graph wires up, and that the
-// Telemetry Generator → Alert Engine → Scoring Engine job chain actually runs end to end.
+// migrations actually apply, that AppModule's/WorkerModule's real DI graphs wire up, and that
+// the Telemetry Generator → Alert Engine → Scoring Engine job chain actually runs end to end
+// across the two separate processes they're now split into (§19.1).
 //
 // Background jobs run for real here, so this test polls rather than triggers anything —
 // the same pattern this project's manual Docker-based live verification has used throughout
@@ -21,6 +23,7 @@ jest.setTimeout(120_000);
 
 describe('Investigation flow (e2e)', () => {
   let app: INestApplication;
+  let worker: INestApplication;
   let http: ReturnType<typeof request>;
 
   const email = `e2e-${randomUUID()}@example.com`;
@@ -32,11 +35,13 @@ describe('Investigation flow (e2e)', () => {
 
   beforeAll(async () => {
     app = await createE2EApp();
+    worker = await createE2EWorker();
     http = request(app.getHttpServer());
   });
 
   afterAll(async () => {
     await app.close();
+    await worker.close();
   });
 
   it('signs up, verifies email (via direct token-store access — no email provider in dev/CI), and logs in', async () => {

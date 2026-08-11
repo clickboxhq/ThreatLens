@@ -23,6 +23,14 @@ scrape_configs:
     static_configs:
       - targets: ["app:3000"]
 
+  # §19.1: separate process from `app` as of the api/worker split — its own memory/event-loop
+  # metrics and its own bullmq_jobs gauge reading (same queues, read straight from Redis, so
+  # both jobs report identical queue-depth numbers; the rest of each is process-local).
+  - job_name: socverse-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:3000"]
+
   - job_name: node-exporter
     static_configs:
       - targets: ["node-exporter:9100"]

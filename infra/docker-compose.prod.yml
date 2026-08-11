@@ -105,6 +105,30 @@ services:
       minio:
         condition: service_healthy
 
+  # §19.1: background-job process — BullMQ workers for telemetry generation, alert
+  # correlation, and scoring, split out of `app` (apps/api/src/worker-main.ts). Reuses the
+  # exact same production image as `app` (both entrypoints are compiled together into the same
+  # dist/), just overriding the start command. No JWT_ACCESS_SECRET/WEB_ORIGIN/TRUST_PROXY_HOPS
+  # — none apply to a process with no REST API and no client-facing HTTP surface beyond
+  # /health, /ready, /metrics.
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.prod
+      target: production
+    restart: unless-stopped
+    command: ["node", "dist/src/worker-main"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://socverse_app:${APP_DB_PASSWORD}@postgres:5432/socverse
+      REDIS_URL: redis://redis:6379
+      WORKER_PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   web:
     build:
       context: ..

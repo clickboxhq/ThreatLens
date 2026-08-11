@@ -2,13 +2,14 @@ import { Test } from '@nestjs/testing';
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../src/app.module';
+import { WorkerModule } from '../../src/worker.module';
 import { ScrubbingLogger } from '../../src/common/logging/scrubbing-logger.service';
 
-// Boots the real AppModule — every module, every BullMQ processor, against whatever
-// DATABASE_URL/REDIS_URL is in the environment (a real Postgres + Redis, not mocks). This is
-// deliberately the same configuration main.ts's bootstrap() applies, minus attachRealtimeGateway
-// (WebSocket is out of scope for this REST-driven e2e pass and already covered by earlier
-// manual live verification).
+// Boots the real AppModule (REST API only, no BullMQ processors — those live in WorkerModule,
+// see createE2EWorker below) against whatever DATABASE_URL/REDIS_URL is in the environment (a
+// real Postgres + Redis, not mocks). This is deliberately the same configuration main.ts's
+// bootstrap() applies, minus attachRealtimeGateway (WebSocket is out of scope for this
+// REST-driven e2e pass and already covered by earlier manual live verification).
 export async function createE2EApp(): Promise<INestApplication> {
   const moduleFixture = await Test.createTestingModule({
     imports: [AppModule],
@@ -27,6 +28,25 @@ export async function createE2EApp(): Promise<INestApplication> {
       transform: true,
     }),
   );
+
+  await app.init();
+  return app;
+}
+
+// Boots WorkerModule (§19.1: telemetry generation, alert correlation, scoring) alongside
+// createE2EApp — since AppModule no longer runs these processors itself, a spec that expects a
+// session to ever reach `ready`, or a submitted session to ever get scored, needs both apps
+// running. No app.listen() needed: instantiating the module graph is what starts the BullMQ
+// workers (same as every other process in this codebase), and this process context makes no
+// outbound HTTP calls itself.
+export async function createE2EWorker(): Promise<INestApplication> {
+  const moduleFixture = await Test.createTestingModule({
+    imports: [WorkerModule],
+  }).compile();
+
+  const app = moduleFixture.createNestApplication({
+    logger: new ScrubbingLogger(),
+  });
 
   await app.init();
   return app;
