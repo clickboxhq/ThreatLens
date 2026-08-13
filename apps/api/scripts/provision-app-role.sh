@@ -8,11 +8,11 @@
 # by APP_DB_PASSWORD, automatically on every deploy — not as a manual runbook step to remember.
 #
 # Used as the `migrate` service's command in infra/docker-compose.prod.yml (the `build`-stage
-# image, WORKDIR /repo, full monorepo layout: apps/api/prisma/...) and directly against the
-# `api` service's production image on Railway (infra/RAILWAY.md, WORKDIR /app, flattened
-# layout: prisma/... at the root) via `railway run`. Detects which one it's in rather than
-# needing a caller-supplied flag, since getting this wrong silently fails with a confusing
-# "schema file not found" rather than anything indicating a layout mismatch.
+# image, WORKDIR /repo, full monorepo layout: apps/api/prisma/...) and chained into the `api`
+# service's own Custom Start Command on Railway (infra/RAILWAY.md, WORKDIR /app, flattened
+# layout: prisma/... at the root). Detects which one it's in rather than needing a
+# caller-supplied flag, since getting this wrong silently fails with a confusing "schema file
+# not found" rather than anything indicating a layout mismatch.
 #
 # Safe to run repeatedly: `migrate deploy` is idempotent, and `ALTER ROLE ... PASSWORD` simply
 # (re)sets the password to the same value if APP_DB_PASSWORD hasn't changed.
@@ -23,6 +23,29 @@ if [ -f apps/api/prisma/schema.prisma ]; then
 else
   SCHEMA_PATH=prisma/schema.prisma
 fi
+
+# 20260805232813_add_audit_logs and 20260806001500_add_least_privilege_app_role (both already
+# applied everywhere else, forward-only, un-editable) hardcode the literal role/database name
+# "socverse" — true in every environment this project ran in until now, where docker-compose's
+# POSTGRES_USER/POSTGRES_DB are both literally "socverse". A managed provider (Railway: role
+# `postgres`, database `railway`) has neither, so those two migrations fail outright with
+# "role/database does not exist". Rather than rewrite history, satisfy the assumption: create a
+# role and a database named "socverse" if neither already exists. Harmless no-ops on the
+# environments where both already exist as the real superuser/database; on Railway this creates
+# an unused placeholder role and an empty, unused placeholder database purely so those two
+# migrations' hardcoded references resolve to *something* valid.
+cat <<SQL | npx prisma db execute --url "$MIGRATE_DATABASE_URL" --stdin
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'socverse') THEN
+    CREATE ROLE "socverse";
+  END IF;
+END
+\$\$;
+SQL
+cat <<SQL | npx prisma db execute --url "$MIGRATE_DATABASE_URL" --stdin || true
+CREATE DATABASE "socverse";
+SQL
 
 npx prisma migrate deploy --schema "$SCHEMA_PATH"
 

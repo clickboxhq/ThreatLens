@@ -23,7 +23,7 @@ In this repo's Settings → Secrets and variables → Actions:
   after each image push.
 
 **Variables** (not secret — baked into the web build, visible in the bundled JS either way):
-- `VITE_API_BASE_URL` — set this *after* step 3 below, once you know the `api` service's
+- `VITE_API_BASE_URL` — set this *after* step 2 below, once you know the `api` service's
   Railway domain, e.g. `https://socverse-api-production.up.railway.app/api/v1`.
 
 ## One-time Railway setup
@@ -37,6 +37,24 @@ full admin access to its managed Postgres, not a locked-down instance).
 ### 2. Create the `api` service
 
 New Service → Docker Image → `<dockerhub-username>/socverse-api:latest`.
+
+Settings → Deploy → Custom Start Command:
+
+```
+sh -c "sh scripts/provision-app-role.sh && node dist/src/main"
+```
+
+This runs `prisma/migrations` and rotates `socverse_app`'s password off the placeholder baked
+into the migration file (to `APP_DB_PASSWORD` below) every time `api` starts, before booting
+the app itself — see that script's own comments for why the rotation can't happen inside the
+migration file directly. Safe to run on every deploy, not just the first one: `migrate deploy`
+is idempotent and re-applying the same `APP_DB_PASSWORD` is a no-op.
+
+(This runs *inside* the container, which matters: `railway run` executes locally on your own
+machine with the service's env vars injected, not inside the deployed image — it can't reach
+this script or the `prisma` CLI, both of which only exist in the image. Chaining it into the
+start command is what actually runs it in the right place, no `railway ssh`/`railway run` step
+needed.)
 
 Environment variables (use Railway's variable-reference picker — click the field and
 autocomplete offers other services' variables — rather than typing these by hand, since your
@@ -57,30 +75,21 @@ APP_DB_PASSWORD=<pick a strong value, distinct from Postgres's own password>
 `MIGRATE_DATABASE_URL` uses Postgres's own `DATABASE_URL` directly (that plugin connection is
 already superuser-equivalent — the same role `MIGRATE_DATABASE_URL` played against the VPS's
 `socverse` superuser). `DATABASE_URL` is composed by hand for the least-privilege `socverse_app`
-role instead, same as `infra/docker-compose.prod.yml` does — it doesn't exist until the
-migration below creates it.
+role instead, same as `infra/docker-compose.prod.yml` does — it doesn't exist until the first
+deploy's migration step creates it, so this service's first deploy will fail its own healthcheck
+briefly before that finishes — expected, not a bug.
 
-`WEB_ORIGIN` isn't set yet — comes back in step 4, once `web`'s domain exists.
+`WEB_ORIGIN` isn't set yet — comes back in step 5, once `web`'s domain exists (step 4).
 
 Settings → Networking → Generate Domain, so you get a public URL for this service. Note it —
 you'll need it for `VITE_API_BASE_URL` and for testing.
 
-### 3. Run the first migration
+Deploy this service and confirm its logs show `Nest application successfully started` before
+moving on — `worker` (next) depends on the `socverse_app` role this step creates, so deploying
+`api` first, and confirming it actually finished, avoids `worker` failing the same way on its
+own first boot.
 
-```bash
-railway login
-railway link   # select this project
-railway run --service api sh scripts/provision-app-role.sh
-```
-
-Applies `prisma/migrations` and rotates `socverse_app`'s password off the placeholder baked
-into the migration file, to `APP_DB_PASSWORD` — see that script's own comments for why this
-can't happen inside the migration itself. Safe to re-run on every future deploy (idempotent);
-CI doesn't do this automatically since a migration is a schema change worth watching happen,
-not something to silently fire on every push — rerun this command by hand after a deploy that
-includes a new migration.
-
-### 4. Create the `worker` service
+### 3. Create the `worker` service
 
 New Service → Docker Image → same `<dockerhub-username>/socverse-api:latest` image.
 
@@ -101,7 +110,7 @@ API and no client-facing HTTP surface beyond `/health`, `/ready`, `/metrics`. **
 a public domain for this service — nothing should ever reach it directly; it only talks to
 Postgres/Redis over Railway's private network.
 
-### 5. Create the `web` service
+### 4. Create the `web` service
 
 Set the `VITE_API_BASE_URL` repo variable in GitHub now (step 0), using the `api` domain from
 step 2, then push to `main` so CI rebuilds the web image with it baked in (VITE_-prefixed vars
@@ -111,7 +120,7 @@ are inlined into the JS bundle at build time, not read at runtime — see
 New Service → Docker Image → `<dockerhub-username>/socverse-web:latest`. No environment
 variables needed — it's a static Nginx-served bundle. Generate a domain for it too.
 
-### 6. Close the loop: set `WEB_ORIGIN` on `api`
+### 5. Close the loop: set `WEB_ORIGIN` on `api`
 
 Now that `web` has a domain, go back to the `api` service and add:
 
@@ -125,10 +134,9 @@ Redeploy `api` for it to take effect (CORS reads this at boot).
 
 Push to `main` → CI runs the existing test suite → on success, builds and pushes
 `socverse-api`/`socverse-web` to Docker Hub tagged `:latest` and `:<commit-sha>` → triggers
-`railway redeploy` for `api`, `worker`, and `web`, which pulls `:latest` and restarts.
-Migrations are **not** run automatically (see step 3) — run
-`railway run --service api sh scripts/provision-app-role.sh` by hand after any deploy that
-includes a new migration.
+`railway redeploy` for `api`, `worker`, and `web`, which pulls `:latest` and restarts. Since
+migrations run as part of `api`'s own start command (step 2), a schema change ships and applies
+automatically on the same deploy — nothing to run by hand.
 
 ## Custom domains (optional)
 
