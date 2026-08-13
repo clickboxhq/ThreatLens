@@ -17,7 +17,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build --workspace=apps/web
 
 # ---- production: static assets served by nginx ----
-FROM nginx:1.27-alpine AS production
+FROM nginx:1.31-alpine AS production
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 # Copied to templates/, not straight to conf.d/, so the official image's built-in
 # envsubst-on-start entrypoint renders ${PORT} (apps/web/nginx.conf's own comment on why) —
