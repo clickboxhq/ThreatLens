@@ -58,11 +58,15 @@ needed.)
 
 Environment variables (use Railway's variable-reference picker — click the field and
 autocomplete offers other services' variables — rather than typing these by hand, since your
-Postgres/Redis plugin service names may differ from the examples below):
+Postgres/Redis plugin service names may differ from the examples below). Note
+`${{APP_DB_PASSWORD}}` is double-braced even though it's referencing a variable on this same
+service — Railway only recognizes `${{...}}`, never a single-brace `${VAR}`; the latter gets
+stored as a literal, unexpanded string, which silently breaks `socverse_app`'s authentication
+rather than erroring at save time:
 
 ```
 NODE_ENV=production
-DATABASE_URL=postgresql://socverse_app:${APP_DB_PASSWORD}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
+DATABASE_URL=postgresql://socverse_app:${{APP_DB_PASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
 MIGRATE_DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 JWT_ACCESS_SECRET=<openssl rand -base64 48>
@@ -99,7 +103,7 @@ Environment variables:
 
 ```
 NODE_ENV=production
-DATABASE_URL=postgresql://socverse_app:${APP_DB_PASSWORD}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
+DATABASE_URL=postgresql://socverse_app:${{APP_DB_PASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
 MIGRATE_DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 APP_DB_PASSWORD=<same value as api's>

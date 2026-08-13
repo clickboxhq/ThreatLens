@@ -19,7 +19,12 @@ RUN npm run build --workspace=apps/web
 # ---- production: static assets served by nginx ----
 FROM nginx:1.27-alpine AS production
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# Copied to templates/, not straight to conf.d/, so the official image's built-in
+# envsubst-on-start entrypoint renders ${PORT} (apps/web/nginx.conf's own comment on why) —
+# Railway assigns each service its own port at runtime and ignores EXPOSE entirely. The
+# default here covers docker-compose.prod.yml and any plain `docker run` with no PORT set.
+COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+ENV PORT=80
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider "http://localhost:$PORT/health" || exit 1
