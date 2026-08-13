@@ -64,6 +64,15 @@ service — Railway only recognizes `${{...}}`, never a single-brace `${VAR}`; t
 stored as a literal, unexpanded string, which silently breaks `socverse_app`'s authentication
 rather than erroring at save time:
 
+**`JWT_ACCESS_SECRET` and `APP_DB_PASSWORD` below are placeholders, not values** — the
+angle-bracket text describes what to generate, it is not something to paste in literally.
+Generate real ones (e.g. `openssl rand -base64 48` for the JWT secret, any strong random string
+for the DB password) and type the *result* into Railway's Variables tab. Pasting the placeholder
+text itself in was a real incident on this project: `api`'s JWT secret and DB password sat live
+in production as the literal strings below for a while before anyone noticed, since Railway
+accepts any string with no validation. See "Rotating credentials" below if you need to check or
+replace what's live now.
+
 ```
 NODE_ENV=production
 DATABASE_URL=postgresql://socverse_app:${{APP_DB_PASSWORD}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}
@@ -99,7 +108,8 @@ New Service → Docker Image → same `<dockerhub-username>/socverse-api:latest`
 
 Settings → Deploy → Custom Start Command: `node dist/src/worker-main`
 
-Environment variables:
+Environment variables. **`APP_DB_PASSWORD` must be the real value you generated for `api`
+above, not the placeholder text** — same role, same password, both services:
 
 ```
 NODE_ENV=production
@@ -141,6 +151,29 @@ Push to `main` → CI runs the existing test suite → on success, builds and pu
 `railway redeploy` for `api`, `worker`, and `web`, which pulls `:latest` and restarts. Since
 migrations run as part of `api`'s own start command (step 2), a schema change ships and applies
 automatically on the same deploy — nothing to run by hand.
+
+## Rotating credentials
+
+How to check what's actually live, or replace it, without touching code:
+
+1. Railway dashboard → your project → click the `api` service → **Variables** tab (this is the
+   Raw Editor view, not the deploy logs).
+2. Find `JWT_ACCESS_SECRET` and `APP_DB_PASSWORD`. Railway masks values by default — click a
+   variable to reveal it if you need to confirm it isn't still the literal placeholder text from
+   this doc (`<openssl rand -base64 48>` etc.).
+3. To set a new value: generate one locally —
+   ```
+   openssl rand -base64 48
+   ```
+   for `JWT_ACCESS_SECRET`, or any long random string for `APP_DB_PASSWORD` — then paste the
+   *output*, not the command, into the variable's value field and save. Saving triggers an
+   automatic redeploy of `api`.
+4. If you rotate `APP_DB_PASSWORD`, update it to the same new value on the `worker` service too
+   (its own Variables tab) — same `socverse_app` role, both services authenticate with it.
+   `worker` won't reconnect to Postgres until you do.
+5. Rotating `JWT_ACCESS_SECRET` invalidates every currently-issued access/refresh token —
+   logged-in users get signed out and need to log back in. Fine to do any time, just don't expect
+   existing sessions to survive it.
 
 ## Custom domains (optional)
 
