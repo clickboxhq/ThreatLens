@@ -215,6 +215,19 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
+      # Migrations run as part of api's own start command (infra/RAILWAY.md step 2) — worker
+      # has no such step and just starts consuming jobs the moment its container is up, so if
+      # both redeploy at once, worker could start against a schema api hasn't finished
+      # migrating yet. The Railway CLI has no documented flag to wait for a redeploy to become
+      # healthy (checked docs.railway.com/cli/redeploy), and api's own /health is a trivial
+      # static route that doesn't reflect migration status even if it did — so this is a fixed
+      # delay, not a real readiness check. Given every migration so far is purely additive
+      # (new tables/columns, nothing renamed or dropped) the actual blast radius of a race here
+      # is low, but the ordering gap is real; revisit with a proper migration-aware health
+      # check if that assumption ever stops holding.
+      - name: Wait for api's migration + boot before starting worker
+        run: sleep 60
+
       - run: railway redeploy --service worker --yes
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
