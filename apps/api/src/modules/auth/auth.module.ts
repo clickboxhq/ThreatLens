@@ -5,6 +5,7 @@ import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
 import { EmailVerificationTokenStore } from './email-verification-token.store';
 import { LoginAttemptTracker } from './login-attempt-tracker.service';
+import { EmailService } from '../../common/email/email.service';
 
 @Module({
   controllers: [AuthController],
@@ -14,6 +15,7 @@ import { LoginAttemptTracker } from './login-attempt-tracker.service';
     PasswordResetTokenStore,
     EmailVerificationTokenStore,
     LoginAttemptTracker,
+    EmailService,
   ],
 })
 export class AuthModule {}

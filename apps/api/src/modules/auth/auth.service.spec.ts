@@ -10,6 +10,7 @@ import {
   computeLockoutSeconds,
 } from './login-attempt-tracker.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { EmailService } from '../../common/email/email.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { User } from '@prisma/client';
 
@@ -173,6 +174,7 @@ function buildService(users: Map<string, User>) {
   const emailVerificationTokens = new FakeEmailVerificationTokenStore();
   const loginAttempts = new FakeLoginAttemptTracker();
   const auditLog = { record: jest.fn(async () => undefined) };
+  const emailService = { send: jest.fn(async () => undefined) };
 
   const service = new AuthService(
     prisma as never,
@@ -183,6 +185,7 @@ function buildService(users: Map<string, User>) {
     emailVerificationTokens as unknown as EmailVerificationTokenStore,
     loginAttempts as unknown as LoginAttemptTracker,
     auditLog as unknown as AuditLogService,
+    emailService as unknown as EmailService,
   );
   return {
     service,
@@ -192,6 +195,7 @@ function buildService(users: Map<string, User>) {
     emailVerificationTokens,
     loginAttempts,
     auditLog,
+    emailService,
   };
 }
 

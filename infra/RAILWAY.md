@@ -83,7 +83,19 @@ JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_DAYS=30
 TRUST_PROXY_HOPS=1
 APP_DB_PASSWORD=<pick a strong value, distinct from Postgres's own password>
+RESEND_API_KEY=<your Resend API key, from resend.com/api-keys>
+EMAIL_FROM=SOCVerse <onboarding@resend.dev>
 ```
+
+`RESEND_API_KEY` powers email verification and password reset (`apps/api/src/common/email/email.service.ts`)
+— without it, `api` still runs fine, but both flows fall back to only *logging* the
+verification/reset link server-side instead of emailing it (visible in this service's Deploy
+Logs), which is fine for internal testing but not for real users who have no log access. Sign
+up at resend.com, create an API key, and set it here. `EMAIL_FROM` defaults to Resend's own
+`onboarding@resend.dev` sender, which works immediately with no domain setup — switch it to an
+address on your own domain once you've verified that domain in Resend, so email doesn't look
+like it's coming from Resend's shared address. `worker` doesn't need either variable; it never
+sends email.
 
 `MIGRATE_DATABASE_URL` uses Postgres's own `DATABASE_URL` directly (that plugin connection is
 already superuser-equivalent — the same role `MIGRATE_DATABASE_URL` played against the VPS's

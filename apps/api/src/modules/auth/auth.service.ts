@@ -16,6 +16,7 @@ import { PasswordResetTokenStore } from './password-reset-token.store';
 import { EmailVerificationTokenStore } from './email-verification-token.store';
 import { LoginAttemptTracker } from './login-attempt-tracker.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { EmailService } from '../../common/email/email.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import type { User } from '@prisma/client';
@@ -74,6 +75,7 @@ export class AuthService {
     private readonly emailVerificationTokens: EmailVerificationTokenStore,
     private readonly loginAttempts: LoginAttemptTracker,
     private readonly auditLog: AuditLogService,
+    private readonly emailService: EmailService,
   ) {}
 
   async signup(dto: SignupDto) {
@@ -111,20 +113,17 @@ export class AuthService {
     return { userId: user.id, emailVerificationRequired: true };
   }
 
-  /**
-   * No transactional email provider is wired up yet (§5.9's `email` queue is a later
-   * milestone, same gap noted on password reset) — the verification link is logged
-   * server-side as a stand-in for the email that would otherwise deliver it.
-   */
   private async sendVerificationEmail(
     userId: string,
     email: string,
   ): Promise<void> {
     const token = await this.emailVerificationTokens.create(userId);
     const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email?token=${token}`;
-    this.logger.log(
-      `Email verification requested for ${email}. Link (stands in for an emailed link): ${verifyUrl}`,
-    );
+    await this.emailService.send({
+      to: email,
+      subject: 'Verify your SOCVerse email address',
+      html: `<p>Welcome to SOCVerse — confirm your email address to unlock scored scenarios.</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+    });
   }
 
   /** §16.2 `POST /auth/email-verification/request`: resend for the currently authenticated user. */
@@ -503,10 +502,6 @@ export class AuthService {
    * §16.2 `POST /auth/password-reset/request`. Always resolves the same way regardless of
    * whether the email matches an account — a distinguishable response here is a user-
    * enumeration vector, which matters as much for a reset flow as it does for login (§15.1).
-   *
-   * No transactional email provider is wired up yet (§5.9's `email` queue is a later
-   * milestone, same gap noted on `signup`'s auto-verification) — the reset link is logged
-   * server-side as a stand-in for the email that would otherwise deliver it.
    */
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -516,9 +511,11 @@ export class AuthService {
 
     const token = await this.passwordResetTokens.create(user.id);
     const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password?token=${token}`;
-    this.logger.log(
-      `Password reset requested for ${user.email}. Link (stands in for an emailed link): ${resetUrl}`,
-    );
+    await this.emailService.send({
+      to: user.email,
+      subject: 'Reset your SOCVerse password',
+      html: `<p>Someone requested a password reset for this SOCVerse account.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If this wasn't you, you can safely ignore this email — your password won't change unless you open the link above and set a new one.</p>`,
+    });
   }
 
   /** §16.2 `POST /auth/password-reset/confirm`. Consumes the token and revokes every other active session. */
