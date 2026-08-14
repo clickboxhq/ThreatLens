@@ -4,6 +4,19 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000
 let accessToken: string | null = localStorage.getItem('socverse_access_token');
 let refreshToken: string | null = localStorage.getItem('socverse_refresh_token');
 
+// accessToken/refreshToken above are plain module state, not React state — AuthContext's
+// `isAuthenticated` reads them via getAccessToken() but only recomputes on its own re-renders.
+// Without this, a background silent-refresh failure (e.g. the access token's 15-minute TTL
+// lapsing while the tab sits idle) clears the tokens here with nothing forcing AuthContext to
+// notice, so the UI keeps showing a logged-in user while every real request 401s. Listeners let
+// AuthContext re-sync its own state whenever tokens actually change.
+const listeners = new Set<() => void>();
+
+export function onTokensChanged(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function setTokens(tokens: { accessToken: string; refreshToken: string } | null) {
   accessToken = tokens?.accessToken ?? null;
   refreshToken = tokens?.refreshToken ?? null;
@@ -14,6 +27,7 @@ export function setTokens(tokens: { accessToken: string; refreshToken: string } 
     localStorage.removeItem('socverse_access_token');
     localStorage.removeItem('socverse_refresh_token');
   }
+  listeners.forEach((listener) => listener());
 }
 
 export function getAccessToken() {

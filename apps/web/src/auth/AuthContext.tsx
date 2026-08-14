@@ -1,7 +1,7 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { authApi, mfaApi } from '../api/endpoints';
-import { getAccessToken, setTokens } from '../api/client';
+import { getAccessToken, onTokensChanged, setTokens } from '../api/client';
 import type { AuthUser } from '../api/types';
 
 type LoginOutcome = { mfaRequired: false; user: AuthUser } | { mfaRequired: true; mfaChallengeId: string };
@@ -55,6 +55,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem('socverse_user');
   }
+
+  // Fires on every token change, including a background silent-refresh failure (client.ts's
+  // own comment on why) — if the tokens are gone, drop the stale `user` too, so isAuthenticated
+  // (and ProtectedRoute's redirect) reflect reality instead of a phantom logged-in state.
+  useEffect(() => {
+    return onTokensChanged(() => {
+      if (!getAccessToken()) {
+        setUser(null);
+        localStorage.removeItem('socverse_user');
+      }
+    });
+  }, []);
 
   // Called after a same-tab email verification confirm (§16.2 `POST /auth/email-verification/confirm`)
   // so the catalog's "please verify" gate disappears without requiring a fresh login — the

@@ -43,6 +43,7 @@ export function CatalogPage() {
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [assignments, setAssignments] = useState<MyAssignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -52,6 +53,9 @@ export function CatalogPage() {
       .then(([scenarioList, assignmentList]) => {
         setScenarios(scenarioList);
         setAssignments(assignmentList);
+      })
+      .catch((err) => {
+        setLoadError(err instanceof ApiError ? err.message : 'Could not load the catalog.');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -69,6 +73,7 @@ export function CatalogPage() {
   }
 
   if (loading) return <p>Loading scenarios...</p>;
+  if (loadError) return <p style={{ color: '#dc2626' }}>{loadError}</p>;
 
   return (
     <div>
