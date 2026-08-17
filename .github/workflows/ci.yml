@@ -175,7 +175,7 @@ jobs:
       # `worker` (Railway service, see infra/RAILWAY.md) reuses this exact image with a
       # different start command — same as infra/docker-compose.prod.yml's `app`/`worker`
       # services do locally — so there's no separate worker image to build or push.
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/api/Dockerfile.prod
@@ -188,7 +188,7 @@ jobs:
       # VITE_-prefixed vars are baked into the static bundle at build time (apps/web/Dockerfile.prod's
       # own comment on this) — vars.VITE_API_BASE_URL is a repo variable, not a secret, set once
       # you know the api service's Railway domain (infra/RAILWAY.md).
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile.prod
