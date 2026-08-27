@@ -118,7 +118,9 @@ export class AuthService {
     email: string,
   ): Promise<void> {
     const token = await this.emailVerificationTokens.create(userId);
-    const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email?token=${token}`;
+    // Path param, not a ?token= query string — matches the ThreatLens frontend's
+    // /verify-email/$token route (apps/web/src/routes/verify-email.$token.tsx).
+    const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email/${token}`;
     await this.emailService.send({
       to: email,
       subject: 'Verify your SOCVerse email address',
@@ -510,7 +512,9 @@ export class AuthService {
     }
 
     const token = await this.passwordResetTokens.create(user.id);
-    const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password?token=${token}`;
+    // Path param, not a ?token= query string — matches the ThreatLens frontend's
+    // /reset-password/$token route (apps/web/src/routes/reset-password.$token.tsx).
+    const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password/${token}`;
     await this.emailService.send({
       to: user.email,
       subject: 'Reset your SOCVerse password',

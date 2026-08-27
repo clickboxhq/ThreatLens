@@ -1,10 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, KeyRound, Mail, ScrollText, ShieldCheck } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  KeyRound,
+  Loader2,
+  Mail,
+  ScrollText,
+  ShieldCheck,
+} from "lucide-react";
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { apiClient } from "@/lib/api-client";
 
 export const Route = createFileRoute("/forgot-password")({
   component: ForgotPasswordPage,
@@ -22,6 +31,22 @@ const TRUST_LINES = [
 function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      // Always resolves the same way whether or not the email matches an account (§15.1
+      // anti-enumeration, apps/api/src/modules/auth/auth.service.ts) — there is no error state
+      // to handle here even on a real network failure short of a thrown ApiError, which we
+      // still don't want to reveal as a distinguishable "no such account" signal.
+      await apiClient.post("/auth/password-reset/request", { email });
+    } finally {
+      setSubmitting(false);
+      setSent(true);
+    }
+  }
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
@@ -121,13 +146,7 @@ function ForgotPasswordPage() {
                   Enter your work email and we'll send you a link to reset it.
                 </p>
 
-                <form
-                  className="mt-8 space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setSent(true);
-                  }}
-                >
+                <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
                   <label className="block">
                     <span className="mb-1.5 block text-[12px] font-medium text-black/70">
                       Work email
@@ -143,8 +162,20 @@ function ForgotPasswordPage() {
                     />
                   </label>
 
-                  <button type="submit" className="btn-primary mt-2 w-full justify-center py-3">
-                    Send reset link <ArrowRight className="size-3.5" />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Sending…
+                      </>
+                    ) : (
+                      <>
+                        Send reset link <ArrowRight className="size-3.5" />
+                      </>
+                    )}
                   </button>
                 </form>
 

@@ -1,4 +1,4 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
   ShieldAlert,
@@ -49,7 +49,15 @@ import { NotificationPanel } from "@/components/soc/notification-panel";
 import { useNotifications } from "@/hooks/use-notifications";
 import { PageTransition } from "@/components/soc/ui/motion";
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
-import { useAccount } from "@/hooks/use-account";
+import { useAuthStore, useAuthUser } from "@/lib/auth-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut } from "lucide-react";
 
 type NavItem = {
   to: string;
@@ -167,8 +175,12 @@ function NavGroup({ label, items }: { label?: string; items: NavItem[] }) {
 }
 
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
-  const { accountType, accountName } = useAccount();
-  const isOrg = accountType === "organization";
+  const user = useAuthUser();
+  // "Organization" nav (instructor tools, org settings) now gates on the real role SOCVerse
+  // issued at signup/login, not the old accountType mock flag — org_admin included for when a
+  // real admin-provisioned account (no self-serve path) logs in.
+  const isOrg = user?.role === "instructor" || user?.role === "org_admin";
+  const accountName = user?.displayName ?? "Account";
 
   return (
     <>
@@ -316,6 +328,15 @@ function Topbar({
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const { unreadCount } = useNotifications();
+  const user = useAuthUser();
+  const logout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
+  const initials = (user?.displayName ?? "?")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md md:px-6">
       <button
@@ -365,18 +386,33 @@ function Topbar({
           </button>
           {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
         </div>
-        <Link
-          to="/app/profile"
-          className="flex items-center gap-2 rounded-md border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:border-[color:var(--info)]/50"
-        >
-          <IconTile tone="info" size="sm" shape="circle" className="text-[11px] font-semibold">
-            JD
-          </IconTile>
-          <div className="hidden text-left leading-tight md:block">
-            <div className="text-[12px] font-medium">John Doe</div>
-            <div className="text-[10px] text-muted-foreground">Profile & settings</div>
-          </div>
-        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-md border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:border-[color:var(--info)]/50">
+              <IconTile tone="info" size="sm" shape="circle" className="text-[11px] font-semibold">
+                {initials}
+              </IconTile>
+              <div className="hidden text-left leading-tight md:block">
+                <div className="text-[12px] font-medium">{user?.displayName ?? "Account"}</div>
+                <div className="text-[10px] text-muted-foreground">Profile & settings</div>
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link to="/app/profile">Profile & settings</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                logout();
+                navigate({ to: "/login" });
+              }}
+            >
+              <LogOut className="size-4" /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { ArrowRight, Building2, CheckCircle2, Loader2, User } from "lucide-react";
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { EvidenceGraph, displayFont, monoFont } from "@/components/soc/marketing/atmos";
-import { useSoc, type AccountType } from "@/lib/store";
+import { ApiError } from "@/lib/api-client";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
@@ -13,16 +14,22 @@ export const Route = createFileRoute("/signup")({
   }),
 });
 
+// ThreatLens's "Individual vs. Organization" choice maps onto SOCVerse's real account
+// roles — student (self-service, plays scenarios) vs. instructor (self-service, manages
+// cohorts) — rather than a separate org/tenant concept, which SOCVerse doesn't actually
+// enforce anywhere yet (see the merge plan's Phase 6). The organization-name/-type fields that
+// used to appear here are dropped: SOCVerse's signup has nowhere to store them, and collecting
+// input that's silently discarded would be worse than not asking.
 const ACCOUNT_OPTIONS = [
   {
-    key: "individual" as const,
+    key: "student" as const,
     icon: User,
     label: "Individual",
     body: "Personal learning and investigation practice.",
     features: ["Personal investigations", "Learning paths", "Certificates", "Progress tracking"],
   },
   {
-    key: "organization" as const,
+    key: "instructor" as const,
     icon: Building2,
     label: "Organization",
     body: "Manage analysts, students, cohorts, and training programs.",
@@ -30,30 +37,28 @@ const ACCOUNT_OPTIONS = [
   },
 ];
 
-const ORG_TYPES = [
-  "Company / Enterprise",
-  "University / Higher Education",
-  "Bootcamp",
-  "Cybersecurity Academy",
-  "MSSP / Security Provider",
-  "Government Agency",
-  "Workforce Development Program",
-  "Training Provider",
-  "Accelerator",
-  "Incubator",
-  "Nonprofit",
-  "Other",
-];
-
 function SignupPage() {
   const navigate = useNavigate();
-  const setAccountType = useSoc((s) => s.setAccountType);
-  const [type, setType] = useState<AccountType>("individual");
-  const [orgName, setOrgName] = useState("");
-  const [orgType, setOrgType] = useState("");
+  const signup = useAuthStore((s) => s.signup);
+  const [role, setRole] = useState<"student" | "instructor">("student");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signup(email, password, displayName, role);
+      navigate({ to: "/welcome" });
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+    }
+  }
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
@@ -131,12 +136,12 @@ function SignupPage() {
 
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {ACCOUNT_OPTIONS.map((opt) => {
-                const active = type === opt.key;
+                const active = role === opt.key;
                 return (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => setType(opt.key)}
+                    onClick={() => setRole(opt.key)}
                     className={
                       active
                         ? "glass-card-dark relative p-5 text-left transition-all"
@@ -184,28 +189,7 @@ function SignupPage() {
               })}
             </div>
 
-            <form
-              className="mt-6 space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setError(null);
-                setSubmitting(true);
-                // Mock-only: a real backend call would replace this timeout.
-                // Try email "taken@contoso.com" to see the already-registered state.
-                window.setTimeout(() => {
-                  if (email === "taken@contoso.com") {
-                    setSubmitting(false);
-                    setError("An account with this email already exists. Try logging in instead.");
-                    return;
-                  }
-                  setAccountType(
-                    type,
-                    type === "organization" ? orgName || "My Organization" : undefined,
-                  );
-                  navigate({ to: "/welcome" });
-                }, 500);
-              }}
-            >
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-medium text-black/70">
                   Full name
@@ -213,6 +197,8 @@ function SignupPage() {
                 <input
                   type="text"
                   required
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Jane Doe"
                   className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
                 />
@@ -231,50 +217,16 @@ function SignupPage() {
                   className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
                 />
               </label>
-              {type === "organization" && (
-                <>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                      Organization name
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={orgName}
-                      onChange={(e) => setOrgName(e.target.value)}
-                      placeholder="Contoso University"
-                      className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                      Organization type
-                    </span>
-                    <select
-                      required
-                      value={orgType}
-                      onChange={(e) => setOrgType(e.target.value)}
-                      className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors focus:border-black/40"
-                    >
-                      <option value="" disabled>
-                        Select organization type
-                      </option>
-                      {ORG_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
-              )}
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-medium text-black/70">Password</span>
                 <input
                   type="password"
                   required
+                  minLength={12}
                   autoComplete="new-password"
-                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="12+ characters"
                   className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
                 />
               </label>
@@ -296,7 +248,7 @@ function SignupPage() {
                   </>
                 ) : (
                   <>
-                    {type === "organization" ? "Create organization" : "Get started"}{" "}
+                    {role === "instructor" ? "Create organization" : "Get started"}{" "}
                     <ArrowRight className="size-3.5" />
                   </>
                 )}

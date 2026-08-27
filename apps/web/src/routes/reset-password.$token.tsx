@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
   KeyRound,
+  Loader2,
   ScrollText,
   ShieldCheck,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import {
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 export const Route = createFileRoute("/reset-password/$token")({
   component: ResetPasswordPage,
@@ -26,26 +28,41 @@ const TRUST_LINES = [
   { icon: ScrollText, l: "Audit logging" },
 ];
 
-/**
- * Mock-only token status derivation. A real backend would return this as
- * part of the token-validation response (see BACKEND_INTEGRATION.md) —
- * here it's simulated from the token value so every state is reachable
- * for testing: try /reset-password/expired or /reset-password/used.
- */
-function tokenStatus(token: string): "valid" | "expired" | "used" {
-  if (token === "expired") return "expired";
-  if (token === "used") return "used";
-  return "valid";
-}
-
 function ResetPasswordPage() {
   const { token } = useParams({ from: "/reset-password/$token" });
   const navigate = useNavigate();
-  const status = tokenStatus(token);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // SOCVerse has no separate "check this token" endpoint — unlike the original mock, which
+  // pre-derived valid/expired/used from the URL before showing the form, there's nothing to
+  // check until the user actually submits a new password. invalidToken only becomes true after
+  // a real INVALID_RESET_TOKEN response (apps/api/src/modules/auth/auth.service.ts's
+  // confirmPasswordReset — it doesn't distinguish "expired" from "already used", so neither
+  // does this page).
+  const [invalidToken, setInvalidToken] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (password.length < 12) return setError("Password must be at least 12 characters.");
+    if (password !== confirm) return setError("Passwords do not match.");
+    setError(null);
+    setSubmitting(true);
+    try {
+      await apiClient.post("/auth/password-reset/confirm", { token, newPassword: password });
+      setDone(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "INVALID_RESET_TOKEN") {
+        setInvalidToken(true);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
@@ -105,7 +122,7 @@ function ResetPasswordPage() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10">
           <div className="w-full max-w-[400px]">
-            {status !== "valid" ? (
+            {invalidToken ? (
               <>
                 <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--critical)]">
                   <AlertTriangle className="size-5" />
@@ -114,12 +131,11 @@ function ResetPasswordPage() {
                   className="mt-5 text-center text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
                   style={displayFont}
                 >
-                  {status === "expired" ? "This link has expired" : "This link was already used"}
+                  This link is invalid or has expired
                 </h2>
                 <p className="mt-2 text-center text-[14px] leading-[1.6] text-black/55">
-                  {status === "expired"
-                    ? "Password reset links are valid for 60 minutes. Request a new one to continue."
-                    : "This reset link has already been used to set a new password. Request a new one if you need to reset it again."}
+                  Reset links expire after a while and can only be used once. Request a new one to
+                  continue.
                 </p>
                 <Link to="/forgot-password" className="btn-primary mt-8 w-full justify-center py-3">
                   Request a new link <ArrowRight className="size-3.5" />
@@ -158,17 +174,7 @@ function ResetPasswordPage() {
                   Choose a strong password you haven't used before.
                 </p>
 
-                <form
-                  className="mt-8 space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (password.length < 8)
-                      return setError("Password must be at least 8 characters.");
-                    if (password !== confirm) return setError("Passwords do not match.");
-                    setError(null);
-                    setDone(true);
-                  }}
-                >
+                <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
                   <label className="block">
                     <span className="mb-1.5 block text-[12px] font-medium text-black/70">
                       New password
@@ -176,10 +182,11 @@ function ResetPasswordPage() {
                     <input
                       type="password"
                       required
+                      minLength={12}
                       autoComplete="new-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="12+ characters"
                       className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
                     />
                   </label>
@@ -190,10 +197,11 @@ function ResetPasswordPage() {
                     <input
                       type="password"
                       required
+                      minLength={12}
                       autoComplete="new-password"
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="12+ characters"
                       className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
                     />
                   </label>
@@ -204,8 +212,20 @@ function ResetPasswordPage() {
                     </p>
                   )}
 
-                  <button type="submit" className="btn-primary mt-2 w-full justify-center py-3">
-                    Set new password <ArrowRight className="size-3.5" />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Setting password…
+                      </>
+                    ) : (
+                      <>
+                        Set new password <ArrowRight className="size-3.5" />
+                      </>
+                    )}
                   </button>
                 </form>
               </>

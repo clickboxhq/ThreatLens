@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { ArrowRight, KeyRound, Loader2, ScrollText, ShieldCheck } from "lucide-react";
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { ApiError } from "@/lib/api-client";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -21,10 +23,34 @@ const TRUST_LINES = [
 
 function LoginPage() {
   const navigate = useNavigate();
+  const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (result.mfaRequired) {
+        // TODO(phase 3): this account has MFA enabled (mandatory for org_admin/platform_admin,
+        // optional otherwise) — there's no challenge-code UI yet. Self-signup only ever creates
+        // student/instructor accounts, which don't require MFA, so this is unreachable for
+        // anyone who hasn't separately opted in via a real Settings page (which doesn't exist
+        // yet either) or been provisioned directly in the database.
+        setSubmitting(false);
+        setError("This account requires a two-factor code, which isn't supported here yet.");
+        return;
+      }
+      navigate({ to: "/app" });
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+    }
+  }
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
@@ -102,24 +128,7 @@ function LoginPage() {
               Access your investigations, training, and progress.
             </p>
 
-            <form
-              className="mt-8 space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setError(null);
-                setSubmitting(true);
-                // Mock-only: a real backend call would replace this timeout.
-                // Try password "wrong" to see the invalid-credentials state.
-                window.setTimeout(() => {
-                  if (password === "wrong") {
-                    setSubmitting(false);
-                    setError("Incorrect email or password. Try again.");
-                    return;
-                  }
-                  navigate({ to: "/app" });
-                }, 500);
-              }}
-            >
+            <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-medium text-black/70">
                   Work email

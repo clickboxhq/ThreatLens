@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieConsent } from "@/components/soc/marketing/cookie-consent";
+import { useAuthHydration } from "@/lib/auth-store";
 
 function NotFoundComponent() {
   return (
@@ -170,6 +171,8 @@ function RootComponent() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useAuthHydration();
 
   return (
     <QueryClientProvider client={queryClient}>

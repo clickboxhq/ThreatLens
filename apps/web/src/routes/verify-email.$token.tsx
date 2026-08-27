@@ -1,9 +1,12 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, CheckCircle2, MailCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { apiClient } from "@/lib/api-client";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/verify-email/$token")({
   component: VerifyEmailPage,
@@ -12,19 +15,33 @@ export const Route = createFileRoute("/verify-email/$token")({
   }),
 });
 
-/**
- * Mock-only token status — see reset-password.$token.tsx for the same
- * pattern. Try /verify-email/expired or /verify-email/already-verified.
- */
-function tokenStatus(token: string): "valid" | "expired" | "already-verified" {
-  if (token === "expired") return "expired";
-  if (token === "already-verified") return "already-verified";
-  return "valid";
-}
+// SOCVerse's confirm endpoint (apps/api/src/modules/auth/auth.service.ts's
+// confirmEmailVerification) doesn't distinguish "expired" from "already verified" — an invalid
+// token is just an invalid token, so this page only has three real states: checking, verified,
+// or failed (grouping the original mock's separate "expired"/"already-verified" outcomes).
+type Status = "checking" | "verified" | "failed";
 
 function VerifyEmailPage() {
   const { token } = useParams({ from: "/verify-email/$token" });
-  const status = tokenStatus(token);
+  const markEmailVerified = useAuthStore((s) => s.markEmailVerified);
+  const [status, setStatus] = useState<Status>("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .post("/auth/email-verification/confirm", { token })
+      .then(() => {
+        if (cancelled) return;
+        markEmailVerified();
+        setStatus("verified");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, markEmailVerified]);
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
@@ -71,7 +88,20 @@ function VerifyEmailPage() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10">
           <div className="w-full max-w-[400px] text-center">
-            {status === "valid" && (
+            {status === "checking" && (
+              <>
+                <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-black/60">
+                  <Loader2 className="size-5 animate-spin" />
+                </div>
+                <h2
+                  className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
+                  style={displayFont}
+                >
+                  Confirming your email…
+                </h2>
+              </>
+            )}
+            {status === "verified" && (
               <>
                 <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--success)]">
                   <CheckCircle2 className="size-5" />
@@ -90,26 +120,7 @@ function VerifyEmailPage() {
                 </Link>
               </>
             )}
-            {status === "already-verified" && (
-              <>
-                <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--info)]">
-                  <MailCheck className="size-5" />
-                </div>
-                <h2
-                  className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-                  style={displayFont}
-                >
-                  Already verified
-                </h2>
-                <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-                  This email address was already confirmed. You can log in normally.
-                </p>
-                <Link to="/login" className="btn-primary mt-8 w-full justify-center py-3">
-                  Go to login <ArrowRight className="size-3.5" />
-                </Link>
-              </>
-            )}
-            {status === "expired" && (
+            {status === "failed" && (
               <>
                 <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--critical)]">
                   <AlertTriangle className="size-5" />
@@ -118,10 +129,11 @@ function VerifyEmailPage() {
                   className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
                   style={displayFont}
                 >
-                  This link has expired
+                  This link is invalid or has expired
                 </h2>
                 <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-                  Verification links are valid for 24 hours. Log in to request a new one.
+                  Verification links expire after a while and can only be used once. Log in and
+                  we'll send you a new one.
                 </p>
                 <Link to="/login" className="btn-primary mt-8 w-full justify-center py-3">
                   Go to login <ArrowRight className="size-3.5" />
