@@ -4,7 +4,11 @@ import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
-import type { CreateNoteDto, PinEvidenceDto } from './dto/incident.dto';
+import type {
+  CreateNoteDto,
+  LogResponseActionDto,
+  PinEvidenceDto,
+} from './dto/incident.dto';
 
 @Injectable()
 export class EvidenceNotesService {
@@ -96,6 +100,31 @@ export class EvidenceNotesService {
       where: { incidentId },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  // See LogResponseActionDto's own comment: this panel has no entity picker, so this only
+  // ever records the audit-trail row (InvestigationAction) — it never mutates a specific
+  // device/identity/email the way POST .../devices/:id/isolate does. `targetId` is the
+  // incident itself, since there's no more specific entity to point at from here.
+  async logResponseAction(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    dto: LogResponseActionDto,
+  ): Promise<{ logged: true }> {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    await this.assertIncidentEditable(sessionId, incidentId);
+
+    await this.investigationActions.record({
+      sessionId,
+      incidentId,
+      userId: user.id,
+      actionType: dto.actionType,
+      targetType: dto.targetType,
+      targetId: incidentId,
+    });
+
+    return { logged: true };
   }
 
   async listInstructorFeedback(

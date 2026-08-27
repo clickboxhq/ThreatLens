@@ -34,7 +34,7 @@ function buildService(incidentStatus: string) {
     sessionAccess as never,
     investigationActions as never,
   );
-  return { service };
+  return { service, investigationActions };
 }
 
 // §2.3's acceptance criterion: "Case status and verdict are immutable once submitted except via
@@ -85,5 +85,50 @@ describe('EvidenceNotesService closed-incident immutability (§2.3)', () => {
     await expect(
       service.createNote('session-1', 'incident-1', USER, { body: 'a note' }),
     ).resolves.toBeTruthy();
+  });
+
+  it('logResponseAction() rejects on a closed incident', async () => {
+    const { service } = buildService('closed');
+    await expect(
+      service.logResponseAction('session-1', 'incident-1', USER, {
+        actionType: 'isolate_device',
+        targetType: 'device',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'INCIDENT_CLOSED' });
+  });
+});
+
+// The ThreatLens "Response actions" panel has no entity picker (a flat button list — see
+// LogResponseActionDto's own comment), so this only ever records the audit-trail row, never a
+// specific device/identity/email's state.
+describe('EvidenceNotesService.logResponseAction (response-action panel wiring)', () => {
+  it('records an InvestigationAction row keyed to the incident itself, for each of the 6 response-action types', async () => {
+    const { service, investigationActions } = buildService('open');
+
+    for (const actionType of [
+      'isolate_device',
+      'disable_account',
+      'force_password_reset',
+      'revoke_tokens',
+      'block_sender',
+      'block_ip',
+    ] as const) {
+      await service.logResponseAction('session-1', 'incident-1', USER, {
+        actionType,
+        targetType: 'device',
+      });
+    }
+
+    expect(investigationActions.record).toHaveBeenCalledTimes(6);
+    expect(investigationActions.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'session-1',
+        incidentId: 'incident-1',
+        userId: USER.id,
+        actionType: 'block_ip',
+        targetType: 'device',
+        targetId: 'incident-1',
+      }),
+    );
   });
 });

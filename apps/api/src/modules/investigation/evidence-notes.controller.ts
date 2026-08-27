@@ -9,7 +9,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { EvidenceNotesService } from './evidence-notes.service';
-import { CreateNoteDto, PinEvidenceDto } from './dto/incident.dto';
+import {
+  CreateNoteDto,
+  LogResponseActionDto,
+  PinEvidenceDto,
+} from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -67,6 +71,16 @@ export class EvidenceNotesController {
     @Param('incidentId', ParseUUIDPipe) incidentId: string,
   ) {
     return this.service.listNotes(sessionId, incidentId, user);
+  }
+
+  @Post('actions')
+  async logResponseAction(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
+    @Body() dto: LogResponseActionDto,
+  ) {
+    return this.service.logResponseAction(sessionId, incidentId, user, dto);
   }
 
   // §2.15/§6.20: a Student sees both their automated score and any instructor feedback,

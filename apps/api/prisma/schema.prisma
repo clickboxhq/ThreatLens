@@ -955,6 +955,11 @@ enum InvestigationActionType {
   escalate_to_incident
   submit_verdict
   request_hint
+  // Added for the ThreatLens frontend's fuller "Response actions" panel — see
+  // 20260827120200_add_response_action_types.
+  force_password_reset
+  revoke_tokens
+  block_ip
 }
 
 model InvestigationAction {
