@@ -120,7 +120,8 @@ export class EvidenceNotesService {
           include: { device: true },
         });
         if (!event) return null;
-        const imageName = event.imagePath.split(/[\\/]/).pop() ?? event.imagePath;
+        const imageName =
+          event.imagePath.split(/[\\/]/).pop() ?? event.imagePath;
         return {
           title: `Process: ${imageName}`,
           summary: `${event.device.hostname} · ${event.commandLine}`,

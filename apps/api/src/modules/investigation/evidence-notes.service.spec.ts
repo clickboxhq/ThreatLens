@@ -180,7 +180,9 @@ describe('EvidenceNotesService.listEvidence display enrichment', () => {
         })),
       },
     };
-    const sessionAccess = { getOwnedSession: jest.fn(async () => ({ id: 'session-1' })) };
+    const sessionAccess = {
+      getOwnedSession: jest.fn(async () => ({ id: 'session-1' })),
+    };
     const investigationActions = { record: jest.fn(async () => undefined) };
     const service = new EvidenceNotesService(
       prisma as never,
@@ -192,7 +194,11 @@ describe('EvidenceNotesService.listEvidence display enrichment', () => {
 
   it('resolves a title/summary for a supported eventTable, and null for one it does not recognize', async () => {
     const { service } = buildServiceWithEvents();
-    const evidence = await service.listEvidence('session-1', 'incident-1', USER);
+    const evidence = await service.listEvidence(
+      'session-1',
+      'incident-1',
+      USER,
+    );
 
     expect(evidence).toHaveLength(2);
     expect(evidence[0].display).toEqual({
