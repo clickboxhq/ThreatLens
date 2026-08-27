@@ -50,6 +50,13 @@ export class EvidenceNotesService {
     return evidence;
   }
 
+  // Enriched with a display title/summary the same way TimelineService.getTimeline resolves
+  // its items — the raw EvidenceCollection row only carries an (eventTable, eventId) pointer,
+  // which isn't enough for a UI to render a pinned item's content without a second lookup per
+  // row. Deliberately a separate, evidence-shaped resolver rather than a shared helper with
+  // TimelineService's resolveFact (same call TimelineService's own comment already makes about
+  // not reusing summarizeEvidenceRef for a similar reason) — both are small, and diverging is
+  // safer than widening one shared, ground-truth-adjacent helper to serve two call sites.
   async listEvidence(
     sessionId: string,
     incidentId: string,
@@ -57,10 +64,104 @@ export class EvidenceNotesService {
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentInSession(sessionId, incidentId);
-    return this.prisma.evidenceCollection.findMany({
+    const rows = await this.prisma.evidenceCollection.findMany({
       where: { incidentId },
       orderBy: { pinnedAt: 'asc' },
     });
+    const resolved = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        display: await this.resolveDisplay(row.eventTable, row.eventId),
+      })),
+    );
+    return resolved;
+  }
+
+  private async resolveDisplay(
+    eventTable: string,
+    eventId: string,
+  ): Promise<{ title: string; summary: string } | null> {
+    switch (eventTable) {
+      case 'sign_in_events': {
+        const event = await this.prisma.signInEvent.findUnique({
+          where: { id: eventId },
+          include: { identity: true },
+        });
+        if (!event) return null;
+        return {
+          title: `Sign-in: ${event.identity.displayName}`,
+          summary: `From ${event.sourceCity}, ${event.sourceCountry} (${event.result})`,
+        };
+      }
+      case 'email_messages': {
+        const email = await this.prisma.emailMessage.findUnique({
+          where: { id: eventId },
+        });
+        if (!email) return null;
+        return {
+          title: email.subject,
+          summary: `${email.direction === 'inbound' ? 'From' : 'To'} ${email.senderAddress}`,
+        };
+      }
+      case 'cloud_events': {
+        const event = await this.prisma.cloudEvent.findUnique({
+          where: { id: eventId },
+          include: { identity: true },
+        });
+        if (!event) return null;
+        return {
+          title: `Cloud action: ${event.actionName}`,
+          summary: `${event.provider} · ${event.identity.displayName}`,
+        };
+      }
+      case 'process_events': {
+        const event = await this.prisma.processEvent.findUnique({
+          where: { id: eventId },
+          include: { device: true },
+        });
+        if (!event) return null;
+        const imageName = event.imagePath.split(/[\\/]/).pop() ?? event.imagePath;
+        return {
+          title: `Process: ${imageName}`,
+          summary: `${event.device.hostname} · ${event.commandLine}`,
+        };
+      }
+      case 'file_events': {
+        const event = await this.prisma.fileEvent.findUnique({
+          where: { id: eventId },
+          include: { device: true },
+        });
+        if (!event) return null;
+        return {
+          title: `File ${event.action}: ${event.filePath}`,
+          summary: event.device.hostname,
+        };
+      }
+      case 'network_events': {
+        const event = await this.prisma.networkEvent.findUnique({
+          where: { id: eventId },
+          include: { device: true },
+        });
+        if (!event) return null;
+        return {
+          title: `${event.direction} connection to ${event.remoteIp}:${event.remotePort}`,
+          summary: event.device.hostname,
+        };
+      }
+      case 'http_requests': {
+        const event = await this.prisma.httpRequest.findUnique({
+          where: { id: eventId },
+          include: { device: true },
+        });
+        if (!event) return null;
+        return {
+          title: `${event.method} ${event.url}`,
+          summary: event.device?.hostname ?? 'Unknown server',
+        };
+      }
+      default:
+        return null;
+    }
   }
 
   async removeEvidence(

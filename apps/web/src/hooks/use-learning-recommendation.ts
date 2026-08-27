@@ -34,8 +34,11 @@ export function useLearningRecommendation() {
       let best = scenarios[0];
       let bestOverlap = -1;
       for (const s of scenarios) {
+        // t.id is now a real database UUID (apps/api's GET /mitre-techniques), not the
+        // human-readable technique id — match against t.techniqueId instead, same field
+        // scenarios' own `mitre` list already uses ("T1078", etc.).
         const overlap = s.mitre.filter((id) =>
-          techniques.some((t) => t.id.startsWith(id) && t.tactic === weakest.tactic),
+          techniques.some((t) => t.techniqueId.startsWith(id) && t.tactic === weakest.tactic),
         ).length;
         if (overlap > bestOverlap) {
           best = s;

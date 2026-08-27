@@ -132,3 +132,73 @@ describe('EvidenceNotesService.logResponseAction (response-action panel wiring)'
     );
   });
 });
+
+// The evidence endpoint only ever carried a raw (eventTable, eventId) pointer, not enough for
+// a UI to render without a second lookup per row (the same problem TimelineService.getTimeline
+// already solved with resolveFact) — listEvidence now resolves a display title/summary itself.
+describe('EvidenceNotesService.listEvidence display enrichment', () => {
+  function buildServiceWithEvents() {
+    const prisma = {
+      incident: {
+        findFirst: jest.fn(async () => ({
+          id: 'incident-1',
+          sessionId: 'session-1',
+          status: 'open',
+        })),
+      },
+      evidenceCollection: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'ev-1',
+            incidentId: 'incident-1',
+            eventTable: 'sign_in_events',
+            eventId: 'sign-in-1',
+            justification: 'because',
+            mitreTechniqueId: null,
+            pinnedBy: USER.id,
+            pinnedAt: new Date(),
+          },
+          {
+            id: 'ev-2',
+            incidentId: 'incident-1',
+            eventTable: 'unsupported_table',
+            eventId: 'x',
+            justification: 'because',
+            mitreTechniqueId: null,
+            pinnedBy: USER.id,
+            pinnedAt: new Date(),
+          },
+        ]),
+      },
+      signInEvent: {
+        findUnique: jest.fn(async () => ({
+          id: 'sign-in-1',
+          sourceCity: 'Lagos',
+          sourceCountry: 'NG',
+          result: 'success',
+          identity: { displayName: 'Jane Doe' },
+        })),
+      },
+    };
+    const sessionAccess = { getOwnedSession: jest.fn(async () => ({ id: 'session-1' })) };
+    const investigationActions = { record: jest.fn(async () => undefined) };
+    const service = new EvidenceNotesService(
+      prisma as never,
+      sessionAccess as never,
+      investigationActions as never,
+    );
+    return { service };
+  }
+
+  it('resolves a title/summary for a supported eventTable, and null for one it does not recognize', async () => {
+    const { service } = buildServiceWithEvents();
+    const evidence = await service.listEvidence('session-1', 'incident-1', USER);
+
+    expect(evidence).toHaveLength(2);
+    expect(evidence[0].display).toEqual({
+      title: 'Sign-in: Jane Doe',
+      summary: 'From Lagos, NG (success)',
+    });
+    expect(evidence[1].display).toBeNull();
+  });
+});

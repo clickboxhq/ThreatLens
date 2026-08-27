@@ -1,49 +1,193 @@
-import { useMemo } from "react";
-import { useSoc, getCase } from "@/lib/store";
-import type { CaseStatus, CaseVerdict, ActionLogEntry } from "@/types/investigations";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { investigationsService } from "@/services/investigations";
+import type { IncidentVerdict, ResponseActionType } from "@/types/socverse-investigation";
+
+const keys = {
+  session: (sessionId: string) => ["session", sessionId] as const,
+  incidents: (sessionId: string) => ["session", sessionId, "incidents"] as const,
+  incident: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId] as const,
+  evidence: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId, "evidence"] as const,
+  timeline: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId, "timeline"] as const,
+  notes: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId, "notes"] as const,
+  hints: (sessionId: string) => ["session", sessionId, "hints"] as const,
+  score: (sessionId: string) => ["session", sessionId, "score"] as const,
+  mitreTechniques: ["mitre-techniques"] as const,
+};
 
 /**
- * Everything a single case workspace needs: the reactive case/incident/
- * linked-alert state (read straight from the store so React re-renders
- * exactly as before), plus the investigations service for mutations and
- * for every ground-truth-derived accessor (minEvidence/hint/narrative) —
- * this hook is the only thing route components touch; none of them import
- * the store or scoring data directly anymore.
+ * Polls a session until telemetry generation finishes (session.ready) — the real equivalent
+ * of what was previously an instant, synchronous mock scenario launch. Session creation is
+ * fast; the BullMQ job behind it isn't guaranteed to be.
  */
-export function useInvestigation(id: string) {
-  const incident = useSoc((s) => s.incidents.find((i) => i.id === id));
-  const caseState = useSoc((s) => getCase(s, id));
-  const allAlerts = useSoc((s) => s.alerts);
-  const linkedAlerts = useMemo(() => allAlerts.filter((a) => a.incidentId === id), [allAlerts, id]);
+export function useSessionReadiness(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId ? keys.session(sessionId) : ["session", "none"],
+    queryFn: () => investigationsService.getSession(sessionId!),
+    enabled: Boolean(sessionId),
+    refetchInterval: (query) => (query.state.data?.ready ? false : 1500),
+  });
+}
+
+/** Resolves the one incident a session's case workspace should open — see the merge plan on
+ * why launching a scenario creates exactly one incident together with its session, rather
+ * than a variable number the UI would need to pick between. */
+export function useSessionIncident(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId ? keys.incidents(sessionId) : ["incidents", "none"],
+    queryFn: () => investigationsService.listIncidents(sessionId!),
+    enabled: Boolean(sessionId),
+    select: (incidents) => incidents[0] as (typeof incidents)[number] | undefined,
+  });
+}
+
+/** Scenario launch: create the session, then the one incident it'll be investigated through.
+ * Telemetry generation (session.ready) runs async — the caller should route to the case
+ * workspace immediately and let useSessionReadiness there show the "generating" state, rather
+ * than block navigation on it here. */
+export function useLaunchScenario() {
+  return useMutation({
+    mutationFn: async (scenarioId: string) => {
+      const session = await investigationsService.createSession(scenarioId);
+      const incident = await investigationsService.createIncident(
+        session.id,
+        "Primary investigation",
+      );
+      return { sessionId: session.id, incidentId: incident.id };
+    },
+  });
+}
+
+/** Standalone score poll, for anywhere that needs just the score without paying for the rest
+ * of useInvestigation's incident/evidence/timeline/notes/hints queries (e.g. the closed-case
+ * results panel, which has no real incidentId reason to be in scope). */
+export function useSessionScore(sessionId: string) {
+  return useQuery({
+    queryKey: keys.score(sessionId),
+    queryFn: () => investigationsService.getScore(sessionId),
+    refetchInterval: (query) => (query.state.data ? false : 2000),
+  });
+}
+
+/** Everything the one-incident-per-session case workspace needs (see the merge plan on why
+ * launching a scenario creates exactly one incident, not a variable number). */
+export function useInvestigation(sessionId: string, incidentId: string) {
+  const queryClient = useQueryClient();
+
+  const incidentQuery = useQuery({
+    queryKey: keys.incident(sessionId, incidentId),
+    queryFn: () => investigationsService.getIncident(sessionId, incidentId),
+  });
+  const evidenceQuery = useQuery({
+    queryKey: keys.evidence(sessionId, incidentId),
+    queryFn: () => investigationsService.listEvidence(sessionId, incidentId),
+  });
+  const timelineQuery = useQuery({
+    queryKey: keys.timeline(sessionId, incidentId),
+    queryFn: () => investigationsService.getTimeline(sessionId, incidentId),
+  });
+  const notesQuery = useQuery({
+    queryKey: keys.notes(sessionId, incidentId),
+    queryFn: () => investigationsService.listNotes(sessionId, incidentId),
+  });
+  const hintsQuery = useQuery({
+    queryKey: keys.hints(sessionId),
+    queryFn: () => investigationsService.listHints(sessionId),
+  });
+  const mitreQuery = useQuery({
+    queryKey: keys.mitreTechniques,
+    queryFn: () => investigationsService.listMitreTechniques(),
+    staleTime: Infinity, // a global reference list, not session-scoped
+  });
+
+  const invalidateIncident = () => {
+    queryClient.invalidateQueries({ queryKey: keys.incident(sessionId, incidentId) });
+  };
+  const invalidateEvidence = () => {
+    queryClient.invalidateQueries({ queryKey: keys.evidence(sessionId, incidentId) });
+  };
+  const invalidateTimeline = () => {
+    queryClient.invalidateQueries({ queryKey: keys.timeline(sessionId, incidentId) });
+  };
+
+  const pinEvidence = useMutation({
+    mutationFn: (input: { eventTable: string; eventId: string; justification: string }) =>
+      investigationsService.pinEvidence(sessionId, incidentId, input),
+    onSuccess: invalidateEvidence,
+  });
+  const removeEvidence = useMutation({
+    mutationFn: (evidenceId: string) =>
+      investigationsService.removeEvidence(sessionId, incidentId, evidenceId),
+    onSuccess: invalidateEvidence,
+  });
+  const addToTimeline = useMutation({
+    mutationFn: (input: { eventTable: string; eventId: string }) =>
+      investigationsService.addToTimeline(sessionId, incidentId, input),
+    onSuccess: invalidateTimeline,
+  });
+  const removeFromTimeline = useMutation({
+    mutationFn: ({ eventTable, eventId }: { eventTable: string; eventId: string }) =>
+      investigationsService.removeFromTimeline(sessionId, incidentId, eventTable, eventId),
+    onSuccess: invalidateTimeline,
+  });
+  const addNote = useMutation({
+    mutationFn: (body: string) => investigationsService.addNote(sessionId, incidentId, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.notes(sessionId, incidentId) }),
+  });
+  const unlockHint = useMutation({
+    mutationFn: (index: number) => investigationsService.unlockHint(sessionId, index),
+    onSuccess: (hints) => queryClient.setQueryData(keys.hints(sessionId), hints),
+  });
+  const logResponseAction = useMutation({
+    mutationFn: ({
+      actionType,
+      targetType,
+    }: {
+      actionType: ResponseActionType;
+      targetType: string;
+    }) => investigationsService.logResponseAction(sessionId, incidentId, actionType, targetType),
+  });
+  const closeIncident = useMutation({
+    mutationFn: (input: {
+      verdict: IncidentVerdict;
+      summary: string;
+      mitreTechniqueIds: string[];
+    }) => investigationsService.closeIncident(sessionId, incidentId, input),
+    onSuccess: invalidateIncident,
+  });
+  const submitSession = useMutation({
+    mutationFn: () => investigationsService.submitSession(sessionId, [incidentId]),
+  });
+  const search = useMutation({
+    mutationFn: (input: { filters?: { field: string; value: string }[]; freetext?: string }) =>
+      investigationsService.search(sessionId, input),
+  });
 
   return {
-    incident,
-    caseState,
-    linkedAlerts,
-    minEvidence: investigationsService.getMinEvidence(id),
-    hint: (hintsUsed: number) => investigationsService.getHint(id, hintsUsed),
-    narrative: investigationsService.getNarrative(id),
-    mitreTechniques: investigationsService.listMitreTechniques(),
-    responseActions: investigationsService.listResponseActions(),
-    searchTelemetry: (query: string) => investigationsService.searchTelemetry(query),
-    eventById: (eventId: string) => investigationsService.eventById(eventId),
-    setCaseStatus: (status: CaseStatus) => investigationsService.setCaseStatus(id, status),
-    pinEvidence: (eventId: string, justification: string) =>
-      investigationsService.pinEvidence(id, eventId, justification),
-    unpinEvidence: (eventId: string) => investigationsService.unpinEvidence(id, eventId),
-    tagEvidence: (eventId: string, technique: string) =>
-      investigationsService.tagEvidence(id, eventId, technique),
-    addToTimeline: (eventId: string) => investigationsService.addToTimeline(id, eventId),
-    removeFromTimeline: (eventId: string) => investigationsService.removeFromTimeline(id, eventId),
-    addCaseNote: (body: string) => investigationsService.addCaseNote(id, body),
-    toggleTechniqueTag: (technique: string) =>
-      investigationsService.toggleTechniqueTag(id, technique),
-    setCaseSummary: (summary: string) => investigationsService.setCaseSummary(id, summary),
-    useHint: () => investigationsService.useHint(id),
-    logAction: (entry: Omit<ActionLogEntry, "id" | "ts" | "actor">) =>
-      investigationsService.logAction(id, entry),
-    submitCase: (verdict: CaseVerdict) => investigationsService.submitCase(id, verdict),
-    reopenCase: (feedback: string) => investigationsService.reopenCase(id, feedback),
+    incident: incidentQuery.data,
+    incidentLoading: incidentQuery.isPending,
+    evidence: evidenceQuery.data ?? [],
+    timeline: timelineQuery.data ?? [],
+    notes: notesQuery.data ?? [],
+    hints: hintsQuery.data ?? [],
+    mitreTechniques: mitreQuery.data ?? [],
+
+    pinEvidence: pinEvidence.mutateAsync,
+    removeEvidence: removeEvidence.mutateAsync,
+    addToTimeline: addToTimeline.mutateAsync,
+    removeFromTimeline: removeFromTimeline.mutateAsync,
+    addNote: addNote.mutateAsync,
+    unlockHint: unlockHint.mutateAsync,
+    logResponseAction: logResponseAction.mutateAsync,
+    closeIncident: closeIncident.mutateAsync,
+    closingIncident: closeIncident.isPending,
+    closeIncidentError: closeIncident.error,
+    submitSession: submitSession.mutateAsync,
+    submittingSession: submitSession.isPending,
+    search: search.mutateAsync,
+    searching: search.isPending,
   };
 }

@@ -1,38 +1,101 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient, ApiError } from "@/lib/api-client";
 import type { InvestigationsService } from "./investigations-service";
+import type {
+  EvidenceItemDto,
+  HintDto,
+  IncidentDto,
+  IncidentSummaryDto,
+  MitreTechniqueDto,
+  NoteDto,
+  ScoreDto,
+  SearchResultItem,
+  SessionDto,
+  TimelineItemDto,
+} from "@/types/socverse-investigation";
 
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`InvestigationsService.${method}`);
-};
-
-/**
- * Future backend adapter. Every method is a documented stub — swap the
- * `investigationsService` export in index.ts to this once a real API
- * exists. Note: the real backend must own scoring/ground-truth entirely
- * server-side; this adapter's scoring methods must never compute a score
- * client-side once connected.
- */
 export const apiInvestigationsService: InvestigationsService = {
-  searchTelemetry: () => notConnected("searchTelemetry"),
-  eventById: () => notConnected("eventById"),
-  listMitreTechniques: () => notConnected("listMitreTechniques"),
-  listResponseActions: () => notConnected("listResponseActions"),
-  listDismissalReasons: () => notConnected("listDismissalReasons"),
-  getMinEvidence: () => notConnected("getMinEvidence"),
-  getHint: () => notConnected("getHint"),
-  getNarrative: () => notConnected("getNarrative"),
-  scoreSubmission: () => notConnected("scoreSubmission"),
-  setCaseStatus: () => notConnected("setCaseStatus"),
-  pinEvidence: () => notConnected("pinEvidence"),
-  unpinEvidence: () => notConnected("unpinEvidence"),
-  tagEvidence: () => notConnected("tagEvidence"),
-  addToTimeline: () => notConnected("addToTimeline"),
-  removeFromTimeline: () => notConnected("removeFromTimeline"),
-  addCaseNote: () => notConnected("addCaseNote"),
-  toggleTechniqueTag: () => notConnected("toggleTechniqueTag"),
-  setCaseSummary: () => notConnected("setCaseSummary"),
-  useHint: () => notConnected("useHint"),
-  logAction: () => notConnected("logAction"),
-  submitCase: () => notConnected("submitCase"),
-  reopenCase: () => notConnected("reopenCase"),
+  createSession: (scenarioId) => apiClient.post<SessionDto>("/sessions", { scenarioId }),
+
+  getSession: (sessionId) => apiClient.get<SessionDto>(`/sessions/${sessionId}`),
+
+  createIncident: (sessionId, title) =>
+    apiClient.post<IncidentDto>(`/sessions/${sessionId}/incidents`, { title }),
+
+  listIncidents: (sessionId) =>
+    apiClient.get<IncidentSummaryDto[]>(`/sessions/${sessionId}/incidents`),
+
+  getIncident: (sessionId, incidentId) =>
+    apiClient.get<IncidentDto>(`/sessions/${sessionId}/incidents/${incidentId}`),
+
+  closeIncident: (sessionId, incidentId, input) =>
+    apiClient.post<IncidentDto>(`/sessions/${sessionId}/incidents/${incidentId}/close`, input),
+
+  listEvidence: (sessionId, incidentId) =>
+    apiClient.get<EvidenceItemDto[]>(`/sessions/${sessionId}/incidents/${incidentId}/evidence`),
+
+  pinEvidence: (sessionId, incidentId, input) =>
+    apiClient.post<EvidenceItemDto>(
+      `/sessions/${sessionId}/incidents/${incidentId}/evidence`,
+      input,
+    ),
+
+  removeEvidence: async (sessionId, incidentId, evidenceId) => {
+    await apiClient.delete(`/sessions/${sessionId}/incidents/${incidentId}/evidence/${evidenceId}`);
+  },
+
+  getTimeline: (sessionId, incidentId) =>
+    apiClient.get<TimelineItemDto[]>(`/sessions/${sessionId}/incidents/${incidentId}/timeline`),
+
+  addToTimeline: (sessionId, incidentId, input) =>
+    apiClient.post<TimelineItemDto>(
+      `/sessions/${sessionId}/incidents/${incidentId}/timeline`,
+      input,
+    ),
+
+  removeFromTimeline: async (sessionId, incidentId, eventTable, eventId) => {
+    await apiClient.delete(
+      `/sessions/${sessionId}/incidents/${incidentId}/timeline/${eventTable}/${eventId}`,
+    );
+  },
+
+  listNotes: (sessionId, incidentId) =>
+    apiClient.get<NoteDto[]>(`/sessions/${sessionId}/incidents/${incidentId}/notes`),
+
+  addNote: (sessionId, incidentId, body) =>
+    apiClient.post<NoteDto>(`/sessions/${sessionId}/incidents/${incidentId}/notes`, { body }),
+
+  listHints: (sessionId) => apiClient.get<HintDto[]>(`/sessions/${sessionId}/hints`),
+
+  unlockHint: (sessionId, index) =>
+    apiClient.post<HintDto[]>(`/sessions/${sessionId}/hints/${index}/unlock`),
+
+  logResponseAction: async (sessionId, incidentId, actionType, targetType) => {
+    await apiClient.post(`/sessions/${sessionId}/incidents/${incidentId}/actions`, {
+      actionType,
+      targetType,
+    });
+  },
+
+  search: async (sessionId, input) => {
+    const { results } = await apiClient.post<{ results: SearchResultItem[] }>(
+      `/sessions/${sessionId}/search`,
+      input,
+    );
+    return results;
+  },
+
+  listMitreTechniques: () => apiClient.get<MitreTechniqueDto[]>("/mitre-techniques"),
+
+  submitSession: async (sessionId, incidentIds) => {
+    await apiClient.post(`/sessions/${sessionId}/submit`, { incidentIds });
+  },
+
+  getScore: async (sessionId) => {
+    try {
+      return await apiClient.get<ScoreDto>(`/sessions/${sessionId}/score`);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "NOT_SCORED_YET") return null;
+      throw err;
+    }
+  },
 };

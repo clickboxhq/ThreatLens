@@ -1,45 +1,89 @@
 import type {
-  ActionLogEntry,
-  CaseState,
-  CaseStatus,
-  CaseVerdict,
-  ScoreBreakdown,
-} from "@/types/investigations";
-import type { SecurityEvent, MitreTechnique, ResponseAction } from "@/types/telemetry";
+  EvidenceItemDto,
+  HintDto,
+  IncidentDto,
+  IncidentSummaryDto,
+  IncidentVerdict,
+  MitreTechniqueDto,
+  NoteDto,
+  ResponseActionType,
+  ScoreDto,
+  SearchResultItem,
+  SessionDto,
+  TimelineItemDto,
+} from "@/types/socverse-investigation";
 
 /**
- * The investigation/case lifecycle: telemetry search, evidence pinning,
- * timeline curation, notes, technique tagging, hints, and scored
- * submission. Ground truth is never part of this surface — callers only
- * ever see the derived accessors (getMinEvidence/getHint/getNarrative),
- * never the raw answer key.
+ * The real investigation lifecycle against SOCVerse's backend: session creation/polling,
+ * incident open/close, evidence pinning, timeline curation, notes, hints, response actions,
+ * scoped search, and server-computed scoring. Ground truth is never part of this surface —
+ * the client only ever sends its own inputs and receives a score back, matching every other
+ * ground-truth-never-leaves-the-server boundary in this codebase.
+ *
+ * Replaces the pre-merge mock version entirely rather than keeping a mock/api adapter split —
+ * there's no meaningful mock left to keep once the whole point was proving out the real
+ * integration (see the merge plan's Phase 2).
  */
 export interface InvestigationsService {
-  // Reference/telemetry data (read-only, static in the mock adapter)
-  searchTelemetry(query: string): SecurityEvent[];
-  eventById(id: string): SecurityEvent | undefined;
-  listMitreTechniques(): MitreTechnique[];
-  listResponseActions(): ResponseAction[];
-  listDismissalReasons(): string[];
+  createSession(scenarioId: string): Promise<SessionDto>;
+  getSession(sessionId: string): Promise<SessionDto>;
 
-  // Scoring/ground-truth-derived accessors — deliberately narrow
-  getMinEvidence(caseId: string): number;
-  getHint(caseId: string, hintsUsed: number): string | undefined;
-  getNarrative(caseId: string): string | undefined;
-  scoreSubmission(caseId: string, caseState: CaseState, verdict: CaseVerdict): ScoreBreakdown;
+  createIncident(sessionId: string, title: string): Promise<IncidentDto>;
+  listIncidents(sessionId: string): Promise<IncidentSummaryDto[]>;
+  getIncident(sessionId: string, incidentId: string): Promise<IncidentDto>;
+  closeIncident(
+    sessionId: string,
+    incidentId: string,
+    input: { verdict: IncidentVerdict; summary: string; mitreTechniqueIds: string[] },
+  ): Promise<IncidentDto>;
 
-  // Case mutations
-  setCaseStatus(id: string, status: CaseStatus): void;
-  pinEvidence(id: string, eventId: string, justification: string): void;
-  unpinEvidence(id: string, eventId: string): void;
-  tagEvidence(id: string, eventId: string, technique: string): void;
-  addToTimeline(id: string, eventId: string): void;
-  removeFromTimeline(id: string, eventId: string): void;
-  addCaseNote(id: string, body: string): void;
-  toggleTechniqueTag(id: string, technique: string): void;
-  setCaseSummary(id: string, summary: string): void;
-  useHint(id: string): void;
-  logAction(id: string, entry: Omit<ActionLogEntry, "id" | "ts" | "actor">): void;
-  submitCase(id: string, verdict: CaseVerdict): void;
-  reopenCase(id: string, feedback: string): void;
+  listEvidence(sessionId: string, incidentId: string): Promise<EvidenceItemDto[]>;
+  pinEvidence(
+    sessionId: string,
+    incidentId: string,
+    input: {
+      eventTable: string;
+      eventId: string;
+      justification: string;
+      mitreTechniqueId?: string;
+    },
+  ): Promise<EvidenceItemDto>;
+  removeEvidence(sessionId: string, incidentId: string, evidenceId: string): Promise<void>;
+
+  getTimeline(sessionId: string, incidentId: string): Promise<TimelineItemDto[]>;
+  addToTimeline(
+    sessionId: string,
+    incidentId: string,
+    input: { eventTable: string; eventId: string },
+  ): Promise<TimelineItemDto>;
+  removeFromTimeline(
+    sessionId: string,
+    incidentId: string,
+    eventTable: string,
+    eventId: string,
+  ): Promise<void>;
+
+  listNotes(sessionId: string, incidentId: string): Promise<NoteDto[]>;
+  addNote(sessionId: string, incidentId: string, body: string): Promise<NoteDto>;
+
+  listHints(sessionId: string): Promise<HintDto[]>;
+  unlockHint(sessionId: string, index: number): Promise<HintDto[]>;
+
+  logResponseAction(
+    sessionId: string,
+    incidentId: string,
+    actionType: ResponseActionType,
+    targetType: string,
+  ): Promise<void>;
+
+  search(
+    sessionId: string,
+    input: { filters?: { field: string; value: string }[]; freetext?: string },
+  ): Promise<SearchResultItem[]>;
+
+  listMitreTechniques(): Promise<MitreTechniqueDto[]>;
+
+  submitSession(sessionId: string, incidentIds: string[]): Promise<void>;
+  /** Returns null while the async scoring job hasn't finished yet (server's NOT_SCORED_YET). */
+  getScore(sessionId: string): Promise<ScoreDto | null>;
 }
