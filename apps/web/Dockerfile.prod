@@ -1,7 +1,15 @@
-# Built from the REPO ROOT (see infra/docker-compose.prod.yml's `context: ..`) — same reason
-# as apps/api/Dockerfile.prod: npm workspaces, one lockfile at the root, `npm ci` needs it.
+# Built from the REPO ROOT (see infra/docker-compose.prod.yml's `context: ..` on apps/api's
+# equivalent file) — npm workspaces, single lockfile at the root, `npm ci` needs it.
+#
+# This app (ThreatLens, merged in from clickboxhq/clickbox-soc-product) is TanStack Start on
+# Nitro. It originally targeted Cloudflare Workers (Lovable's own hosting) — retargeted to
+# Nitro's `node-server` preset (apps/web/vite.config.ts) since Railway runs plain Docker
+# images, not a Workers runtime. `node-server` output is close to fully self-contained (its own
+# `.output/server/node_modules` is ~30KB, just `tslib` — Nitro bundles everything else into the
+# compiled server chunks), so unlike apps/api's production stage, there's no need to carry over
+# the full `node_modules` tree — just the `.output/` directory itself.
 
-# ---- build: produces a static bundle ----
+# ---- build ----
 FROM node:22-alpine AS build
 WORKDIR /repo
 COPY package*.json ./
@@ -9,22 +17,24 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 COPY apps/web apps/web
-# VITE_-prefixed vars are inlined into the JS bundle at `vite build` time, unlike the dev
-# server where they're read at request time — so this must be a build ARG, not a runtime
-# `environment:` value like the dev service uses.
+# The Lovable Vite config wrapper auto-injects any VITE_-prefixed env var present at build time
+# into the client bundle (same convention the old static SPA used) — this is the client-side
+# half of the API base URL; see apps/web/src/lib/api-client.ts for the server-side half (a
+# plain runtime env var, since this is SSR now, not a build-time-only static bundle).
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build --workspace=apps/web
 
-# ---- production: static assets served by nginx ----
-FROM nginx:1.27-alpine AS production
-COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
-# Copied to templates/, not straight to conf.d/, so the official image's built-in
-# envsubst-on-start entrypoint renders ${PORT} (apps/web/nginx.conf's own comment on why) —
-# Railway assigns each service its own port at runtime and ignores EXPOSE entirely. The
-# default here covers docker-compose.prod.yml and any plain `docker run` with no PORT set.
-COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
-ENV PORT=80
-EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider "http://localhost:$PORT/health" || exit 1
+# ---- production ----
+FROM node:22-alpine AS production
+RUN addgroup -S app && adduser -S app -G app
+WORKDIR /app
+COPY --from=build --chown=app:app /repo/apps/web/.output ./
+USER app
+ENV NODE_ENV=production
+# Nitro's node-server preset reads PORT itself (defaults to 3000) — Railway injects its own at
+# runtime and ignores EXPOSE entirely, same caveat as apps/api/web's other services.
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider "http://localhost:${PORT:-3000}/" || exit 1
+CMD ["node", "server/index.mjs"]

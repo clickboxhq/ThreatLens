@@ -143,8 +143,15 @@ step 2, then push to `main` so CI rebuilds the web image with it baked in (VITE_
 are inlined into the JS bundle at build time, not read at runtime — see
 `apps/web/Dockerfile.prod`'s own comment on this).
 
-New Service → Docker Image → `<dockerhub-username>/socverse-web:latest`. No environment
-variables needed — it's a static Nginx-served bundle. Generate a domain for it too.
+**As of the ThreatLens frontend merge, `web` is no longer a static Nginx-served bundle** — it's
+TanStack Start on Nitro's `node-server` preset (`apps/web/vite.config.ts`), a real long-lived
+Node process doing SSR, originally built for Cloudflare Workers and retargeted here since
+Railway runs plain Docker images, not a Workers runtime. Same "Docker Image" service shape as
+before, though: New Service → Docker Image → `<dockerhub-username>/socverse-web:latest`. Still
+no environment variables needed on the Railway side — Nitro's `node-server` preset reads `PORT`
+itself the same way `api`/`worker` do, and the only frontend-facing config
+(`VITE_API_BASE_URL`) is a GitHub repo variable baked in at image build time, not a Railway
+variable. Generate a domain for it too.
 
 ### 5. Close the loop: set `WEB_ORIGIN` on `api`
 
@@ -197,10 +204,13 @@ at your DNS provider. Update `VITE_API_BASE_URL`/`WEB_ORIGIN` to match once atta
 
 - **No nginx, no certbot.** Railway terminates TLS and routes to each service itself; there's
   no shared edge to configure, and no Let's Encrypt dance to automate.
-- **`api` and `web` live on separate domains**, not one domain with path-based routing. Already
-  handled with zero code changes — `apps/web/src/api/realtime.ts` derives the WebSocket URL
-  from `VITE_API_BASE_URL` rather than assuming a shared origin, and `main.ts`'s CORS config
-  already reads `WEB_ORIGIN` from an env var.
+- **`api` and `web` live on separate domains**, not one domain with path-based routing.
+  `main.ts`'s CORS config reads `WEB_ORIGIN` from an env var, which is all `web` needs on the
+  REST side. The pre-merge frontend also derived its WebSocket URL from `VITE_API_BASE_URL`
+  (`apps/web/src/api/realtime.ts`, since removed with that frontend) rather than assuming a
+  shared origin — the ThreatLens frontend that replaced it doesn't call the WebSocket endpoint
+  at all yet (real-time alerts are a later merge-phase item, see the merge plan), so there's
+  nothing to carry over here until that's built.
 - **No self-hosted observability stack** (Prometheus/Grafana/Loki/Alertmanager,
   `infra/observability/`). Two of its pieces structurally can't run on Railway at all —
   node-exporter needs real host access Railway doesn't grant, and promtail needs the Docker

@@ -1,0 +1,4 @@
+# Normalize line endings to LF in the repo regardless of a contributor's local git
+# core.autocrlf setting — added after cloning apps/web's ThreatLens source (originally LF)
+# picked up CRLF on a Windows checkout and produced ~21,000 spurious prettier/eslint errors.
+* text=auto eol=lf

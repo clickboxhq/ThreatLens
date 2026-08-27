@@ -1,0 +1,200 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { ArrowRight, KeyRound, Loader2, ScrollText, ShieldCheck } from "lucide-react";
+
+import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
+import { TopologyDiagram } from "@/components/soc/marketing/atmos";
+import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
+
+export const Route = createFileRoute("/login")({
+  component: LoginPage,
+  head: () => ({
+    meta: [{ title: "Login — ThreatLens" }, { name: "robots", content: "noindex" }],
+  }),
+});
+
+const TRUST_LINES = [
+  { icon: KeyRound, l: "Secure authentication" },
+  { icon: ShieldCheck, l: "Role-based access" },
+  { icon: ScrollText, l: "Audit logging" },
+];
+
+function LoginPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="min-h-screen lg:grid lg:grid-cols-2">
+      {/* left — brand panel */}
+      <div
+        className="relative hidden flex-col justify-between overflow-hidden p-10 lg:flex xl:p-16"
+        style={{ background: "#000000", color: "#EDEDED" }}
+      >
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-40">
+          <TopologyDiagram />
+        </div>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, #000 5%, transparent 40%, transparent 60%, #000 95%)",
+          }}
+        />
+
+        <Link to="/" className="relative flex items-center gap-2.5" style={displayFont}>
+          <Mark />
+          <BrandLockup />
+        </Link>
+
+        <div className="relative max-w-sm">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-white/40" style={monoFont}>
+            Security Investigation Platform
+          </div>
+          <h1
+            className="mt-4 text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-white xl:text-[32px]"
+            style={displayFont}
+          >
+            Develop practical security investigation skills.
+          </h1>
+          <p className="mt-3 text-[13.5px] leading-[1.7] text-white/50">
+            For individuals and organizations building real investigation capability.
+          </p>
+        </div>
+
+        <div className="relative flex items-center gap-5">
+          {TRUST_LINES.map((t) => (
+            <div key={t.l} className="flex items-center gap-1.5 text-[11.5px] text-white/40">
+              <t.icon className="size-3.5" />
+              {t.l}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* right — form panel */}
+      <div className="flex min-h-screen flex-col bg-white text-[#0A0C0F]">
+        <div className="flex items-center justify-between px-6 py-5 lg:justify-end lg:px-10">
+          <Link to="/" className="flex items-center gap-2.5 lg:hidden" style={displayFont}>
+            <Mark />
+            <span className="text-[15px] font-semibold text-[#0A0C0F]">ThreatLens</span>
+          </Link>
+          <Link
+            to="/signup"
+            className="text-[13px] text-black/55 transition-colors hover:text-black"
+          >
+            Need an account? <span className="font-medium text-[#0A0C0F]">Get Started</span>
+          </Link>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-6 py-10">
+          <div className="w-full max-w-[400px]">
+            <h2
+              className="text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
+              style={displayFont}
+            >
+              Welcome back
+            </h2>
+            <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+              Access your investigations, training, and progress.
+            </p>
+
+            <form
+              className="mt-8 space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                setSubmitting(true);
+                // Mock-only: a real backend call would replace this timeout.
+                // Try password "wrong" to see the invalid-credentials state.
+                window.setTimeout(() => {
+                  if (password === "wrong") {
+                    setSubmitting(false);
+                    setError("Incorrect email or password. Try again.");
+                    return;
+                  }
+                  navigate({ to: "/app" });
+                }, 500);
+              }}
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                  Work email
+                </span>
+                <input
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@organization.com"
+                  className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[12px] font-medium text-black/70">Password</span>
+                  <Link
+                    to="/forgot-password"
+                    className="text-[12px] text-black/45 hover:text-black"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                />
+              </label>
+
+              {error && (
+                <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Logging in…
+                  </>
+                ) : (
+                  <>
+                    Log in <ArrowRight className="size-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-black/8 px-6 py-5 text-[12px] text-black/40">
+          <Link to="/privacy" className="hover:text-black/70">
+            Privacy Policy
+          </Link>
+          <Link to="/terms" className="hover:text-black/70">
+            Terms of Service
+          </Link>
+          <Link to="/security" className="hover:text-black/70">
+            Security
+          </Link>
+          <a href="mailto:info@useclickbox.com" className="hover:text-black/70">
+            Contact
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
