@@ -1,5 +1,6 @@
+import { apiAlertsService } from "./api-alerts-service";
 import type { AlertsService } from "./alerts-service";
-import { mockAlertsService } from "./mock-alerts-service";
 
-export const alertsService: AlertsService = mockAlertsService;
+export const alertsService: AlertsService = apiAlertsService;
+
 export type { AlertsService } from "./alerts-service";

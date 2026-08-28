@@ -1,6 +1,7 @@
-import type { Endpoint } from "@/types/endpoints";
+import type { DeviceDto } from "@/types/socverse-operations";
 
+/** Devices are generated per session, same as identities — see socverse-operations.ts. */
 export interface EndpointsService {
-  listEndpoints(): Endpoint[];
-  toggleIsolate(host: string): void;
+  list(sessionId: string): Promise<DeviceDto[]>;
+  isolate(sessionId: string, deviceId: string): Promise<DeviceDto>;
 }

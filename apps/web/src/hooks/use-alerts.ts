@@ -1,17 +1,26 @@
-import { useSoc } from "@/lib/store";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { alertsService } from "@/services/alerts";
+import type { AlertStatus } from "@/types/socverse-operations";
 
-/** Reactive alert list (via the store) plus the alert mutation surface. */
-export function useAlerts() {
-  const alerts = useSoc((s) => s.alerts);
-  return {
-    alerts,
-    setAlertStatus: alertsService.setAlertStatus,
-    assignAlert: alertsService.assignAlert,
-    resolveAlert: alertsService.resolveAlert,
-    escalateAlert: alertsService.escalateAlert,
-    addAlertNote: alertsService.addAlertNote,
-    dismissAlert: alertsService.dismissAlert,
-    promoteAlert: alertsService.promoteAlert,
-  };
+const keys = {
+  list: (sessionId: string) => ["session", sessionId, "alerts"] as const,
+};
+
+export function useAlerts(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId ? keys.list(sessionId) : ["alerts", "none"],
+    queryFn: () => alertsService.list(sessionId!),
+    enabled: Boolean(sessionId),
+  });
+}
+
+export function useUpdateAlertStatus(sessionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { alertId: string; status: AlertStatus; dismissalReason?: string }) =>
+      alertsService.updateStatus(sessionId!, input.alertId, input),
+    onSuccess: () => {
+      if (sessionId) queryClient.invalidateQueries({ queryKey: keys.list(sessionId) });
+    },
+  });
 }

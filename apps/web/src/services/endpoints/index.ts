@@ -1,5 +1,6 @@
+import { apiEndpointsService } from "./api-endpoints-service";
 import type { EndpointsService } from "./endpoints-service";
-import { mockEndpointsService } from "./mock-endpoints-service";
 
-export const endpointsService: EndpointsService = mockEndpointsService;
+export const endpointsService: EndpointsService = apiEndpointsService;
+
 export type { EndpointsService } from "./endpoints-service";

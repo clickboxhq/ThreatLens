@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { emailInvestigationsService } from "@/services/email-investigations";
-import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
 
-export function useEmailInvestigations() {
-  const query = useQuery({
-    queryKey: [...queryKeys.emailInvestigations, "messages"],
-    queryFn: () => emailInvestigationsService.listMessages(),
+const keys = {
+  list: (sessionId: string) => ["session", sessionId, "emails"] as const,
+};
+
+export function useEmailInvestigations(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId ? keys.list(sessionId) : ["emails", "none"],
+    queryFn: () => emailInvestigationsService.list(sessionId!),
+    enabled: Boolean(sessionId),
   });
-  return { ...query, messages: query.data ?? [], state: deriveViewState(query) };
 }

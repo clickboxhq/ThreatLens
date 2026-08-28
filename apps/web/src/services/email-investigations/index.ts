@@ -1,6 +1,6 @@
+import { apiEmailInvestigationsService } from "./api-email-investigations-service";
 import type { EmailInvestigationsService } from "./email-investigations-service";
-import { mockEmailInvestigationsService } from "./mock-email-investigations-service";
 
-export const emailInvestigationsService: EmailInvestigationsService =
-  mockEmailInvestigationsService;
+export const emailInvestigationsService: EmailInvestigationsService = apiEmailInvestigationsService;
+
 export type { EmailInvestigationsService } from "./email-investigations-service";

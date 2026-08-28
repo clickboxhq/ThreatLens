@@ -34,7 +34,58 @@ export class AlertsService {
       include: { mitreTechnique: true },
       orderBy: [{ severity: 'desc' }, { lastSeenAt: 'desc' }],
     });
-    return alerts.map(toStudentAlertDto);
+    const entityDisplayById = await this.resolveEntityDisplays(alerts);
+    return alerts.map((alert) => ({
+      ...toStudentAlertDto(alert),
+      entityDisplay: entityDisplayById.get(alert.primaryEntityId) ?? null,
+    }));
+  }
+
+  // The alert list is a triage queue — "who/what is this about" needs to read at a glance,
+  // not require opening the alert. `mailbox` entities are stored under their owning identity's
+  // id (rules.ts has no standalone mailbox table yet), so identity + mailbox share one lookup.
+  private async resolveEntityDisplays(
+    alerts: { primaryEntityType: string; primaryEntityId: string }[],
+  ): Promise<Map<string, string>> {
+    const identityIds = [
+      ...new Set(
+        alerts
+          .filter(
+            (a) =>
+              a.primaryEntityType === 'identity' ||
+              a.primaryEntityType === 'mailbox',
+          )
+          .map((a) => a.primaryEntityId),
+      ),
+    ];
+    const deviceIds = [
+      ...new Set(
+        alerts
+          .filter((a) => a.primaryEntityType === 'device')
+          .map((a) => a.primaryEntityId),
+      ),
+    ];
+
+    const [identities, devices] = await Promise.all([
+      identityIds.length
+        ? this.prisma.identity.findMany({
+            where: { id: { in: identityIds } },
+            select: { id: true, displayName: true },
+          })
+        : Promise.resolve([]),
+      deviceIds.length
+        ? this.prisma.device.findMany({
+            where: { id: { in: deviceIds } },
+            select: { id: true, hostname: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const displayById = new Map<string, string>();
+    for (const identity of identities)
+      displayById.set(identity.id, identity.displayName);
+    for (const device of devices) displayById.set(device.id, device.hostname);
+    return displayById;
   }
 
   async getEvidence(
@@ -102,7 +153,11 @@ export class AlertsService {
           : undefined,
     });
 
-    const updatedDto = toStudentAlertDto(updated);
+    const entityDisplayById = await this.resolveEntityDisplays([updated]);
+    const updatedDto = {
+      ...toStudentAlertDto(updated),
+      entityDisplay: entityDisplayById.get(updated.primaryEntityId) ?? null,
+    };
     await this.realtimeEvents.publish(sessionId, {
       type: 'alert.updated',
       payload: updatedDto,

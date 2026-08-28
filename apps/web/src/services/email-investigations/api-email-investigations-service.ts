@@ -1,8 +1,10 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { EmailInvestigationsService } from "./email-investigations-service";
+import type { EmailMessageDto } from "@/types/socverse-operations";
 
 export const apiEmailInvestigationsService: EmailInvestigationsService = {
-  listMessages: () => {
-    throw new NotConnectedError("EmailInvestigationsService.listMessages");
-  },
+  list: (sessionId) => apiClient.get<EmailMessageDto[]>(`/sessions/${sessionId}/emails`),
+
+  getMessage: (sessionId, messageId) =>
+    apiClient.get<EmailMessageDto>(`/sessions/${sessionId}/emails/${messageId}`),
 };

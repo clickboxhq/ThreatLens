@@ -1,9 +1,6 @@
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useAlerts } from "@/hooks/use-alerts";
-import { useIdentities } from "@/hooks/use-identities";
-import { useEndpoints } from "@/hooks/use-endpoints";
 import { useScenarios } from "@/hooks/use-scenarios";
 import {
   LayoutGrid,
@@ -35,6 +32,7 @@ const modules = [
   { to: "/app/endpoints", label: "Endpoint Center", icon: MonitorSmartphone },
   { to: "/app/email", label: "Email Investigations", icon: Mail },
   { to: "/app/threat-intel", label: "Threat Intelligence", icon: Radar },
+  { to: "/app/search", label: "Global Search", icon: Search },
   { to: "/app/scenarios", label: "Scenario Library", icon: Library },
   { to: "/app/learning", label: "Learning Center", icon: GraduationCap },
   { to: "/app/certificates", label: "Certificates", icon: Award },
@@ -55,9 +53,6 @@ export function CommandPalette({
 }) {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
-  const { alerts } = useAlerts();
-  const { identities } = useIdentities();
-  const { endpoints } = useEndpoints();
   const { scenarios } = useScenarios();
 
   useEffect(() => {
@@ -86,7 +81,7 @@ export function CommandPalette({
             <Command.Input
               value={q}
               onValueChange={setQ}
-              placeholder="Jump to module, user, alert, device, MITRE ID…"
+              placeholder="Jump to a module or a scenario…"
               className="flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none"
               autoFocus
             />
@@ -119,53 +114,9 @@ export function CommandPalette({
               })}
             </Command.Group>
 
-            <Command.Group heading="Alerts">
-              {alerts.slice(0, 20).map((a) => (
-                <Command.Item
-                  key={a.id}
-                  value={`alert ${a.id} ${a.name} ${a.mitre} ${a.user}`}
-                  onSelect={() => go("/app/alerts")}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
-                >
-                  <Bell className="size-3.5 text-muted-foreground" />
-                  <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>
-                  <span className="truncate">{a.name}</span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-
-            <Command.Group heading="Users">
-              {identities.map((i) => (
-                <Command.Item
-                  key={i.upn}
-                  value={`user ${i.name} ${i.upn} ${i.dept}`}
-                  onSelect={() => go("/app/identity")}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
-                >
-                  <UserRound className="size-3.5 text-muted-foreground" />
-                  {i.name}
-                  <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-                    {i.upn}
-                  </span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-
-            <Command.Group heading="Devices">
-              {endpoints.map((e) => (
-                <Command.Item
-                  key={e.host}
-                  value={`device ${e.host} ${e.owner}`}
-                  onSelect={() => go("/app/endpoints")}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
-                >
-                  <MonitorSmartphone className="size-3.5 text-muted-foreground" />
-                  {e.host}
-                  <span className="ml-auto text-[11px] text-muted-foreground">{e.owner}</span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-
+            {/* Alerts/identities/devices are generated per investigation session, not a global
+             * "SOC" directory (see socverse-operations.ts) — jumping to Global Search above is
+             * the real way to look one up, rather than faking an org-wide index here. */}
             <Command.Group heading="Scenarios">
               {scenarios.map((s) => (
                 <Command.Item

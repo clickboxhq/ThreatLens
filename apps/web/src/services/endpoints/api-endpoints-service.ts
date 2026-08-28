@@ -1,11 +1,10 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { EndpointsService } from "./endpoints-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`EndpointsService.${method}`);
-};
+import type { DeviceDto } from "@/types/socverse-operations";
 
 export const apiEndpointsService: EndpointsService = {
-  listEndpoints: () => notConnected("listEndpoints"),
-  toggleIsolate: () => notConnected("toggleIsolate"),
+  list: (sessionId) => apiClient.get<DeviceDto[]>(`/sessions/${sessionId}/devices`),
+
+  isolate: (sessionId, deviceId) =>
+    apiClient.post<DeviceDto>(`/sessions/${sessionId}/devices/${deviceId}/isolate`),
 };
