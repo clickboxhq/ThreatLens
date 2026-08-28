@@ -1,5 +1,18 @@
-import type { Analyst } from "@/types/organizations";
+import type {
+  InvitePreviewDto,
+  InviteRole,
+  OrganizationDto,
+  OrganizationInviteDto,
+  OrganizationMemberDto,
+} from "@/types/socverse-organizations";
 
 export interface OrganizationsService {
-  listMembers(): Promise<Analyst[]>;
+  create(name: string): Promise<OrganizationDto>;
+  getMine(): Promise<OrganizationDto | null>;
+  listMembers(): Promise<OrganizationMemberDto[]>;
+  listInvites(): Promise<OrganizationInviteDto[]>;
+  createInvite(email: string, role: InviteRole): Promise<OrganizationInviteDto>;
+  /** Unauthenticated on the backend — used by the public accept-invite page. */
+  previewInvite(token: string): Promise<InvitePreviewDto | null>;
+  acceptInvite(token: string): Promise<OrganizationDto>;
 }

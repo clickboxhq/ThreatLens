@@ -4,7 +4,24 @@ import { AlertTriangle, ArrowRight, Building2, CheckCircle2 } from "lucide-react
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
-import { useAccount } from "@/hooks/use-account";
+import { useIsAuthenticated } from "@/lib/auth-store";
+import { useInvitePreview, useAcceptInvite } from "@/hooks/use-organizations";
+import { ApiError } from "@/lib/api-client";
+
+function acceptErrorMessage(error: unknown, invitedEmail: string): string {
+  if (error instanceof ApiError) {
+    if (error.code === "EMAIL_MISMATCH") {
+      return `This invite was sent to ${invitedEmail} — log out and sign in with that address to accept.`;
+    }
+    if (error.code === "ALREADY_IN_ORGANIZATION") {
+      return "You already belong to an organization — leave it before joining another.";
+    }
+    if (error.code === "INVITE_NOT_PENDING") {
+      return "This invite is no longer available.";
+    }
+  }
+  return "Couldn't accept that invite — try again.";
+}
 
 export const Route = createFileRoute("/accept-invite/$token")({
   component: AcceptInvitePage,
@@ -16,26 +33,7 @@ export const Route = createFileRoute("/accept-invite/$token")({
   }),
 });
 
-/**
- * Mock-only token status + inviting org — a real backend would resolve
- * the token to an actual pending invitation record (org name, inviter,
- * role). Try /accept-invite/expired or /accept-invite/accepted.
- */
-function inviteFromToken(token: string): {
-  status: "valid" | "expired" | "accepted";
-  orgName: string;
-} {
-  if (token === "expired") return { status: "expired", orgName: "Contoso University" };
-  if (token === "accepted") return { status: "accepted", orgName: "Contoso University" };
-  return { status: "valid", orgName: "Contoso University" };
-}
-
-function AcceptInvitePage() {
-  const { token } = useParams({ from: "/accept-invite/$token" });
-  const navigate = useNavigate();
-  const { setAccountType } = useAccount();
-  const invite = inviteFromToken(token);
-
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-2">
       <div
@@ -65,91 +63,127 @@ function AcceptInvitePage() {
             className="mt-4 text-[28px] font-semibold leading-[1.15] tracking-[-0.02em] text-white xl:text-[32px]"
             style={displayFont}
           >
-            Build practical security investigation skills, together.
+            Join your team's investigation workspace.
           </h1>
         </div>
         <div aria-hidden className="relative h-4" />
       </div>
 
-      <div className="flex min-h-screen flex-col bg-white text-[#0A0C0F]">
-        <div className="flex items-center justify-between px-6 py-5 lg:justify-end lg:px-10">
-          <Link to="/" className="flex items-center gap-2.5 lg:hidden" style={displayFont}>
-            <Mark />
-            <span className="text-[15px] font-semibold text-[#0A0C0F]">ThreatLens</span>
-          </Link>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center px-6 py-10">
-          <div className="w-full max-w-[400px] text-center">
-            {invite.status === "expired" && (
-              <>
-                <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--critical)]">
-                  <AlertTriangle className="size-5" />
-                </div>
-                <h2
-                  className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-                  style={displayFont}
-                >
-                  This invitation has expired
-                </h2>
-                <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-                  Ask an administrator at {invite.orgName} to send you a new invitation.
-                </p>
-                <Link to="/login" className="btn-primary mt-8 w-full justify-center py-3">
-                  Go to login <ArrowRight className="size-3.5" />
-                </Link>
-              </>
-            )}
-            {invite.status === "accepted" && (
-              <>
-                <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--info)]">
-                  <CheckCircle2 className="size-5" />
-                </div>
-                <h2
-                  className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-                  style={displayFont}
-                >
-                  Invitation already accepted
-                </h2>
-                <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-                  You've already joined {invite.orgName}. Log in to continue.
-                </p>
-                <Link to="/login" className="btn-primary mt-8 w-full justify-center py-3">
-                  Go to login <ArrowRight className="size-3.5" />
-                </Link>
-              </>
-            )}
-            {invite.status === "valid" && (
-              <>
-                <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[#0A0C0F]">
-                  <Building2 className="size-5" />
-                </div>
-                <h2
-                  className="mt-5 text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-                  style={displayFont}
-                >
-                  Join {invite.orgName}
-                </h2>
-                <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-                  You've been invited to join {invite.orgName} on ThreatLens as an analyst.
-                </p>
-                <button
-                  onClick={() => {
-                    setAccountType("organization", invite.orgName);
-                    navigate({ to: "/welcome" });
-                  }}
-                  className="btn-primary mt-8 w-full justify-center py-3"
-                >
-                  Accept invitation <ArrowRight className="size-3.5" />
-                </button>
-                <p className="mt-4 text-[12px] text-black/45">
-                  Not expecting this? You can safely ignore it.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6 py-16 text-[#0A0C0F]">
+        <div className="w-full max-w-md">{children}</div>
       </div>
     </div>
+  );
+}
+
+function AcceptInvitePage() {
+  const { token } = useParams({ from: "/accept-invite/$token" });
+  const navigate = useNavigate();
+  const isAuthenticated = useIsAuthenticated();
+  const { preview, isPending } = useInvitePreview(token);
+  const acceptInvite = useAcceptInvite();
+
+  if (isPending) {
+    return (
+      <Shell>
+        <p className="text-center text-[13px] text-muted-foreground">Checking your invite…</p>
+      </Shell>
+    );
+  }
+
+  if (!preview) {
+    return (
+      <Shell>
+        <div className="text-center">
+          <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-black/60">
+            <AlertTriangle className="size-5" />
+          </div>
+          <h2 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">Invite not found</h2>
+          <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+            This invite link is invalid — double-check the link, or ask your organization admin to
+            resend it.
+          </p>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (preview.status !== "pending") {
+    const label =
+      preview.status === "accepted"
+        ? "already been accepted"
+        : preview.status === "revoked"
+          ? "been revoked"
+          : "expired";
+    return (
+      <Shell>
+        <div className="text-center">
+          <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-black/60">
+            <AlertTriangle className="size-5" />
+          </div>
+          <h2 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">
+            This invite has {label}
+          </h2>
+          <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+            Ask {preview.organizationName}'s admin to send a new one.
+          </p>
+        </div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <div className="text-center">
+        <div className="mx-auto grid size-12 place-items-center rounded-xl border border-black/10 bg-black/[0.03] text-[color:var(--info)]">
+          <Building2 className="size-5" />
+        </div>
+        <h2 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">
+          Join {preview.organizationName}
+        </h2>
+        <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+          You've been invited as a{preview.role === "instructor" ? "n" : ""}{" "}
+          <strong>{preview.role}</strong>, to <span className="font-mono">{preview.email}</span>.
+        </p>
+
+        {!isAuthenticated ? (
+          <div className="mt-6 flex flex-col gap-2">
+            <p className="text-[12.5px] text-black/55">
+              Log in or create an account with this email to accept.
+            </p>
+            <Link to="/login" className="btn-primary w-full justify-center py-3">
+              Log in <ArrowRight className="size-3.5" />
+            </Link>
+            <Link
+              to="/signup"
+              className="w-full rounded-md border border-black/10 py-3 text-center text-[13px] font-medium hover:bg-black/[0.03]"
+            >
+              Create an account
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-6">
+            <p className="mb-3 text-[12px] text-black/45">
+              Make sure you're signed in as {preview.email} before accepting.
+            </p>
+            <button
+              onClick={() =>
+                acceptInvite.mutate(token, { onSuccess: () => navigate({ to: "/app" }) })
+              }
+              disabled={acceptInvite.isPending}
+              className="btn-primary w-full justify-center py-3 disabled:opacity-50"
+            >
+              {acceptInvite.isPending ? "Joining…" : "Accept & join"}
+              <CheckCircle2 className="size-3.5" />
+            </button>
+            {acceptInvite.isError && (
+              <p className="mt-2 text-[12.5px] text-[color:var(--critical)]">
+                {acceptErrorMessage(acceptInvite.error, preview.email)}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </Shell>
   );
 }

@@ -44,9 +44,41 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users User[]
+  users   User[]
+  invites OrganizationInvite[]
 
   @@map("organizations")
+}
+
+enum OrganizationInviteStatus {
+  pending
+  accepted
+  revoked
+}
+
+// §Phase 6 (merge plan): the org multi-tenancy this session builds out. An invite is scoped to
+// one email address and one role (student or instructor only — org_admin/platform_admin are
+// never grantable by invite, same privilege-escalation boundary signup itself enforces). Kept
+// as a real, queryable row (unlike the Redis-ephemeral auth tokens in email-verification-token
+// .store.ts) because an org_admin needs to see and revoke pending invites, not just consume
+// them once.
+model OrganizationInvite {
+  id             String                   @id @default(uuid()) @db.Uuid
+  organizationId String                   @map("organization_id") @db.Uuid
+  email          String                   @db.Citext
+  role           UserRole                 @default(student)
+  token          String                   @unique
+  status         OrganizationInviteStatus @default(pending)
+  invitedBy      String                   @map("invited_by") @db.Uuid
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  expiresAt      DateTime                 @map("expires_at")
+  acceptedAt     DateTime?                @map("accepted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("OrganizationInviteInviter", fields: [invitedBy], references: [id])
+
+  @@index([organizationId])
+  @@map("organization_invites")
 }
 
 model User {
@@ -87,6 +119,7 @@ model User {
   instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
   certificates          Certificate[]
   auditLogs             AuditLog[]
+  sentOrgInvites        OrganizationInvite[]       @relation("OrganizationInviteInviter")
 
   @@map("users")
 }

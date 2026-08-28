@@ -1,8 +1,41 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient, ApiError } from "@/lib/api-client";
 import type { OrganizationsService } from "./organizations-service";
+import type {
+  InvitePreviewDto,
+  InviteRole,
+  OrganizationDto,
+  OrganizationInviteDto,
+  OrganizationMemberDto,
+} from "@/types/socverse-organizations";
 
 export const apiOrganizationsService: OrganizationsService = {
-  listMembers: () => {
-    throw new NotConnectedError("OrganizationsService.listMembers");
+  create: (name) => apiClient.post<OrganizationDto>("/organizations", { name }),
+
+  getMine: async () => {
+    try {
+      return await apiClient.get<OrganizationDto>("/organizations/mine");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "NOT_IN_ORGANIZATION") return null;
+      throw err;
+    }
   },
+
+  listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
+
+  listInvites: () => apiClient.get<OrganizationInviteDto[]>("/organizations/mine/invites"),
+
+  createInvite: (email, role) =>
+    apiClient.post<OrganizationInviteDto>("/organizations/mine/invites", { email, role }),
+
+  previewInvite: async (token) => {
+    try {
+      return await apiClient.get<InvitePreviewDto>(`/organizations/invites/${token}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "NOT_FOUND") return null;
+      throw err;
+    }
+  },
+
+  acceptInvite: (token) =>
+    apiClient.post<OrganizationDto>(`/organizations/invites/${token}/accept`),
 };

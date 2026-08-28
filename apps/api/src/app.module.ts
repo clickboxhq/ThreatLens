@@ -28,6 +28,7 @@ import { AuditLogModule } from './common/audit-log/audit-log.module';
 import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     RateLimiterModule,
     AdminModule,
     MetricsModule,
+    OrganizationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
