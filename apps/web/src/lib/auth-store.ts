@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { apiClient, getAccessToken, onTokensChanged, setTokens } from "./api-client";
+import { apiClient, getAccessToken, onTokensChanged, setTokens, tryRefresh } from "./api-client";
 
 export type AuthRole = "student" | "instructor" | "org_admin" | "platform_admin";
 
@@ -47,6 +47,12 @@ interface AuthState {
   ) => Promise<{ userId: string; emailVerificationRequired: boolean }>;
   logout: () => void;
   markEmailVerified: () => void;
+  /** Creating an organization or accepting an invite changes the caller's role server-side —
+   * there's no GET /auth/me to re-fetch the user from, so this refreshes the JWT (which does
+   * re-read the DB, see api-client.ts's tryRefresh) and patches the cached copy with the role
+   * the caller already knows it just became, the same "no fresh login needed" spirit as
+   * markEmailVerified(). */
+  refreshAfterRoleChange: (role: AuthRole) => Promise<void>;
 }
 
 function applySession(result: Session): void {
@@ -107,6 +113,15 @@ export const useAuthStore = create<AuthState>()(() => ({
     const current = useAuthStore.getState().user;
     if (!current) return;
     const updated = { ...current, emailVerified: true };
+    persistUser(updated);
+    useAuthStore.setState({ user: updated });
+  },
+
+  async refreshAfterRoleChange(role) {
+    await tryRefresh();
+    const current = useAuthStore.getState().user;
+    if (!current) return;
+    const updated = { ...current, role };
     persistUser(updated);
     useAuthStore.setState({ user: updated });
   },

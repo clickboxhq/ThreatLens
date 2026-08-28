@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { organizationsService } from "@/services/organizations";
+import { useAuthStore } from "@/lib/auth-store";
 import type { InviteRole } from "@/types/socverse-organizations";
 
 const keys = {
@@ -21,7 +22,13 @@ export function useCreateOrganization() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => organizationsService.create(name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.mine }),
+    // create() always promotes the caller to org_admin server-side — the client's cached JWT
+    // and stored user still say the old role until this runs, so the very next org-scoped
+    // request (listMembers, etc.) would otherwise 403 despite the org having been created.
+    onSuccess: async () => {
+      await useAuthStore.getState().refreshAfterRoleChange("org_admin");
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
   });
 }
 
@@ -67,6 +74,13 @@ export function useInvitePreview(token: string) {
 
 export function useAcceptInvite() {
   return useMutation({
-    mutationFn: (token: string) => organizationsService.acceptInvite(token),
+    // Same stale-role issue as useCreateOrganization() — the role isn't in acceptInvite()'s
+    // own response, so the caller passes the role the invite preview already told it about
+    // (it's the exact value the backend just assigned, see organizations.service.ts).
+    mutationFn: ({ token }: { token: string; role: InviteRole }) =>
+      organizationsService.acceptInvite(token),
+    onSuccess: async (_data, variables) => {
+      await useAuthStore.getState().refreshAfterRoleChange(variables.role);
+    },
   });
 }

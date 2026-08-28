@@ -168,7 +168,10 @@ function AcceptInvitePage() {
             </p>
             <button
               onClick={() =>
-                acceptInvite.mutate(token, { onSuccess: () => navigate({ to: "/app" }) })
+                acceptInvite.mutate(
+                  { token, role: preview.role },
+                  { onSuccess: () => navigate({ to: "/app" }) },
+                )
               }
               disabled={acceptInvite.isPending}
               className="btn-primary w-full justify-center py-3 disabled:opacity-50"

@@ -85,7 +85,11 @@ function OrgRoster({
 }: {
   organization: { id: string; name: string; memberCount: number };
 }) {
-  const { members, isPending: membersPending } = useOrganizationMembers(true);
+  const {
+    members,
+    isPending: membersPending,
+    isError: membersError,
+  } = useOrganizationMembers(true);
   const { invites } = useOrganizationInvites(true);
   const createInvite = useCreateInvite();
   const [showForm, setShowForm] = useState(false);
@@ -204,6 +208,11 @@ function OrgRoster({
               <Skeleton key={i} className="h-9" />
             ))}
           </div>
+        ) : membersError ? (
+          <EmptyState
+            title="Couldn't load the roster"
+            description="Try reloading the page — this can happen right after creating an organization."
+          />
         ) : members.length === 0 ? (
           <EmptyState title="No members yet" description="Invite your first analyst above." />
         ) : (

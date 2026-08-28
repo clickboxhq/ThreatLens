@@ -96,7 +96,13 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   return body as T;
 }
 
-async function tryRefresh(): Promise<boolean> {
+// Exported so call sites that change the caller's own role server-side (creating an org,
+// accepting an invite) can force a fresh access token afterward — POST /auth/refresh always
+// re-reads the user from the DB (see auth.service.ts's refresh()), so this is the one existing
+// way to make the client's JWT reflect a role change without a full re-login. There's no
+// GET /auth/me to re-fetch the *user* object this way, hence auth-store.ts's updateRole()
+// patching the cached copy directly alongside this.
+export async function tryRefresh(): Promise<boolean> {
   try {
     const response = await rawRequest("/auth/refresh", {
       method: "POST",
