@@ -6,7 +6,7 @@ import { deriveViewState } from "./use-query-state";
 export function useAchievements() {
   const query = useQuery({
     queryKey: queryKeys.achievements,
-    queryFn: () => achievementsService.listAchievements(),
+    queryFn: () => achievementsService.listMine(),
   });
   return { ...query, achievements: query.data ?? [], state: deriveViewState(query) };
 }

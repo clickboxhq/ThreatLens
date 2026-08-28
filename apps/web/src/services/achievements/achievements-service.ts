@@ -1,5 +1,5 @@
-import type { Achievement } from "@/types/achievements";
+import type { AchievementDto } from "@/types/socverse-achievements";
 
 export interface AchievementsService {
-  listAchievements(): Promise<Achievement[]>;
+  listMine(): Promise<AchievementDto[]>;
 }

@@ -29,6 +29,7 @@ import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { AchievementsModule } from './modules/achievements/achievements.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
     AdminModule,
     MetricsModule,
     OrganizationsModule,
+    AchievementsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

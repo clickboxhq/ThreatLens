@@ -118,6 +118,7 @@ model User {
   createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
   instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
   certificates          Certificate[]
+  achievements          Achievement[]
   auditLogs             AuditLog[]
   sentOrgInvites        OrganizationInvite[]       @relation("OrganizationInviteInviter")
 
@@ -1119,4 +1120,31 @@ model Certificate {
 
   @@unique([userId, learningPathId])
   @@map("certificates")
+}
+
+enum AchievementKey {
+  first_blood
+  perfect_score
+  sharpshooter
+  technique_master
+  verdict_veteran
+  no_hints_needed
+  category_explorer
+}
+
+// §Phase 6 (merge plan): net-new, computed the same check-and-issue way certificates are —
+// re-evaluated after every scoring run (not just the first) so a later session can still earn
+// one it missed. Every definition reads only Score's own aggregate fields (overallPercent,
+// evidencePrecisionPercent, etc.) or session/scenario counts — never a raw ground-truth field,
+// same boundary the rest of the student-facing surface holds to.
+model Achievement {
+  id       String         @id @default(uuid()) @db.Uuid
+  userId   String         @map("user_id") @db.Uuid
+  key      AchievementKey
+  earnedAt DateTime       @default(now()) @map("earned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@map("achievements")
 }

@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { computeScore, ScoringInput } from './scorer';
 import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
 import { CertificatesService } from '../learning/certificates.service';
+import { AchievementsService } from '../achievements/achievements.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
 
@@ -36,6 +37,7 @@ export class ScoringService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly certificatesService: CertificatesService,
+    private readonly achievementsService: AchievementsService,
   ) {}
 
   /** §12.4: fetches the facts computeScore needs, scores the session, and persists it. */
@@ -273,6 +275,7 @@ export class ScoringService {
       session.userId,
       session.scenarioId,
     );
+    await this.achievementsService.checkAndIssue(session.userId);
 
     this.logger.log(
       `Scored session ${sessionId}: ${breakdown.overallPercent}%`,
