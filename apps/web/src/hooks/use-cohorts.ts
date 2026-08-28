@@ -1,25 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cohortsService } from "@/services/cohorts";
-import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
 
-export function useCohorts() {
-  const cohortsQuery = useQuery({
-    queryKey: [...queryKeys.cohorts, "list"],
-    queryFn: () => cohortsService.listCohorts(),
+const keys = {
+  mine: ["cohorts", "mine"] as const,
+  myAssignments: ["cohorts", "mine", "assignments"] as const,
+};
+
+export function useMyCohorts() {
+  return useQuery({
+    queryKey: keys.mine,
+    queryFn: () => cohortsService.listMine(),
   });
-  const statsQuery = useQuery({
-    queryKey: [...queryKeys.cohorts, "stats"],
-    queryFn: () => cohortsService.getStats(),
+}
+
+export function useMyAssignments() {
+  return useQuery({
+    queryKey: keys.myAssignments,
+    queryFn: () => cohortsService.listMyAssignments(),
   });
-  const trackCompletionQuery = useQuery({
-    queryKey: [...queryKeys.cohorts, "track-completion"],
-    queryFn: () => cohortsService.listTrackCompletion(),
+}
+
+export function useJoinCohort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (joinCode: string) => cohortsService.join(joinCode),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+      queryClient.invalidateQueries({ queryKey: keys.myAssignments });
+    },
   });
-  return {
-    cohorts: cohortsQuery.data ?? [],
-    stats: statsQuery.data,
-    trackCompletion: trackCompletionQuery.data ?? [],
-    state: deriveViewState(cohortsQuery),
-  };
 }

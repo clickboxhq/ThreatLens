@@ -1,5 +1,6 @@
+import { apiCohortsService } from "./api-cohorts-service";
 import type { CohortsService } from "./cohorts-service";
-import { mockCohortsService } from "./mock-cohorts-service";
 
-export const cohortsService: CohortsService = mockCohortsService;
+export const cohortsService: CohortsService = apiCohortsService;
+
 export type { CohortsService } from "./cohorts-service";

@@ -1,5 +1,6 @@
+import { apiInstructorService } from "./api-instructor-service";
 import type { InstructorService } from "./instructor-service";
-import { mockInstructorService } from "./mock-instructor-service";
 
-export const instructorService: InstructorService = mockInstructorService;
+export const instructorService: InstructorService = apiInstructorService;
+
 export type { InstructorService } from "./instructor-service";
