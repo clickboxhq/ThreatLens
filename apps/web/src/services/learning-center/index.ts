@@ -1,5 +1,6 @@
+import { apiLearningCenterService } from "./api-learning-center-service";
 import type { LearningCenterService } from "./learning-center-service";
-import { mockLearningCenterService } from "./mock-learning-center-service";
 
-export const learningCenterService: LearningCenterService = mockLearningCenterService;
+export const learningCenterService: LearningCenterService = apiLearningCenterService;
+
 export type { LearningCenterService } from "./learning-center-service";

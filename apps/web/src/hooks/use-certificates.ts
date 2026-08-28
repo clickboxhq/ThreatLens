@@ -1,19 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { certificatesService } from "@/services/certificates";
-import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
+
+const keys = {
+  mine: ["certificates", "mine"] as const,
+  one: (id: string) => ["certificates", id] as const,
+};
 
 export function useCertificates() {
   const query = useQuery({
-    queryKey: queryKeys.certificates,
+    queryKey: keys.mine,
     queryFn: () => certificatesService.listCertificates(),
   });
-  return { ...query, certificates: query.data ?? [], state: deriveViewState(query) };
+  return { certificates: query.data ?? [], isPending: query.isPending, isError: query.isError };
 }
 
+/** Used by the public verify.$id.tsx page — no auth required on the backend. */
 export function useCertificate(id: string) {
   const query = useQuery({
-    queryKey: [...queryKeys.certificates, id],
+    queryKey: keys.one(id),
     queryFn: () => certificatesService.getCertificate(id),
   });
   return { certificate: query.data, isPending: query.isPending, isError: query.isError };

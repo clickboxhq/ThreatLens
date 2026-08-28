@@ -110,8 +110,14 @@ const organization: NavItem[] = [
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
-  { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
   { to: "/app/billing", label: "Billing", icon: CreditCard },
+];
+
+// Separate from `organization` — the backend gates GET /admin/audit-logs to platform_admin
+// specifically (RolesGuard), a stricter, distinct role from instructor/org_admin. Every
+// instructor account seeing this link would just get a 403 the moment they clicked it.
+const platformAdminTools: NavItem[] = [
+  { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 
 function NavGroup({ label, items }: { label?: string; items: NavItem[] }) {
@@ -180,6 +186,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   // issued at signup/login, not the old accountType mock flag — org_admin included for when a
   // real admin-provisioned account (no self-serve path) logs in.
   const isOrg = user?.role === "instructor" || user?.role === "org_admin";
+  const isPlatformAdmin = user?.role === "platform_admin";
   const accountName = user?.displayName ?? "Account";
 
   return (
@@ -206,6 +213,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         <NavGroup label="Learning" items={learning} />
         {isOrg && <NavGroup label="Instructor Tools" items={instructorTools} />}
         {isOrg && <NavGroup label="Organization" items={organization} />}
+        {isPlatformAdmin && <NavGroup label="Platform Admin" items={platformAdminTools} />}
       </nav>
 
       {/* Footer: subscription + storage */}

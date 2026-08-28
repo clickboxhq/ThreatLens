@@ -1,7 +1,11 @@
-import type { AuditLogEntry, AuditLogStats, AuditLogCategory } from "@/types/audit-logs";
+import type { AuditLogEntryDto } from "@/types/socverse-learning";
 
+/** platform_admin-only on the backend (RolesGuard) — see app-shell.tsx's nav gating. */
 export interface AuditLogsService {
-  listEntries(): Promise<AuditLogEntry[]>;
-  getStats(): Promise<AuditLogStats>;
-  listCategories(): Promise<AuditLogCategory[]>;
+  list(filters?: {
+    actorUserId?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+  }): Promise<AuditLogEntryDto[]>;
 }

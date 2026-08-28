@@ -9,56 +9,56 @@ export const Route = createFileRoute("/app/audit-logs")({
       { title: "ThreatLens · Audit Logs" },
       {
         name: "description",
-        content:
-          "Platform audit trail for investigation actions, grading changes, and admin events.",
+        content: "Platform-wide audit trail — investigation actions, grading, and admin events.",
       },
       { property: "og:title", content: "ThreatLens · Audit Logs" },
-      {
-        property: "og:description",
-        content: "Immutable audit trail across the ThreatLens platform.",
-      },
+      { property: "og:description", content: "Append-only audit trail across the platform." },
     ],
   }),
 });
 
 function AuditLogs() {
-  const { entries: logs, stats, categories, state } = useAuditLogs();
+  const { entries: logs, isPending, isError } = useAuditLogs();
+
+  const gradingOverrides = logs.filter((l) => l.action === "submit_feedback").length;
+  const cohortActions = logs.filter((l) => l.action === "cohort_created").length;
+
   return (
     <WorkspacePage
       title="Audit Logs"
-      description="Immutable record of investigation actions, grading decisions, and administrative changes."
-      state={state}
+      description="Append-only record of investigation actions, grading decisions, and administrative changes."
+      state={isPending ? "loading" : isError ? "error" : logs.length === 0 ? "empty" : "ready"}
+      errorMessage="This page is restricted to platform administrators."
+      emptyState={{
+        title: "No events yet",
+        description: "Audit events will appear here as they occur.",
+      }}
       stats={[
-        { label: "Events (24h)", value: stats ? stats.eventsLast24h.toLocaleString() : "—" },
-        { label: "Admin actions", value: stats ? String(stats.adminActions) : "—" },
+        { label: "Events (most recent 100)", value: String(logs.length) },
+        { label: "Grading overrides", value: String(gradingOverrides), tone: "high" },
+        { label: "Cohorts created", value: String(cohortActions) },
         {
-          label: "Grading overrides",
-          value: stats ? String(stats.gradingOverrides) : "—",
-          tone: "high",
+          label: "Earliest shown",
+          value: logs.length
+            ? new Date(logs[logs.length - 1].occurredAt).toLocaleDateString()
+            : "—",
         },
-        { label: "Retention", value: stats ? `${stats.retentionDays} days` : "—" },
       ]}
       table={{
         title: "Recent events",
-        columns: ["Time", "Actor", "Action", "Target", "Context", "Source IP", "Result"],
+        columns: ["Time", "Actor", "Action", "Target", "IP"],
         rows: logs.map((l) => [
-          <span className="font-mono text-[11px] text-muted-foreground">{l.ts}</span>,
-          <span className="font-medium" title={l.userAgent}>
-            {l.actor}
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {new Date(l.occurredAt).toLocaleString()}
           </span>,
+          <span className="font-medium">{l.actorDisplayName ?? "System"}</span>,
           <span className="font-mono text-[11px] text-[color:var(--info)]">{l.action}</span>,
-          <span className="font-mono text-[11px]">{l.target}</span>,
-          <span className="text-secondary">{l.ctx}</span>,
-          <span className="font-mono text-[11px] text-muted-foreground">{l.ip}</span>,
-          <span
-            className="text-[11px] font-medium"
-            style={{ color: l.result === "success" ? "var(--success)" : "var(--critical)" }}
-          >
-            {l.result === "success" ? "Success" : "Failure"}
+          <span className="font-mono text-[11px]">
+            {l.targetType}:{l.targetId.slice(0, 8)}
           </span>,
+          <span className="font-mono text-[11px] text-muted-foreground">{l.actorIp ?? "—"}</span>,
         ]),
       }}
-      asides={[{ title: "Event categories", items: categories }]}
     />
   );
 }

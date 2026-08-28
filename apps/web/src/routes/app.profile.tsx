@@ -70,9 +70,9 @@ function ProfilePage() {
               Certificates
             </div>
             {certificates.map((c) => (
-              <div key={c.name} className="flex items-center gap-2 py-1 text-[12.5px]">
+              <div key={c.id} className="flex items-center gap-2 py-1 text-[12.5px]">
                 <Award className="size-3.5 text-[color:var(--info)]" />
-                {c.name}
+                {c.learningPathTitle}
               </div>
             ))}
           </div>

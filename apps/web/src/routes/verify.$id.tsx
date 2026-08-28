@@ -50,7 +50,7 @@ function VerifyPage() {
     );
   }
 
-  const revoked = certificate.verificationStatus === "revoked";
+  const revoked = !certificate.valid;
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-6 py-16">
@@ -78,10 +78,9 @@ function VerifyPage() {
         <dl className="mt-6 divide-y divide-border rounded-xl border border-border bg-background text-left text-[12.5px]">
           {[
             ["Credential ID", certificate.id],
-            ["Holder", certificate.holder],
-            ["Track", certificate.name],
-            ["Score", certificate.score],
-            ["Issued", certificate.issued],
+            ["Holder", certificate.learnerDisplayName],
+            ["Track", certificate.learningPathTitle],
+            ["Issued", new Date(certificate.issuedAt).toLocaleDateString()],
             ["Status", revoked ? "Revoked" : "Active"],
           ].map(([k, v]) => (
             <div key={k} className="flex items-center justify-between gap-4 px-4 py-2.5">

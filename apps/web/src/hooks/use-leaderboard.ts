@@ -1,12 +1,19 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { leaderboardService } from "@/services/leaderboard";
-import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
+import type { LeaderboardPeriod } from "@/types/socverse-learning";
 
 export function useLeaderboard() {
+  const [period, setPeriod] = useState<LeaderboardPeriod>("all_time");
   const query = useQuery({
-    queryKey: queryKeys.leaderboard,
-    queryFn: () => leaderboardService.listLeaderboard(),
+    queryKey: ["leaderboard", "global", period],
+    queryFn: () => leaderboardService.get(period, "global"),
   });
-  return { ...query, leaderboard: query.data ?? [], state: deriveViewState(query) };
+  return {
+    period,
+    setPeriod,
+    leaderboard: query.data,
+    isPending: query.isPending,
+    isError: query.isError,
+  };
 }

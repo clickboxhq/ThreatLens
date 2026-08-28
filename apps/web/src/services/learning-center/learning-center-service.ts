@@ -1,11 +1,6 @@
-import type {
-  LearningTrack,
-  LearningAchievement,
-  LearningCertificate,
-} from "@/types/learning-center";
+import type { CourseDto, LearningPathDto } from "@/types/socverse-learning";
 
 export interface LearningCenterService {
-  listTracks(): Promise<LearningTrack[]>;
-  listAchievements(): Promise<LearningAchievement[]>;
-  listCertificates(): Promise<LearningCertificate[]>;
+  listCourses(): Promise<CourseDto[]>;
+  getPath(pathId: string): Promise<LearningPathDto>;
 }

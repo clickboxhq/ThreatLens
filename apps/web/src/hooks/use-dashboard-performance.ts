@@ -28,7 +28,7 @@ export function useDashboardPerformance() {
   });
   const leaderboardQuery = useQuery({
     queryKey: queryKeys.leaderboard,
-    queryFn: () => leaderboardService.listLeaderboard(),
+    queryFn: () => leaderboardService.get("all_time", "global"),
   });
 
   return {
@@ -37,7 +37,13 @@ export function useDashboardPerformance() {
     recentInvestigations: recentQuery.data ?? [],
     assignedScenarios: assignedQuery.data ?? [],
     mitreMastery: masteryQuery.data ?? [],
-    leaderboard: leaderboardQuery.data ?? [],
+    // Real leaderboard entries, reshaped to the field names this dashboard panel already
+    // renders (see use-leaderboard.ts for the direct, unmapped version).
+    leaderboard: (leaderboardQuery.data?.entries ?? []).map((e) => ({
+      name: e.displayName,
+      score: e.points,
+      solved: e.completions,
+    })),
     state: deriveViewState(kpisQuery),
   };
 }

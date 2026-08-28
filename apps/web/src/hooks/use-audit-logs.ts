@@ -1,25 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { auditLogsService } from "@/services/audit-logs";
-import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
 
 export function useAuditLogs() {
-  const entriesQuery = useQuery({
-    queryKey: [...queryKeys.auditLogs, "entries"],
-    queryFn: () => auditLogsService.listEntries(),
-  });
-  const statsQuery = useQuery({
-    queryKey: [...queryKeys.auditLogs, "stats"],
-    queryFn: () => auditLogsService.getStats(),
-  });
-  const categoriesQuery = useQuery({
-    queryKey: [...queryKeys.auditLogs, "categories"],
-    queryFn: () => auditLogsService.listCategories(),
+  const query = useQuery({
+    queryKey: ["audit-logs"],
+    queryFn: () => auditLogsService.list(),
+    retry: false, // a 403 (non-admin) or 404 won't resolve on retry
   });
   return {
-    entries: entriesQuery.data ?? [],
-    stats: statsQuery.data,
-    categories: categoriesQuery.data ?? [],
-    state: deriveViewState(entriesQuery),
+    entries: query.data ?? [],
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
   };
 }

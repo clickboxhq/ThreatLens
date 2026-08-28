@@ -1,6 +1,8 @@
-import type { Certificate } from "@/types/certificates";
+import type { MyCertificateDto, PublicCertificateDto } from "@/types/socverse-learning";
 
 export interface CertificatesService {
-  listCertificates(): Promise<Certificate[]>;
-  getCertificate(id: string): Promise<Certificate | null>;
+  listCertificates(): Promise<MyCertificateDto[]>;
+  /** Unauthenticated on the backend — verify.$id.tsx uses this from a public link, not just
+   * the authenticated Certificates page. */
+  getCertificate(id: string): Promise<PublicCertificateDto | null>;
 }

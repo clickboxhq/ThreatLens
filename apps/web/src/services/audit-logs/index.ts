@@ -1,5 +1,6 @@
+import { apiAuditLogsService } from "./api-audit-logs-service";
 import type { AuditLogsService } from "./audit-logs-service";
-import { mockAuditLogsService } from "./mock-audit-logs-service";
 
-export const auditLogsService: AuditLogsService = mockAuditLogsService;
+export const auditLogsService: AuditLogsService = apiAuditLogsService;
+
 export type { AuditLogsService } from "./audit-logs-service";

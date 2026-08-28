@@ -1,12 +1,9 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { LearningCenterService } from "./learning-center-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`LearningCenterService.${method}`);
-};
+import type { CourseDto, LearningPathDto } from "@/types/socverse-learning";
 
 export const apiLearningCenterService: LearningCenterService = {
-  listTracks: () => notConnected("listTracks"),
-  listAchievements: () => notConnected("listAchievements"),
-  listCertificates: () => notConnected("listCertificates"),
+  listCourses: () => apiClient.get<CourseDto[]>("/learning/courses"),
+
+  getPath: (pathId) => apiClient.get<LearningPathDto>(`/learning/paths/${pathId}`),
 };

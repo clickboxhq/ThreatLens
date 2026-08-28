@@ -1,5 +1,13 @@
-import type { LeaderboardEntry } from "@/types/leaderboard";
+import type {
+  LeaderboardDto,
+  LeaderboardPeriod,
+  LeaderboardScope,
+} from "@/types/socverse-learning";
 
 export interface LeaderboardService {
-  listLeaderboard(): Promise<LeaderboardEntry[]>;
+  get(
+    period: LeaderboardPeriod,
+    scope: LeaderboardScope,
+    cohortId?: string,
+  ): Promise<LeaderboardDto>;
 }

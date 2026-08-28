@@ -1,12 +1,15 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { AuditLogsService } from "./audit-logs-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`AuditLogsService.${method}`);
-};
+import type { AuditLogEntryDto } from "@/types/socverse-learning";
 
 export const apiAuditLogsService: AuditLogsService = {
-  listEntries: () => notConnected("listEntries"),
-  getStats: () => notConnected("getStats"),
-  listCategories: () => notConnected("listCategories"),
+  list: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.actorUserId) params.set("actorUserId", filters.actorUserId);
+    if (filters.action) params.set("action", filters.action);
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+    const query = params.toString();
+    return apiClient.get<AuditLogEntryDto[]>(`/admin/audit-logs${query ? `?${query}` : ""}`);
+  },
 };
