@@ -68,6 +68,12 @@ function AlertsPage() {
         }
       />
 
+      {updateStatus.isError && (
+        <div className="mb-3 rounded-md border border-[color:var(--critical)]/40 bg-[color:var(--critical)]/10 px-3 py-2 text-[12px] text-[color:var(--critical)]">
+          Couldn't update that alert — try again.
+        </div>
+      )}
+
       <Panel padded={false}>
         {alertsQuery.isPending ? (
           <div className="flex flex-col gap-px p-3">

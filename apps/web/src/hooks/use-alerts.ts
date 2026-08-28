@@ -17,8 +17,14 @@ export function useAlerts(sessionId: string | undefined) {
 export function useUpdateAlertStatus(sessionId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { alertId: string; status: AlertStatus; dismissalReason?: string }) =>
-      alertsService.updateStatus(sessionId!, input.alertId, input),
+    mutationFn: ({
+      alertId,
+      ...body
+    }: {
+      alertId: string;
+      status: AlertStatus;
+      dismissalReason?: string;
+    }) => alertsService.updateStatus(sessionId!, alertId, body),
     onSuccess: () => {
       if (sessionId) queryClient.invalidateQueries({ queryKey: keys.list(sessionId) });
     },

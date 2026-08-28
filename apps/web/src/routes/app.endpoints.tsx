@@ -62,6 +62,12 @@ function EndpointCenter() {
         }
       />
 
+      {isolate.isError && (
+        <div className="mb-3 rounded-md border border-[color:var(--critical)]/40 bg-[color:var(--critical)]/10 px-3 py-2 text-[12px] text-[color:var(--critical)]">
+          Couldn't isolate that device — try again.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Panel>
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Devices</div>
