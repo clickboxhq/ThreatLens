@@ -57,7 +57,8 @@ function IdentityCenter() {
 
   const identities = identitiesQuery.data ?? [];
   const selected = identities.find((i) => i.id === selectedIdentityId);
-  const totalRisky = identities.filter((i) => i.riskLevel === "high").length;
+  // Same alert-derived risk as Device Center — see apps/api's entity-risk.ts.
+  const totalRisky = identities.filter((i) => i.riskLevel !== "none").length;
   const mfaOff = identities.filter((i) => i.mfaStatus === "not_registered").length;
 
   return (

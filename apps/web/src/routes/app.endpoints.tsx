@@ -46,7 +46,10 @@ function EndpointCenter() {
 
   const devices = endpointsQuery.data ?? [];
   const isolated = devices.filter((d) => d.isolationStatus === "isolated").length;
-  const atRisk = devices.filter((d) => d.riskLevel === "high").length;
+  // Risk is derived from each device's still-open alerts (apps/api's entity-risk.ts), where
+  // a single critical detection reads "high" and a high-severity one reads "medium" — so
+  // "at risk" counts anything alerting at all, not just the worst tier.
+  const atRisk = devices.filter((d) => d.riskLevel !== "none").length;
 
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
