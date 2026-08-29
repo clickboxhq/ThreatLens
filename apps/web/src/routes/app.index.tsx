@@ -1,15 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Panel, SectionHeader, StatCard, SeverityBadge } from "@/components/soc/primitives";
+import { Panel, SectionHeader, StatCard } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { cn } from "@/lib/utils";
 import {
   Activity,
   AlertOctagon,
-  ArrowUpRight,
   Award,
-  Crosshair,
+  ArrowUpRight,
   Gauge,
-  ListChecks,
   PlayCircle,
   ShieldAlert,
   Target,
@@ -27,6 +25,9 @@ import {
 } from "recharts";
 import { useDashboardPerformance } from "@/hooks/use-dashboard-performance";
 import { useLearningRecommendation } from "@/hooks/use-learning-recommendation";
+import { useLearningOverview } from "@/hooks/use-learning-center";
+import { useCertificates } from "@/hooks/use-certificates";
+import { useAuthUser } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/app/")({
   component: Dashboard,
@@ -47,8 +48,8 @@ const kpiIcons = [
   <AlertOctagon className="size-4" key="b" />,
   <Gauge className="size-4" key="c" />,
   <Target className="size-4" key="d" />,
-  <Crosshair className="size-4" key="e" />,
-  <ShieldAlert className="size-4" key="f" />,
+  <ShieldAlert className="size-4" key="e" />,
+  <Activity className="size-4" key="f" />,
 ];
 
 function masteryTone(v: number) {
@@ -59,6 +60,7 @@ function masteryTone(v: number) {
 }
 
 function Dashboard() {
+  const user = useAuthUser();
   const {
     kpis: trainingKpis,
     performance: investigationPerformance,
@@ -66,13 +68,22 @@ function Dashboard() {
     assignedScenarios,
     mitreMastery,
     leaderboard,
+    summary,
   } = useDashboardPerformance();
   const { recommendation } = useLearningRecommendation();
+  const { tracks } = useLearningOverview();
+  const { certificates } = useCertificates();
+
+  const recentCertificates = [...certificates]
+    .filter((c) => !c.revoked)
+    .sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime())
+    .slice(0, 3);
+
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
       <SectionHeader
-        title="Welcome back, John"
-        description="Your investigation activity, scoring, and ATT&CK mastery across the Contoso Global SOC training environment."
+        title={user ? `Welcome back, ${user.displayName}` : "Welcome back"}
+        description="Your investigation activity, scoring, and ATT&CK mastery across every scenario you've attempted."
         actions={
           <>
             <Link
@@ -98,7 +109,6 @@ function Dashboard() {
             key={k.label}
             label={k.label}
             value={k.value}
-            delta={k.delta}
             tone={k.tone}
             icon={kpiIcons[i]}
           />
@@ -121,104 +131,113 @@ function Dashboard() {
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2 rounded-sm bg-muted-foreground/70" /> Avg. score
               </span>
-              <span className="rounded border border-border bg-background px-2 py-0.5 text-secondary">
-                Feb – Aug
-              </span>
             </div>
           }
         >
-          <div className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={investigationPerformance}
-                margin={{ top: 10, right: 8, left: -18, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="gStarted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--info)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="var(--info)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gDone" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--success)" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="var(--success)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="m"
-                  stroke="var(--muted-foreground)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--muted-foreground)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="started"
-                  name="Started"
-                  stroke="var(--info)"
-                  strokeWidth={2}
-                  fill="url(#gStarted)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="completed"
-                  name="Completed"
-                  stroke="var(--success)"
-                  strokeWidth={2}
-                  fill="url(#gDone)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  name="Avg. score"
-                  stroke="var(--muted-foreground)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="mttr"
-                  name="Time to resolution (min)"
-                  stroke="var(--warning)"
-                  strokeWidth={1.5}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {investigationPerformance.length > 0 ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={investigationPerformance}
+                  margin={{ top: 10, right: 8, left: -18, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="gStarted" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--info)" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="var(--info)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gDone" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--success)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--success)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="m"
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="started"
+                    name="Started"
+                    stroke="var(--info)"
+                    strokeWidth={2}
+                    fill="url(#gStarted)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="completed"
+                    name="Completed"
+                    stroke="var(--success)"
+                    strokeWidth={2}
+                    fill="url(#gDone)"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    name="Avg. score"
+                    stroke="var(--muted-foreground)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mttr"
+                    name="Time to resolution (min)"
+                    stroke="var(--warning)"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-[260px] items-center justify-center text-[12px] text-muted-foreground">
+              No investigations yet — launch a scenario to start building your performance history.
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-[11px] md:grid-cols-4">
             <div>
               <div className="text-muted-foreground">Investigations started</div>
-              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">47</div>
+              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">{summary.started}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Completed</div>
-              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">44</div>
+              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">
+                {summary.completed}
+              </div>
             </div>
             <div>
               <div className="text-muted-foreground">Average score</div>
               <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-[color:var(--success)]">
-                92%
+                {summary.averageScore !== null ? `${summary.averageScore}%` : "—"}
               </div>
             </div>
             <div>
               <div className="text-muted-foreground">Time to resolution</div>
-              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">34 min</div>
+              <div className="mt-0.5 text-[15px] font-semibold tabular-nums">
+                {summary.averageMinutesToResolution !== null
+                  ? `${summary.averageMinutesToResolution} min`
+                  : "—"}
+              </div>
             </div>
           </div>
         </Panel>
@@ -226,37 +245,47 @@ function Dashboard() {
         <Panel
           title="MITRE ATT&CK mastery"
           actions={
-            <span className="text-[11px] text-muted-foreground tabular-nums">76% overall</span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {summary.overallMastery !== null
+                ? `${summary.overallMastery}% overall`
+                : "No data yet"}
+            </span>
           }
         >
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {mitreMastery.map((t) => {
-              const tone = masteryTone(t.mastery);
-              return (
-                <div
-                  key={t.tactic}
-                  className="rounded-md border p-2.5"
-                  style={{
-                    borderColor: `color-mix(in oklab, ${tone} 35%, var(--card-border-tint))`,
-                    background: `color-mix(in oklab, ${tone} 8%, var(--card))`,
-                  }}
-                >
-                  <div className="truncate text-[10.5px] text-secondary">{t.tactic}</div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span
-                      className="text-[16px] font-semibold tabular-nums"
-                      style={{ color: tone }}
-                    >
-                      {t.mastery}%
-                    </span>
+          {mitreMastery.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {mitreMastery.map((t) => {
+                const tone = masteryTone(t.mastery);
+                return (
+                  <div
+                    key={t.tactic}
+                    className="rounded-md border p-2.5"
+                    style={{
+                      borderColor: `color-mix(in oklab, ${tone} 35%, var(--card-border-tint))`,
+                      background: `color-mix(in oklab, ${tone} 8%, var(--card))`,
+                    }}
+                  >
+                    <div className="truncate text-[10.5px] text-secondary">{t.tactic}</div>
+                    <div className="mt-1 flex items-baseline gap-1">
+                      <span
+                        className="text-[16px] font-semibold tabular-nums"
+                        style={{ color: tone }}
+                      >
+                        {t.mastery}%
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+                      {t.practiced}/{t.total} techniques
+                    </div>
                   </div>
-                  <div className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                    {t.practiced}/{t.total} techniques
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[120px] items-center justify-center text-center text-[12px] text-muted-foreground">
+              Complete and score an investigation to see your ATT&CK tactic mastery.
+            </div>
+          )}
         </Panel>
       </div>
 
@@ -275,43 +304,58 @@ function Dashboard() {
             </Link>
           }
         >
-          <div className="divide-y divide-border">
-            {recentInvestigations.map((r) => (
-              <div
-                key={r.id}
-                className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-background/40"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[10.5px] text-muted-foreground">{r.id}</span>
-                    <span className="truncate text-[13px] font-medium">{r.title}</span>
-                    <SeverityBadge level={r.severity} />
-                  </div>
-                  <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                    {r.subjectLabel}: <span className="text-secondary">{r.subject}</span> ·{" "}
-                    {r.mitre}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="h-1 w-32 overflow-hidden rounded-full bg-background">
-                      <div
-                        className="h-full rounded-full bg-[color:var(--info)]"
-                        style={{ width: `${r.progress}%` }}
-                      />
+          {recentInvestigations.length > 0 ? (
+            <div className="divide-y divide-border">
+              {recentInvestigations.map((r) => (
+                <Link
+                  key={r.id}
+                  to="/app/cases/$id"
+                  params={{ id: r.id }}
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-background/40"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-[13px] font-medium">{r.scenarioTitle}</span>
+                      <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] capitalize text-secondary">
+                        {r.scenarioCategory}
+                      </span>
                     </div>
-                    <span className="text-[10.5px] tabular-nums text-muted-foreground">
-                      {r.progress}% complete
-                    </span>
+                    <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                      {r.overallPercent !== null ? (
+                        <span className="text-secondary">Score {r.overallPercent}%</span>
+                      ) : (
+                        "Not yet scored"
+                      )}
+                      {r.verdictCorrect !== null && (
+                        <>
+                          {" · "}
+                          <span
+                            className={
+                              r.verdictCorrect
+                                ? "text-[color:var(--success)]"
+                                : "text-[color:var(--high)]"
+                            }
+                          >
+                            {r.verdictCorrect ? "Verdict correct" : "Verdict incorrect"}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[11px] font-medium text-secondary">{r.statusLabel}</div>
-                  <div className="mt-1 text-[10.5px] text-muted-foreground tabular-nums">
-                    {r.ts}
+                  <div className="text-right">
+                    <div className="text-[11px] font-medium text-secondary">{r.statusLabel}</div>
+                    <div className="mt-1 text-[10.5px] text-muted-foreground tabular-nums">
+                      {r.ts}
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
+              No investigations yet.
+            </div>
+          )}
         </Panel>
 
         <Panel
@@ -323,39 +367,43 @@ function Dashboard() {
             </Link>
           }
         >
-          <div className="divide-y divide-border">
-            {assignedScenarios.map((s) => (
-              <div key={s.id} className="px-4 py-3 transition-colors hover:bg-background/40">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-medium">{s.title}</span>
-                  <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-secondary">
-                    {s.difficulty}
-                  </span>
+          {assignedScenarios.length > 0 ? (
+            <div className="divide-y divide-border">
+              {assignedScenarios.map((s) => (
+                <div key={s.id} className="px-4 py-3 transition-colors hover:bg-background/40">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[13px] font-medium">{s.title}</span>
+                    <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] capitalize text-secondary">
+                      {s.difficulty}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${s.progress}%`,
+                        background: s.progress === 100 ? "var(--success)" : "var(--info)",
+                      }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10.5px] text-muted-foreground tabular-nums">
+                    <span>{s.duration}</span>
+                    <span>
+                      {s.score !== null ? (
+                        <span className="text-[color:var(--success)]">Score {s.score}%</span>
+                      ) : (
+                        "Not graded"
+                      )}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-background">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${s.progress}%`,
-                      background: s.progress === 100 ? "var(--success)" : "var(--info)",
-                    }}
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[10.5px] text-muted-foreground tabular-nums">
-                  <span>
-                    {s.progress}% · {s.duration}
-                  </span>
-                  <span>
-                    {s.score !== null ? (
-                      <span className="text-[color:var(--success)]">Score {s.score}%</span>
-                    ) : (
-                      "Not graded"
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
+              Nothing assigned yet — join a cohort to see instructor assignments here.
+            </div>
+          )}
         </Panel>
       </div>
 
@@ -383,92 +431,84 @@ function Dashboard() {
         </Panel>
       )}
 
-      {/* Cohort + skills + checklist */}
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* Cohort + skills */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Cohort leaderboard" padded={false}>
-          <div className="divide-y divide-border">
-            {leaderboard.map((l, i) => (
-              <div key={l.name} className="flex items-center gap-3 px-4 py-3">
-                <IconTile
-                  size="sm"
-                  className={cn(
-                    "text-[11px] font-semibold",
-                    i === 0 ? "text-warning" : "text-secondary",
-                  )}
-                >
-                  {i === 0 ? <Trophy className="size-3.5" /> : i + 1}
-                </IconTile>
-                <div className="flex-1 text-[13px] font-medium">{l.name}</div>
-                <div className="text-right">
-                  <div className="text-[12px] tabular-nums">{l.score.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">{l.solved} investigations</div>
+          {leaderboard.length > 0 ? (
+            <div className="divide-y divide-border">
+              {leaderboard.map((l, i) => (
+                <div key={l.name} className="flex items-center gap-3 px-4 py-3">
+                  <IconTile
+                    size="sm"
+                    className={cn(
+                      "text-[11px] font-semibold",
+                      i === 0 ? "text-warning" : "text-secondary",
+                    )}
+                  >
+                    {i === 0 ? <Trophy className="size-3.5" /> : i + 1}
+                  </IconTile>
+                  <div className="flex-1 text-[13px] font-medium">{l.name}</div>
+                  <div className="text-right">
+                    <div className="text-[12px] tabular-nums">{l.score.toLocaleString()}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {l.solved} investigations
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
+              No leaderboard entries yet.
+            </div>
+          )}
         </Panel>
 
         <Panel title="Skill tracks & certificates" padded={false}>
-          <div className="space-y-3 p-4">
-            {[
-              { t: "SOC Analyst Track", v: 74 },
-              { t: "Threat Hunter Track", v: 42 },
-              { t: "Incident Responder Track", v: 88 },
-            ].map((s) => (
-              <div key={s.t}>
-                <div className="flex items-center justify-between text-[12px]">
-                  <span>{s.t}</span>
-                  <span className="tabular-nums text-secondary">{s.v}%</span>
+          {tracks.length > 0 ? (
+            <div className="space-y-3 p-4">
+              {tracks.map((t) => (
+                <div key={t.id}>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span>{t.name}</span>
+                    <span className="tabular-nums text-secondary">{t.progress}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full bg-[color:var(--info)]"
+                      style={{ width: `${t.progress}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
-                  <div
-                    className="h-full rounded-full bg-[color:var(--info)]"
-                    style={{ width: `${s.v}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-6 text-center text-[12px] text-muted-foreground">
+              No learning tracks available yet.
+            </div>
+          )}
           <div className="border-t border-border p-4">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Recent certificates
             </div>
-            {[
-              { name: "ThreatLens Certified Analyst — L2", when: "Jun 24" },
-              { name: "Identity Attack Investigation", when: "Jun 12" },
-              { name: "Endpoint Forensics Fundamentals", when: "May 30" },
-            ].map((c) => (
-              <div key={c.name} className="flex items-center gap-2 py-1.5 text-[12px]">
-                <Award className="size-3.5 text-[color:var(--info)]" />
-                <span className="flex-1 truncate">{c.name}</span>
-                <span className="text-[11px] text-muted-foreground">{c.when}</span>
+            {recentCertificates.length > 0 ? (
+              recentCertificates.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 py-1.5 text-[12px]">
+                  <Award className="size-3.5 text-[color:var(--info)]" />
+                  <span className="flex-1 truncate">{c.learningPathTitle}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {new Date(c.issuedAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="py-1.5 text-[12px] text-muted-foreground">
+                Complete a learning path to earn your first certificate.
               </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="Case checklist">
-          <div className="flex items-start gap-3">
-            <IconTile tone="info" size="lg">
-              <ListChecks className="size-4" />
-            </IconTile>
-            <div className="flex-1">
-              <p className="text-[13px] text-secondary">
-                On <span className="font-mono text-foreground">INV-3181</span> you have collected
-                <span className="text-foreground"> 7 of 9 required artifacts</span>. The message
-                trace and the inbox rule created after sign-in are still missing — both are needed
-                to justify a BEC conclusion under{" "}
-                <span className="font-mono text-foreground">T1114.002</span>.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded-md border border-border bg-background px-2.5 py-1 text-[11px] text-secondary hover:text-foreground">
-                  Show missing evidence
-                </button>
-                <button className="rounded-md border border-border bg-background px-2.5 py-1 text-[11px] text-secondary hover:text-foreground">
-                  Explain T1114.002
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </Panel>
       </div>

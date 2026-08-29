@@ -10,6 +10,8 @@ export interface RealScenario {
   category: string;
   difficulty: string;
   estimatedMinutes: number;
+  /** MITRE technique IDs (e.g. "T1078") this scenario's kill chain actually exercises. */
+  techniqueIds: string[];
 }
 
 export function listRealScenarios(): Promise<RealScenario[]> {

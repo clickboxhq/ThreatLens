@@ -18,6 +18,11 @@ export class ScenarioCatalogController {
     const scenarios = await this.prisma.attackScenario.findMany({
       where: { status: 'published', category, difficulty },
       orderBy: { title: 'asc' },
+      include: {
+        currentVersion: {
+          include: { scenarioTechniques: { include: { mitreTechnique: true } } },
+        },
+      },
     });
     return scenarios.map((s) => ({
       id: s.id,
@@ -27,6 +32,12 @@ export class ScenarioCatalogController {
       category: s.category,
       difficulty: s.difficulty,
       estimatedMinutes: s.estimatedMinutes,
+      // The MITRE techniques this scenario's kill chain actually exercises — lets the
+      // frontend recommend scenarios by weak tactic without a second round-trip per scenario.
+      techniqueIds:
+        s.currentVersion?.scenarioTechniques.map(
+          (st) => st.mitreTechnique.techniqueId,
+        ) ?? [],
     }));
   }
 
@@ -34,6 +45,11 @@ export class ScenarioCatalogController {
   async getBySlug(@Param('slug') slug: string) {
     const scenario = await this.prisma.attackScenario.findUnique({
       where: { slug },
+      include: {
+        currentVersion: {
+          include: { scenarioTechniques: { include: { mitreTechnique: true } } },
+        },
+      },
     });
     if (!scenario || scenario.status !== 'published') {
       throw new AppException(404, 'NOT_FOUND', 'Scenario not found.');
@@ -46,6 +62,10 @@ export class ScenarioCatalogController {
       category: scenario.category,
       difficulty: scenario.difficulty,
       estimatedMinutes: scenario.estimatedMinutes,
+      techniqueIds:
+        scenario.currentVersion?.scenarioTechniques.map(
+          (st) => st.mitreTechnique.techniqueId,
+        ) ?? [],
     };
   }
 }

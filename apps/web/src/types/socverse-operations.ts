@@ -22,6 +22,17 @@ export interface SessionListItemDto {
   submittedAt: string | null;
 }
 
+/** GET /sessions/skill-radar — per-MITRE-tactic proficiency across every scored session
+ * (apps/api's computeSkillRadar). A tactic never touched by a required technique in any
+ * scored session is omitted entirely, not zeroed out. */
+export interface SkillRadarEntryDto {
+  tactic: string;
+  tacticName: string;
+  requiredCount: number;
+  hitCount: number;
+  percent: number;
+}
+
 export type AlertSeverity = "informational" | "low" | "medium" | "high" | "critical";
 export type AlertStatus = "new" | "in_progress" | "resolved" | "dismissed";
 export type AlertEntityType = "identity" | "device" | "mailbox";

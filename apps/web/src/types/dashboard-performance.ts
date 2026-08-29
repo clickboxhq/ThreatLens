@@ -1,9 +1,11 @@
-import type { Severity } from "./common";
+// Every shape here is derived client-side from real, already-fetched domains (sessions,
+// cohort assignments, the scenario catalog, the skill radar) — there is no single
+// "dashboard performance" endpoint on the backend, so these are view-model types for
+// use-dashboard-performance.ts's aggregation, not a wire contract.
 
 export type TrainingKpi = {
   label: string;
   value: string;
-  delta: string;
   tone: "default" | "critical" | "success" | "info";
 };
 
@@ -17,14 +19,12 @@ export type InvestigationPerformancePoint = {
 
 export type RecentInvestigation = {
   id: string;
-  title: string;
-  subjectLabel: string;
-  subject: string;
-  severity: Severity;
+  scenarioTitle: string;
+  scenarioCategory: string;
   status: string;
   statusLabel: string;
-  mitre: string;
-  progress: number;
+  overallPercent: number | null;
+  verdictCorrect: boolean | null;
   ts: string;
 };
 
