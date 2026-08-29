@@ -47,6 +47,7 @@ interface AuthState {
   ) => Promise<{ userId: string; emailVerificationRequired: boolean }>;
   logout: () => void;
   markEmailVerified: () => void;
+  requestEmailVerification: () => Promise<void>;
   /** Creating an organization or accepting an invite changes the caller's role server-side —
    * there's no GET /auth/me to re-fetch the user from, so this refreshes the JWT (which does
    * re-read the DB, see api-client.ts's tryRefresh) and patches the cached copy with the role
@@ -115,6 +116,10 @@ export const useAuthStore = create<AuthState>()(() => ({
     const updated = { ...current, emailVerified: true };
     persistUser(updated);
     useAuthStore.setState({ user: updated });
+  },
+
+  async requestEmailVerification() {
+    await apiClient.post("/auth/email-verification/request");
   },
 
   async refreshAfterRoleChange(role) {

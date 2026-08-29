@@ -48,6 +48,7 @@ import { CommandPalette, useCommandPalette } from "@/components/soc/command-pale
 import { NotificationPanel } from "@/components/soc/notification-panel";
 import { useNotifications } from "@/hooks/use-notifications";
 import { PageTransition } from "@/components/soc/ui/motion";
+import { EmailVerificationBanner } from "@/components/soc/email-verification-banner";
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
 import {
@@ -480,6 +481,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           onOpenPalette={() => setOpen(true)}
           onOpenMobileNav={() => setMobileNavOpen(true)}
         />
+        <EmailVerificationBanner />
         <main className="flex-1 overflow-x-hidden">
           <PageTransition>{children ?? <Outlet />}</PageTransition>
         </main>

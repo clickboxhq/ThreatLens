@@ -32,7 +32,7 @@ function ScenarioLib() {
       setLaunchingId(null);
       if (err instanceof ApiError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
         setError(
-          "Verify your email address before starting a scenario — check the banner on your dashboard.",
+          "Verify your email address before starting a scenario — check the banner at the top of the page.",
         );
       } else {
         setError(err instanceof ApiError ? err.message : "Could not start this scenario.");
