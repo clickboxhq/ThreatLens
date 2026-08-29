@@ -293,7 +293,9 @@ export class ScenarioBuilderService {
           id: versionId,
           scenarioId,
           versionNumber: 1,
-          groundTruthDefinition: dto.groundTruthDefinition as unknown as object,
+          groundTruthDefinition: this.toStoredDefinition(
+            dto.groundTruthDefinition,
+          ) as unknown as object,
           publishedAt: new Date(),
           createdBy: user.id,
         },
@@ -321,6 +323,29 @@ export class ScenarioBuilderService {
       category: dto.category,
       difficulty: dto.difficulty,
       estimatedMinutes: dto.estimatedMinutes,
+    };
+  }
+
+  // Completes the authored definition with the fields real consumers require to exist even
+  // though they're always empty in practice today — ScoringService reads
+  // `rubric.containment_expectations.length` unconditionally (containment scoring isn't actually
+  // implemented; `containmentMetCount` is hardcoded to 0 regardless), so a stored definition
+  // missing the key entirely throws inside the scoring job the same way a missing
+  // `attributes` wrapper throws inside telemetry generation — silently, with the session never
+  // leaving `submitted`. `distractor_pool` has no reader anywhere in the codebase (confirmed by
+  // grep, not assumed) and is included purely for schema fidelity with prisma/seed.ts's shape.
+  private toStoredDefinition(
+    def: AuthoredGroundTruthDefinition,
+  ): AuthoredGroundTruthDefinition & {
+    distractor_pool: unknown[];
+    scoring_rubric: AuthoredGroundTruthDefinition['scoring_rubric'] & {
+      containment_expectations: unknown[];
+    };
+  } {
+    return {
+      ...def,
+      distractor_pool: [],
+      scoring_rubric: { ...def.scoring_rubric, containment_expectations: [] },
     };
   }
 

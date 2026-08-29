@@ -305,6 +305,29 @@ describe('ScenarioBuilderService.create', () => {
     expect(prisma.scenarioTechnique.create).toHaveBeenCalledTimes(1);
     expect(result.slug).toBe('new-impossible-travel');
   });
+
+  // Regression guard for the second silent-crash bug this feature shipped with:
+  // ScoringService reads `scoring_rubric.containment_expectations.length` unconditionally, so a
+  // stored definition missing that key throws inside the scoring job (session stuck at
+  // "submitted" forever, no visible error) exactly the way a missing `attributes` wrapper threw
+  // inside telemetry generation. The author never has to supply this — it's always empty in
+  // every real scenario — but the *stored* definition must still have the key.
+  it('completes the stored definition with containment_expectations and distractor_pool even though the author never supplies them', async () => {
+    const { service, prisma } = buildService();
+
+    await service.create(buildUser(), scenarioDto());
+
+    const call = (prisma.scenarioVersion.create as jest.Mock).mock
+      .calls[0][0] as {
+      data: { groundTruthDefinition: unknown };
+    };
+    const stored = call.data.groundTruthDefinition as {
+      distractor_pool: unknown[];
+      scoring_rubric: { containment_expectations: unknown[] };
+    };
+    expect(stored.scoring_rubric.containment_expectations).toEqual([]);
+    expect(stored.distractor_pool).toEqual([]);
+  });
 });
 
 describe('ScenarioBuilderService.archive', () => {
