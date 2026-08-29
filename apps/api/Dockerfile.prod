@@ -43,6 +43,12 @@ COPY --from=build --chown=app:app /repo/apps/api/package.json ./package.json
 # scripts/provision-app-role.sh` (infra/RAILWAY.md) can run migrations directly against this
 # image, the same script infra/docker-compose.prod.yml's separate `migrate` service runs.
 COPY --from=build --chown=app:app /repo/apps/api/scripts ./scripts
+# Same reason: `prisma db seed` shells out to `ts-node prisma/seed.ts`, and without a tsconfig
+# beside it ts-node falls back to its own defaults rather than the settings this code is
+# actually compiled under. Seeding is a deliberate one-off (`railway ssh --service api -- npm
+# run prisma:seed`), not part of the start command, so this file is the only thing standing
+# between that command working and it failing on a container nobody can easily debug.
+COPY --from=build --chown=app:app /repo/apps/api/tsconfig.json ./tsconfig.json
 USER app
 ENV NODE_ENV=production
 EXPOSE 3000

@@ -56,6 +56,29 @@ this script or the `prisma` CLI, both of which only exist in the image. Chaining
 start command is what actually runs it in the right place, no `railway ssh`/`railway run` step
 needed.)
 
+### Seeding the scenario library (deliberate one-off, not part of the start command)
+
+Migrations run on every boot because they're cheap and idempotent. Seeding is different: it
+rewrites reference data and publishes scenario versions, so it runs only when you actually
+mean it.
+
+```bash
+railway ssh --service api -- npm run prisma:seed
+```
+
+`railway ssh` executes *inside* the running container, which is the part that matters — unlike
+`railway run`, which runs on your own machine and can't reach the image's `prisma` CLI,
+`prisma/seed.ts`, or the internal `DATABASE_URL`. The production image ships all three (plus
+`tsconfig.json`, since `prisma db seed` shells out to `ts-node`).
+
+Run this after any change to a scenario's `groundTruthDefinition` in `prisma/seed.ts`. The
+seed compares each stored definition against the seed literal and publishes a **new**
+`ScenarioVersion` when they differ, rather than rewriting the existing one — `InvestigationSession`
+pins `scenarioVersionId` at launch, so editing a published definition in place would swap the
+answer key underneath every in-flight attempt. New sessions pick up the new version; running
+ones finish on the version they started with. Unchanged scenarios are a no-op, so re-running is
+safe.
+
 Environment variables (use Railway's variable-reference picker — click the field and
 autocomplete offers other services' variables — rather than typing these by hand, since your
 Postgres/Redis plugin service names may differ from the examples below). Note
