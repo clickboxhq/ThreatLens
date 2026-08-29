@@ -32,6 +32,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { AchievementsApiModule } from './modules/achievements/achievements-api.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
+import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { NotificationsApiModule } from './modules/notifications/notifications-ap
     AchievementsApiModule,
     NotificationsModule,
     NotificationsApiModule,
+    ScenarioBuilderModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
