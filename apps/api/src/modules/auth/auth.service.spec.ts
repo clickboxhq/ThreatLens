@@ -199,6 +199,36 @@ function buildService(users: Map<string, User>) {
   };
 }
 
+// The JWT only ever carries id/role — this is the one endpoint a Student's own profile page
+// can read their real email/displayName/verification status back from.
+describe('AuthService.getMe', () => {
+  it('returns the profile fields a JWT does not carry, deriving emailVerified from emailVerifiedAt', async () => {
+    const u = user({
+      email: 'jane@example.com',
+      displayName: 'Jane Doe',
+      emailVerifiedAt: null,
+    });
+    const { service } = buildService(new Map([[u.id, u]]));
+
+    await expect(service.getMe(u.id)).resolves.toEqual({
+      id: u.id,
+      email: 'jane@example.com',
+      displayName: 'Jane Doe',
+      role: 'student',
+      emailVerified: false,
+      createdAt: u.createdAt,
+    });
+  });
+
+  it('rejects with 404 for an unknown user id', async () => {
+    const { service } = buildService(new Map());
+    await expect(service.getMe(randomUUID())).rejects.toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    });
+  });
+});
+
 describe('AuthService MFA (§15.1, §16.2)', () => {
   it('login() does not issue tokens for an MFA-enrolled account, returning a challenge instead', async () => {
     const argon2 = await import('argon2');

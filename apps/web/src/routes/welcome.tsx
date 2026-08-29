@@ -1,5 +1,4 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -13,7 +12,7 @@ import {
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { Reveal, TopologyDiagram, displayFont, monoFont } from "@/components/soc/marketing/atmos";
-import { useSoc } from "@/lib/store";
+import { useAuthUser } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/welcome")({
   component: WelcomePage,
@@ -33,18 +32,13 @@ const STEPS = [
 
 function WelcomePage() {
   const navigate = useNavigate();
-  const completeOnboarding = useSoc((s) => s.completeOnboarding);
-  const onboardingCompleted = useSoc((s) => s.onboardingCompleted);
-  const accountType = useSoc((s) => s.accountType);
-  const accountName = useSoc((s) => s.accountName);
+  const user = useAuthUser();
 
-  // Returning users who somehow land back here (bookmark, back-button) skip straight through.
-  useEffect(() => {
-    if (onboardingCompleted) navigate({ to: "/app" });
-  }, [onboardingCompleted, navigate]);
-
+  // Only signup.tsx ever links here, right after a fresh signup — nothing else in the app
+  // navigates to /welcome, so there's no "returning user" case to guard against beyond someone
+  // hitting back/bookmark within that same signed-in session, which just re-shows this screen
+  // (harmless) rather than needing a persisted, easy-to-get-wrong-across-accounts flag.
   const enter = () => {
-    completeOnboarding();
     navigate({ to: "/app" });
   };
 
@@ -92,7 +86,7 @@ function WelcomePage() {
               className="mt-5 text-center text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] text-white md:text-[38px]"
               style={displayFont}
             >
-              Welcome to ThreatLens{accountType === "organization" ? `, ${accountName}` : ""}
+              Welcome to ThreatLens{user ? `, ${user.displayName}` : ""}
             </h1>
           </Reveal>
           <Reveal delay={130}>

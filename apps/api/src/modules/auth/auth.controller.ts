@@ -98,6 +98,12 @@ export class AuthController {
     );
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getMe(user.id);
+  }
+
   @Get('mfa/status')
   @UseGuards(JwtAuthGuard)
   async mfaStatus(@CurrentUser() user: AuthenticatedUser) {

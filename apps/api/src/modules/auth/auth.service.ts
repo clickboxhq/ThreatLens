@@ -489,6 +489,22 @@ export class AuthService {
     });
   }
 
+  // The JWT only ever carries id/role (§15.1) — this is the one place a Student's own email,
+  // display name, and verification status can be read back, since nothing else issues them
+  // after signup/login.
+  async getMe(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      emailVerified: user.emailVerifiedAt !== null,
+      createdAt: user.createdAt,
+    };
+  }
+
   async mfaStatus(
     userId: string,
   ): Promise<{ enabled: boolean; mandatory: boolean }> {

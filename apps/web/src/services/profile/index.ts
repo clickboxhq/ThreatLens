@@ -1,5 +1,5 @@
+import { apiProfileService } from "./api-profile-service";
 import type { ProfileService } from "./profile-service";
-import { mockProfileService } from "./mock-profile-service";
 
-export const profileService: ProfileService = mockProfileService;
+export const profileService: ProfileService = apiProfileService;
 export type { ProfileService } from "./profile-service";

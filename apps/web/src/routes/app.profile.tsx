@@ -50,6 +50,11 @@ function ProfilePage() {
 
         <Panel className="lg:col-span-2" title="Skills mastery" padded={false}>
           <div className="p-4">
+            {skillMastery.length === 0 && (
+              <p className="py-2 text-[12px] text-muted-foreground">
+                Complete and score an investigation in each category to see your mastery here.
+              </p>
+            )}
             {skillMastery.map((s) => (
               <div key={s.label} className="mb-3">
                 <div className="flex items-center justify-between text-[12px]">
@@ -69,6 +74,11 @@ function ProfilePage() {
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Certificates
             </div>
+            {certificates.length === 0 && (
+              <p className="py-1 text-[12px] text-muted-foreground">
+                Complete a learning path to earn your first certificate.
+              </p>
+            )}
             {certificates.map((c) => (
               <div key={c.id} className="flex items-center gap-2 py-1 text-[12.5px]">
                 <Award className="size-3.5 text-[color:var(--info)]" />
