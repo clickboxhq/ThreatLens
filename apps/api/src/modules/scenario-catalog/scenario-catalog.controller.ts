@@ -20,7 +20,7 @@ export class ScenarioCatalogController {
       orderBy: { title: 'asc' },
       include: {
         currentVersion: {
-          include: { scenarioTechniques: { include: { mitreTechnique: true } } },
+          include: { techniques: { include: { mitreTechnique: true } } },
         },
       },
     });
@@ -35,7 +35,7 @@ export class ScenarioCatalogController {
       // The MITRE techniques this scenario's kill chain actually exercises — lets the
       // frontend recommend scenarios by weak tactic without a second round-trip per scenario.
       techniqueIds:
-        s.currentVersion?.scenarioTechniques.map(
+        s.currentVersion?.techniques.map(
           (st) => st.mitreTechnique.techniqueId,
         ) ?? [],
     }));
@@ -47,7 +47,7 @@ export class ScenarioCatalogController {
       where: { slug },
       include: {
         currentVersion: {
-          include: { scenarioTechniques: { include: { mitreTechnique: true } } },
+          include: { techniques: { include: { mitreTechnique: true } } },
         },
       },
     });
@@ -63,7 +63,7 @@ export class ScenarioCatalogController {
       difficulty: scenario.difficulty,
       estimatedMinutes: scenario.estimatedMinutes,
       techniqueIds:
-        scenario.currentVersion?.scenarioTechniques.map(
+        scenario.currentVersion?.techniques.map(
           (st) => st.mitreTechnique.techniqueId,
         ) ?? [],
     };
