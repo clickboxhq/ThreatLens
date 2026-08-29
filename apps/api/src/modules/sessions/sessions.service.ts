@@ -219,6 +219,20 @@ export class SessionsService {
       );
     }
 
+    // Scoring reads each incident's verdict and its tagged techniques, both of which are only
+    // written when the incident is closed — so submitting with one still open scores it at
+    // effectively zero, irreversibly, and only an instructor can reopen it. The case workspace
+    // always closes before it submits, but nothing in the API enforced that, leaving a
+    // scripted or retried call able to burn an attempt with no way back.
+    const openIncidents = incidents.filter((i) => i.status !== 'closed');
+    if (openIncidents.length > 0) {
+      throw new AppException(
+        409,
+        'INCIDENT_NOT_CLOSED',
+        'Close every incident with a verdict before submitting this session for scoring.',
+      );
+    }
+
     await this.prisma.investigationSession.update({
       where: { id: sessionId },
       data: { status: 'submitted', submittedAt: new Date() },

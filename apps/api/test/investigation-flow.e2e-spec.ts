@@ -178,6 +178,26 @@ describe('Investigation flow (e2e)', () => {
       .expect(201);
   });
 
+  // Scoring reads verdicts and tagged techniques off closed incidents, so submitting with one
+  // still open scores it at effectively zero and locks the session — recoverable only by an
+  // instructor. The workspace always closes first, but nothing stopped a scripted or retried
+  // call from burning an attempt this way.
+  it('refuses to submit a session while an incident is still open', async () => {
+    const res = await http
+      .post(`/api/v1/sessions/${sessionId}/submit`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ incidentIds: [incidentId] })
+      .expect(409);
+    expect(res.body.error.code).toBe('INCIDENT_NOT_CLOSED');
+
+    // And the session is still active afterwards — a rejected submit must not consume it.
+    const session = await http
+      .get(`/api/v1/sessions/${sessionId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(session.body.status).toBe('active');
+  });
+
   it('closes the incident, then rejects further mutation — §2.3 immutability, enforced against a real DB', async () => {
     const techniques = await http
       .get('/api/v1/mitre-techniques')

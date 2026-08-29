@@ -11,6 +11,7 @@ import {
   toStudentNetworkEventDto,
   toStudentProcessEventDto,
 } from '../../common/dto/device.dto';
+import { deriveRiskByEntityId } from '../session-core/entity-risk';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { DeviceRiskLevel } from '@prisma/client';
 
@@ -34,10 +35,30 @@ export class DevicePortalService {
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     const devices = await this.prisma.device.findMany({
-      where: { sessionId, riskLevel: filters.riskLevel },
+      where: { sessionId },
       orderBy: { hostname: 'asc' },
     });
-    return devices.map(toStudentDeviceDto);
+
+    // riskLevel is derived from open alerts rather than read off the row (see entity-risk.ts —
+    // the stored column is always 'none'), so the filter has to be applied here too rather
+    // than pushed into the query.
+    const risk = await this.riskByDeviceId(sessionId);
+    const withRisk = devices.map((device) => ({
+      ...toStudentDeviceDto(device),
+      riskLevel: risk.get(device.id) ?? 'none',
+    }));
+
+    return filters.riskLevel
+      ? withRisk.filter((d) => d.riskLevel === filters.riskLevel)
+      : withRisk;
+  }
+
+  private async riskByDeviceId(sessionId: string) {
+    const alerts = await this.prisma.alert.findMany({
+      where: { sessionId, primaryEntityType: 'device' },
+      select: { primaryEntityId: true, severity: true, status: true },
+    });
+    return deriveRiskByEntityId(alerts);
   }
 
   async getProfile(
@@ -56,7 +77,12 @@ export class DevicePortalService {
       targetId: deviceId,
     });
 
-    return toStudentDeviceDto(device);
+    // Same derivation as list(), so the drawer and the table never disagree about a host.
+    const risk = await this.riskByDeviceId(sessionId);
+    return {
+      ...toStudentDeviceDto(device),
+      riskLevel: risk.get(deviceId) ?? 'none',
+    };
   }
 
   async getProcessTree(

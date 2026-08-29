@@ -10,6 +10,7 @@ import {
   distanceBetweenCitiesKm,
   impliedTravelSpeedKmh,
 } from '../../common/geo';
+import { deriveRiskByEntityId } from '../session-core/entity-risk';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   IdentityRiskLevel,
@@ -39,13 +40,31 @@ export class IdentityPortalService {
     const identities = await this.prisma.identity.findMany({
       where: {
         sessionId,
-        riskLevel: filters.riskLevel,
         department: filters.department,
         mfaStatus: filters.mfaStatus,
       },
       orderBy: { displayName: 'asc' },
     });
-    return identities.map(toStudentIdentityDto);
+
+    // riskLevel comes from open alerts, not the stored column (always 'none' — see
+    // entity-risk.ts), so its filter is applied here rather than in the query.
+    const risk = await this.riskByEntity(sessionId, 'identity');
+    const withRisk = identities.map((identity) => ({
+      ...toStudentIdentityDto(identity),
+      riskLevel: risk.get(identity.id) ?? 'none',
+    }));
+
+    return filters.riskLevel
+      ? withRisk.filter((i) => i.riskLevel === filters.riskLevel)
+      : withRisk;
+  }
+
+  private async riskByEntity(sessionId: string, type: 'identity' | 'device') {
+    const alerts = await this.prisma.alert.findMany({
+      where: { sessionId, primaryEntityType: type },
+      select: { primaryEntityId: true, severity: true, status: true },
+    });
+    return deriveRiskByEntityId(alerts);
   }
 
   async getProfile(
@@ -72,13 +91,21 @@ export class IdentityPortalService {
       where: { sessionId, primaryIdentityId: identityId },
     });
 
+    // The identity's own risk and its devices' risk come from different alert sets — a user
+    // can be quiet while their workstation is the one alerting, and the profile should say so.
+    const [identityRisk, deviceRisk] = await Promise.all([
+      this.riskByEntity(sessionId, 'identity'),
+      this.riskByEntity(sessionId, 'device'),
+    ]);
+
     return {
       ...toStudentIdentityDto(identity),
+      riskLevel: identityRisk.get(identityId) ?? 'none',
       devices: devices.map((d) => ({
         id: d.id,
         hostname: d.hostname,
         osPlatform: d.osPlatform,
-        riskLevel: d.riskLevel,
+        riskLevel: deviceRisk.get(d.id) ?? 'none',
       })),
     };
   }
