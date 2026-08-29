@@ -33,6 +33,18 @@ export interface SkillRadarEntryDto {
   percent: number;
 }
 
+/** GET /sessions/technique-mastery — the same required-vs-tagged rollup as SkillRadarEntryDto,
+ * per individual MITRE technique instead of per tactic. Backs the MITRE ATT&CK Explorer. */
+export interface TechniqueMasteryEntryDto {
+  techniqueId: string;
+  name: string;
+  tactic: string;
+  tacticName: string;
+  requiredCount: number;
+  hitCount: number;
+  percent: number;
+}
+
 export type AlertSeverity = "informational" | "low" | "medium" | "high" | "critical";
 export type AlertStatus = "new" | "in_progress" | "resolved" | "dismissed";
 export type AlertEntityType = "identity" | "device" | "mailbox";

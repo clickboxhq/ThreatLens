@@ -29,7 +29,7 @@ function tone(v: number) {
 }
 
 function MitreExplorer() {
-  const { mastery: mitreMastery, techniques: mitreTechniques } = useMitreExplorer();
+  const { mastery: mitreMastery, techniques: mitreTechniques, state } = useMitreExplorer();
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
       <SectionHeader
@@ -37,69 +37,82 @@ function MitreExplorer() {
         description="Technique-level mastery across the enterprise matrix, derived from your graded investigations."
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {mitreMastery.map((t) => (
-          <Panel key={t.tactic} className="p-0">
-            <div className="p-3">
-              <div className="text-[11px] font-medium text-secondary">{t.tactic}</div>
-              <div
-                className="mt-2 text-xl font-semibold tabular-nums"
-                style={{ color: tone(t.mastery) }}
-              >
-                {t.mastery}%
-              </div>
-              <div className="mt-1 text-[10.5px] text-muted-foreground tabular-nums">
-                {t.practiced} of {t.total} techniques
-              </div>
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-background">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${t.mastery}%`, background: tone(t.mastery) }}
-                />
-              </div>
+      {state === "empty" ? (
+        <Panel className="mt-6">
+          <div className="py-12 text-center">
+            <p className="text-[13px] font-medium">No graded investigations yet</p>
+            <p className="mx-auto mt-1 max-w-md text-[12px] text-secondary">
+              Complete and submit a scenario to see your ATT&CK tactic and technique mastery here.
+            </p>
+          </div>
+        </Panel>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {mitreMastery.map((t) => (
+              <Panel key={t.tactic} className="p-0">
+                <div className="p-3">
+                  <div className="text-[11px] font-medium text-secondary">{t.tactic}</div>
+                  <div
+                    className="mt-2 text-xl font-semibold tabular-nums"
+                    style={{ color: tone(t.mastery) }}
+                  >
+                    {t.mastery}%
+                  </div>
+                  <div className="mt-1 text-[10.5px] text-muted-foreground tabular-nums">
+                    {t.practiced} of {t.total} techniques
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-background">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${t.mastery}%`, background: tone(t.mastery) }}
+                    />
+                  </div>
+                </div>
+              </Panel>
+            ))}
+          </div>
+
+          <Panel className="mt-6" title="Techniques practiced" padded={false}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[12.5px]">
+                <thead>
+                  <tr className="border-b border-border text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2.5 font-medium">Technique</th>
+                    <th className="px-4 py-2.5 font-medium">Name</th>
+                    <th className="px-4 py-2.5 font-medium">Tactic</th>
+                    <th className="px-4 py-2.5 font-medium">Investigations</th>
+                    <th className="px-4 py-2.5 font-medium">Mastery</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {mitreTechniques.map((t) => (
+                    <tr key={t.id} className="transition-colors hover:bg-background/40">
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[color:var(--info)]">
+                        {t.id}
+                      </td>
+                      <td className="px-4 py-2.5 font-medium">{t.name}</td>
+                      <td className="px-4 py-2.5 text-secondary">{t.tactic}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{t.practicedCount}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1 w-24 overflow-hidden rounded-full bg-background">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${t.mastery}%`, background: tone(t.mastery) }}
+                            />
+                          </div>
+                          <span className="tabular-nums text-muted-foreground">{t.mastery}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </Panel>
-        ))}
-      </div>
-
-      <Panel className="mt-6" title="Techniques practiced" padded={false}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[12.5px]">
-            <thead>
-              <tr className="border-b border-border text-[10.5px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium">Technique</th>
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Tactic</th>
-                <th className="px-4 py-2.5 font-medium">Investigations</th>
-                <th className="px-4 py-2.5 font-medium">Mastery</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {mitreTechniques.map((t) => (
-                <tr key={t.id} className="transition-colors hover:bg-background/40">
-                  <td className="px-4 py-2.5 font-mono text-[11px] text-[color:var(--info)]">
-                    {t.id}
-                  </td>
-                  <td className="px-4 py-2.5 font-medium">{t.name}</td>
-                  <td className="px-4 py-2.5 text-secondary">{t.tactic}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{t.practicedCount}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1 w-24 overflow-hidden rounded-full bg-background">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${t.mastery}%`, background: tone(t.mastery) }}
-                        />
-                      </div>
-                      <span className="tabular-nums text-muted-foreground">{t.mastery}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+        </>
+      )}
     </div>
   );
 }

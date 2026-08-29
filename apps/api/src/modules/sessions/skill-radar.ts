@@ -21,7 +21,7 @@ export interface SkillRadarEntry {
 // The standard MITRE ATT&CK Enterprise tactic set — kept complete (not trimmed to only the
 // tactics this scenario library currently uses) so a newly-authored scenario touching a
 // not-yet-seen tactic doesn't need a matching update here.
-const TACTIC_NAMES: Record<string, string> = {
+export const TACTIC_NAMES: Record<string, string> = {
   TA0043: 'Reconnaissance',
   TA0042: 'Resource Development',
   TA0001: 'Initial Access',
@@ -84,4 +84,65 @@ export function computeSkillRadar(
       };
     },
   );
+}
+
+export interface TechniqueMasteryEntry {
+  techniqueId: string;
+  name: string;
+  tactic: string;
+  tacticName: string;
+  requiredCount: number;
+  hitCount: number;
+  percent: number;
+}
+
+/**
+ * Same required-vs-tagged aggregation as computeSkillRadar, rolled up per individual
+ * technique instead of per tactic — backs the MITRE ATT&CK Explorer's technique table.
+ * A technique never required by any scored session is omitted entirely, same rationale as
+ * computeSkillRadar's per-tactic omission.
+ */
+export function computeTechniqueMastery(
+  sessions: SessionTechniqueOutcome[],
+  techniqueMetaById: Map<string, { name: string; tactic: string }>,
+): TechniqueMasteryEntry[] {
+  const requiredCountByTechnique = new Map<string, number>();
+  const hitCountByTechnique = new Map<string, number>();
+
+  for (const session of sessions) {
+    const taggedSet = new Set(session.taggedTechniqueIds);
+    for (const techniqueId of session.requiredTechniqueIds) {
+      requiredCountByTechnique.set(
+        techniqueId,
+        (requiredCountByTechnique.get(techniqueId) ?? 0) + 1,
+      );
+      if (taggedSet.has(techniqueId)) {
+        hitCountByTechnique.set(
+          techniqueId,
+          (hitCountByTechnique.get(techniqueId) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  return [...requiredCountByTechnique.keys()]
+    .map((techniqueId) => {
+      const meta = techniqueMetaById.get(techniqueId);
+      const requiredCount = requiredCountByTechnique.get(techniqueId)!;
+      const hitCount = hitCountByTechnique.get(techniqueId) ?? 0;
+      return {
+        techniqueId,
+        name: meta?.name ?? techniqueId,
+        tactic: meta?.tactic ?? '',
+        tacticName: TACTIC_NAMES[meta?.tactic ?? ''] ?? (meta?.tactic ?? ''),
+        requiredCount,
+        hitCount,
+        percent: Math.round((hitCount / requiredCount) * 1000) / 10,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.requiredCount - a.requiredCount ||
+        a.techniqueId.localeCompare(b.techniqueId),
+    );
 }

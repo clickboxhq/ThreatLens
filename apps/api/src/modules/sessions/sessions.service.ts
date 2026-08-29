@@ -10,7 +10,7 @@ import {
   TELEMETRY_GENERATION_QUEUE,
   SCORING_QUEUE,
 } from '../../common/queue/queue.module';
-import { computeSkillRadar } from './skill-radar';
+import { computeSkillRadar, computeTechniqueMastery } from './skill-radar';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { TelemetryGenerationJobData } from '../telemetry-generator/telemetry-generator.processor';
 import type { ScoringJobData } from '../scoring/scoring.types';
@@ -131,6 +131,29 @@ export class SessionsService {
   // computation (rubric JSON + closed-incident IncidentTechnique rows) rather than reading
   // back through Score.rubricBreakdown, since that field never captured a tactic or a hit list.
   async getSkillRadar(user: AuthenticatedUser) {
+    const { outcomes, allTechniques } =
+      await this.loadTechniqueOutcomes(user);
+    const tacticByTechniqueId = new Map(
+      allTechniques.map((t) => [t.techniqueId, t.tactic]),
+    );
+    return computeSkillRadar(outcomes, tacticByTechniqueId);
+  }
+
+  // Same required-vs-tagged aggregation as getSkillRadar, but rolled up per individual
+  // technique rather than per tactic — backs the MITRE ATT&CK Explorer's technique table.
+  async getTechniqueMastery(user: AuthenticatedUser) {
+    const { outcomes, allTechniques } =
+      await this.loadTechniqueOutcomes(user);
+    const metaByTechniqueId = new Map(
+      allTechniques.map((t) => [t.techniqueId, t]),
+    );
+    return computeTechniqueMastery(outcomes, metaByTechniqueId);
+  }
+
+  private async loadTechniqueOutcomes(user: AuthenticatedUser): Promise<{
+    outcomes: SessionTechniqueOutcome[];
+    allTechniques: { techniqueId: string; name: string; tactic: string }[];
+  }> {
     const scoredSessions = await this.prisma.investigationSession.findMany({
       where: { userId: user.id, status: 'scored' },
       include: { scenarioVersion: true },
@@ -167,13 +190,10 @@ export class SessionsService {
     );
 
     const allTechniques = await this.prisma.mitreTechnique.findMany({
-      select: { techniqueId: true, tactic: true },
+      select: { techniqueId: true, name: true, tactic: true },
     });
-    const tacticByTechniqueId = new Map(
-      allTechniques.map((t) => [t.techniqueId, t.tactic]),
-    );
 
-    return computeSkillRadar(outcomes, tacticByTechniqueId);
+    return { outcomes, allTechniques };
   }
 
   async submitSession(

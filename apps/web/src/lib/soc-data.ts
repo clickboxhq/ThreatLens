@@ -395,27 +395,3 @@ export const scenarios = [
     level: "Tier 1+",
   },
 ];
-
-/* ------------------------------------------------------------------ *
- * Training-focused datasets (learner performance, not SOC operations)
- * ------------------------------------------------------------------ */
-
-// trainingKpis, investigationPerformance, recentInvestigations, and assignedScenarios used to
-// live here backing the dashboard's mock service — that service is gone (see
-// use-dashboard-performance.ts, which now derives everything from real sessions/cohorts/
-// scenario-catalog/skill-radar data). mitreMastery is still used by mock-mitre-explorer-service
-// (the MITRE Explorer page itself remains mocked — a separate, not-yet-scoped fix).
-
-export const mitreMastery = [
-  { tactic: "Initial Access", mastery: 82, practiced: 9, total: 11 },
-  { tactic: "Execution", mastery: 88, practiced: 11, total: 13 },
-  { tactic: "Persistence", mastery: 64, practiced: 12, total: 19 },
-  { tactic: "Privilege Escalation", mastery: 71, practiced: 9, total: 13 },
-  { tactic: "Defense Evasion", mastery: 66, practiced: 27, total: 42 },
-  { tactic: "Credential Access", mastery: 91, practiced: 15, total: 17 },
-  { tactic: "Discovery", mastery: 74, practiced: 22, total: 31 },
-  { tactic: "Lateral Movement", mastery: 68, practiced: 6, total: 9 },
-  { tactic: "Collection", mastery: 59, practiced: 10, total: 17 },
-  { tactic: "Exfiltration", mastery: 63, practiced: 6, total: 9 },
-  { tactic: "Impact", mastery: 72, practiced: 10, total: 14 },
-];

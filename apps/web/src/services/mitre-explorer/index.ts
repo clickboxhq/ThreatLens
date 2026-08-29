@@ -1,5 +1,5 @@
+import { apiMitreExplorerService } from "./api-mitre-explorer-service";
 import type { MitreExplorerService } from "./mitre-explorer-service";
-import { mockMitreExplorerService } from "./mock-mitre-explorer-service";
 
-export const mitreExplorerService: MitreExplorerService = mockMitreExplorerService;
+export const mitreExplorerService: MitreExplorerService = apiMitreExplorerService;
 export type { MitreExplorerService } from "./mitre-explorer-service";

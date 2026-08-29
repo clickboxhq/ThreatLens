@@ -64,6 +64,12 @@ export class SessionsController {
     return this.sessionsService.getSkillRadar(user);
   }
 
+  // Same route-ordering note as 'skill-radar' above — must be declared before @Get(':id').
+  @Get('technique-mastery')
+  async getTechniqueMastery(@CurrentUser() user: AuthenticatedUser) {
+    return this.sessionsService.getTechniqueMastery(user);
+  }
+
   @Get(':id')
   async get(
     @CurrentUser() user: AuthenticatedUser,
