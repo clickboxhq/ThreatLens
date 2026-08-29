@@ -38,7 +38,7 @@ export type LoginResult =
     })
   | { mfaRequired: true; mfaChallengeId: string };
 
-const MFA_ISSUER = 'SOCVerse';
+const MFA_ISSUER = 'ThreatLens';
 const RECOVERY_CODE_COUNT = 10;
 // §15.2: mandatory MFA for the two privileged roles, given their access breadth.
 const MFA_MANDATORY_ROLES = new Set(['org_admin', 'platform_admin']);
@@ -123,8 +123,15 @@ export class AuthService {
     const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email/${token}`;
     await this.emailService.send({
       to: email,
-      subject: 'Verify your SOCVerse email address',
-      html: `<p>Welcome to SOCVerse — confirm your email address to unlock scored scenarios.</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+      subject: 'Verify your ThreatLens email address',
+      html: [
+        '<p>Welcome to ThreatLens.</p>',
+        '<p>Confirm your email address to unlock scored investigations:</p>',
+        `<p><a href="${verifyUrl}">Verify my email address</a></p>`,
+        '<p>This link expires in 24 hours.</p>',
+        '<p>— The ThreatLens team</p>',
+        `<p style="color:#888;font-size:12px">If the link above doesn't work, paste this into your browser:<br>${verifyUrl}</p>`,
+      ].join(''),
     });
   }
 
@@ -533,8 +540,20 @@ export class AuthService {
     const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password/${token}`;
     await this.emailService.send({
       to: user.email,
-      subject: 'Reset your SOCVerse password',
-      html: `<p>Someone requested a password reset for this SOCVerse account.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If this wasn't you, you can safely ignore this email — your password won't change unless you open the link above and set a new one.</p>`,
+      subject: 'Reset your ThreatLens password',
+      html: [
+        '<p>Hi,</p>',
+        '<p>We received a request to reset the password for your ThreatLens account. Choose a new password using the link below:</p>',
+        `<p><a href="${resetUrl}">Reset my password</a></p>`,
+        '<p>This link can only be used once, and expires in 1 hour.</p>',
+        // Named explicitly because this reset is also the recovery path for a lost
+        // authenticator (see confirmPasswordReset) — someone locked out of 2FA needs to know
+        // this link is what clears it, not just that it changes their password.
+        '<p>If two-factor authentication is switched on for your account, completing this reset will also turn it off, so you can sign in again if you have lost your authenticator app.</p>',
+        "<p>If you didn't request this, you can safely ignore this email — nothing changes unless you open the link and set a new password.</p>",
+        '<p>— The ThreatLens team</p>',
+        `<p style="color:#888;font-size:12px">If the link above doesn't work, paste this into your browser:<br>${resetUrl}</p>`,
+      ].join(''),
     });
   }
 

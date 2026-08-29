@@ -2,6 +2,8 @@
 // walking-skeleton scenario needs; breadth-phase work expands this into a real content-team
 // -maintained library rather than inline constants.
 
+import type { Prisma } from '@prisma/client';
+
 export const FIRST_NAMES = [
   'Alex',
   'Jordan',
@@ -88,6 +90,60 @@ export const EXEC_LOOKALIKE_DOMAIN = 'contoso-finance-exec.example.net';
 export const EXEC_NAME = 'Morgan Reyes';
 export const EXEC_TITLE = 'Chief Financial Officer';
 export const PERSONAL_EMAIL_DOMAIN_FOR_GENERATION = 'gmail.com';
+
+/**
+ * Builds a realistic RFC-5322-shaped header set for a generated message, so the Email
+ * Investigation portal can offer genuine header analysis rather than a two-field summary.
+ *
+ * Everything here is derived from the message's own facts (sender, recipients, timestamps,
+ * routing, auth results) — no ground-truth flag is encoded. The signals an analyst reads out
+ * of these headers (a Reply-To pointing somewhere other than From, a Return-Path that doesn't
+ * match the sending domain, an origin hop on an unfamiliar host) are exactly the ones that
+ * distinguish a spoofed message from a legitimate one, and they have to be *derivable* rather
+ * than labelled for the exercise to be worth anything.
+ */
+export function buildEmailHeaders(input: {
+  messageId: string;
+  senderDisplayName: string;
+  senderAddress: string;
+  recipientAddresses: string[];
+  subject: string;
+  occurredAt: Date;
+  /** Ordered origin → edge; rendered as separate Received hops, most recent first. */
+  receivedChain: string[];
+  authenticationResults: string;
+  /** Present when the attacker wants replies to land somewhere other than the spoofed From. */
+  replyTo?: string;
+  /** The envelope sender — differs from From on most spoofed mail. */
+  returnPath?: string;
+  originatingIp?: string;
+  // Returns Prisma's own JSON input type rather than Record<string, unknown> — this value is
+  // written straight into EmailMessage.headersRaw (a Json column), and the looser type isn't
+  // assignable to it.
+}): Prisma.InputJsonValue {
+  const date = input.occurredAt.toUTCString();
+  const hops = [...input.receivedChain].reverse();
+
+  return {
+    'Return-Path': `<${input.returnPath ?? input.senderAddress}>`,
+    Received: hops.map(
+      (host, i) =>
+        `from ${host} by ${hops[i + 1] ?? 'mx.corp.internal'} with ESMTPS; ${date}`,
+    ),
+    'Message-ID': input.messageId,
+    Date: date,
+    From: `"${input.senderDisplayName}" <${input.senderAddress}>`,
+    ...(input.replyTo ? { 'Reply-To': `<${input.replyTo}>` } : {}),
+    To: input.recipientAddresses.join(', '),
+    Subject: input.subject,
+    'Authentication-Results': input.authenticationResults,
+    ...(input.originatingIp
+      ? { 'X-Originating-IP': `[${input.originatingIp}]` }
+      : {}),
+    'MIME-Version': '1.0',
+    'Content-Type': 'text/html; charset=UTF-8',
+  };
+}
 export const SENSITIVE_ATTACHMENT_FILENAMES = [
   'Q3_Customer_Contracts_Export.xlsx',
   'Employee_Compensation_Bands_2026.xlsx',

@@ -4,10 +4,20 @@ import {
   useSimilarEmails,
   useEmailLinkActivity,
 } from "@/hooks/use-email-investigations";
-import { Loader2, MousePointerClick, Paperclip, Users, X, Link as LinkIcon } from "lucide-react";
+import {
+  Loader2,
+  MousePointerClick,
+  Paperclip,
+  Pin,
+  PinOff,
+  Users,
+  X,
+  Link as LinkIcon,
+} from "lucide-react";
+import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
 import type { EmailMessageDto } from "@/types/socverse-operations";
 
-type Tab = "message" | "recipients" | "links";
+type Tab = "message" | "headers" | "recipients" | "links";
 
 const AUTH_TONE: Record<string, string> = {
   pass: "text-[color:var(--success)]",
@@ -34,12 +44,17 @@ export function EmailDetailDrawer({
   emailId,
   onClose,
   onPin,
+  onUnpin,
+  isPinned,
   locked,
 }: {
   sessionId: string;
   emailId: string;
   onClose: () => void;
   onPin?: (input: { eventTable: string; eventId: string; justification: string }) => void;
+  onUnpin?: () => void;
+  /** Whether this message is already pinned as evidence on the open incident. */
+  isPinned?: boolean;
   locked?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("message");
@@ -79,6 +94,7 @@ export function EmailDetailDrawer({
               {(
                 [
                   ["message", "Message"],
+                  ["headers", "Headers"],
                   ["recipients", "Who else received it"],
                   ["links", "Link activity"],
                 ] as const
@@ -99,25 +115,43 @@ export function EmailDetailDrawer({
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {tab === "message" && <MessageTab email={email} />}
+              {tab === "headers" && <EmailHeaderAnalysis email={email} />}
               {tab === "recipients" && <RecipientsTab sessionId={sessionId} emailId={emailId} />}
               {tab === "links" && <LinksTab sessionId={sessionId} emailId={emailId} />}
             </div>
 
             {onPin && (
-              <div className="border-t border-border px-5 py-3">
-                <button
-                  disabled={locked}
-                  onClick={() =>
-                    onPin({
-                      eventTable: "email_messages",
-                      eventId: email.id,
-                      justification: `Email from ${email.senderAddress}: "${email.subject}"`,
-                    })
-                  }
-                  className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
-                >
-                  Pin this email as evidence
-                </button>
+              <div className="flex items-center gap-3 border-t border-border px-5 py-3">
+                {isPinned ? (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--success)]">
+                      <Pin className="size-3.5" /> Pinned as evidence
+                    </span>
+                    {onUnpin && (
+                      <button
+                        disabled={locked}
+                        onClick={onUnpin}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-[12px] text-secondary hover:text-foreground disabled:opacity-50"
+                      >
+                        <PinOff className="size-3.5" /> Unpin
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    disabled={locked}
+                    onClick={() =>
+                      onPin({
+                        eventTable: "email_messages",
+                        eventId: email.id,
+                        justification: `Email from ${email.senderAddress}: "${email.subject}"`,
+                      })
+                    }
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                  >
+                    <Pin className="size-3.5" /> Pin this email as evidence
+                  </button>
+                )}
               </div>
             )}
           </>

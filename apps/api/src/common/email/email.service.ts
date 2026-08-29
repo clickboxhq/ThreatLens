@@ -28,7 +28,7 @@ export class EmailService {
 
     const from =
       this.config.get<string>('EMAIL_FROM') ??
-      'SOCVerse <onboarding@resend.dev>';
+      'ThreatLens <onboarding@resend.dev>';
 
     // A transient provider outage or bad key shouldn't fail the caller's own operation
     // (account creation, a reset request) — both have their own resend/retry path, and

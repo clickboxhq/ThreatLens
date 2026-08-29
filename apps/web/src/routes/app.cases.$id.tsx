@@ -392,7 +392,14 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                 const isPinned = pinnedIds.has(key);
                 const onTimeline = timelineIds.has(key);
                 return (
-                  <li key={key} className="px-4 py-3">
+                  <li
+                    key={key}
+                    className={`px-4 py-3 ${
+                      isPinned
+                        ? "border-l-2 border-[color:var(--success)] bg-[color:var(--success)]/[0.04]"
+                        : ""
+                    }`}
+                  >
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -400,6 +407,16 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                             {labelForResult(r.entityType, r.data)}
                           </span>
                           <SeverityBadge level={severityForEntity(r.entityType)} />
+                          {isPinned && (
+                            <span className="inline-flex items-center gap-1 rounded border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--success)]">
+                              <Pin className="size-2.5" /> Evidence
+                            </span>
+                          )}
+                          {onTimeline && (
+                            <span className="inline-flex items-center gap-1 rounded border border-[color:var(--info)]/40 bg-[color:var(--info)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--info)]">
+                              <ListTree className="size-2.5" /> On timeline
+                            </span>
+                          )}
                         </div>
                         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
                           {detailForResult(r.entityType, r.data)}
@@ -428,16 +445,25 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                           disabled={locked}
                           onClick={() =>
                             isPinned
-                              ? undefined
+                              ? (() => {
+                                  // Pinning is a toggle, not a one-way action — an analyst
+                                  // narrowing down a case needs to drop evidence they pinned
+                                  // during triage, and evidence precision is scored.
+                                  const existing = evidence.find(
+                                    (e) => e.eventTable === eventTable && e.eventId === eventId,
+                                  );
+                                  if (existing) removeEvidence(existing.id);
+                                })()
                               : pinEvidence({
                                   eventTable,
                                   eventId,
                                   justification: "Pinned during triage",
                                 })
                           }
+                          title={isPinned ? "Remove from evidence" : "Pin as evidence"}
                           className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] disabled:opacity-40 ${
                             isPinned
-                              ? "border-[color:var(--info)]/50 bg-[color:var(--info)]/10 text-[color:var(--info)]"
+                              ? "border-[color:var(--success)]/50 bg-[color:var(--success)]/10 text-[color:var(--success)] hover:border-[color:var(--critical)]/50 hover:text-[color:var(--critical)]"
                               : "border-border bg-background text-secondary hover:text-foreground"
                           }`}
                         >
@@ -814,6 +840,13 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           emailId={openEmailId}
           onClose={() => setOpenEmailId(null)}
           onPin={(input) => pinEvidence(input)}
+          isPinned={pinnedIds.has(`email_messages:${openEmailId}`)}
+          onUnpin={() => {
+            const pinned = evidence.find(
+              (e) => e.eventTable === "email_messages" && e.eventId === openEmailId,
+            );
+            if (pinned) removeEvidence(pinned.id);
+          }}
           locked={locked}
         />
       )}

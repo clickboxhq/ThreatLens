@@ -36,6 +36,7 @@ import {
   OAUTH_PHISHING_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
+  buildEmailHeaders,
   RANSOM_NOTE_FILENAME,
   RANSOMWARE_EXFIL_IP,
   REMOVABLE_MEDIA_DRIVE,
@@ -400,12 +401,13 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
   switch (templateId) {
     case 'phishing_email_invoice_lookalike_login_v1': {
       const emailId = randomUUID();
+      const phishMessageId = `<${randomUUID()}@${MALICIOUS_DOMAIN}>`;
       ctx.emailMessages.push({
         id: emailId,
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${MALICIOUS_DOMAIN}>`,
+        messageId: phishMessageId,
         direction: 'inbound',
         senderAddress: `billing@${MALICIOUS_DOMAIN}`,
         senderDisplayName: 'Accounts Payable Portal',
@@ -413,13 +415,20 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         subject: 'Action Required: Invoice #48213 Payment Verification',
         bodyHtml:
           '<p>Your recent invoice requires verification before payment can be processed. Please sign in to review and confirm.</p>',
-        headersRaw: {
-          'Received-Chain': [
+        headersRaw: buildEmailHeaders({
+          messageId: phishMessageId,
+          senderDisplayName: 'Accounts Payable Portal',
+          senderAddress: `billing@${MALICIOUS_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: 'Action Required: Invoice #48213 Payment Verification',
+          occurredAt: ctx.occurredAt,
+          receivedChain: [
             `mail.${MALICIOUS_DOMAIN}`,
             'edge-relay-03.example-mx.net',
           ],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${MALICIOUS_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+          authenticationResults: `spf=fail smtp.mailfrom=${MALICIOUS_DOMAIN}; dkim=none; dmarc=fail`,
+          returnPath: `bounce@${MALICIOUS_DOMAIN}`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
@@ -478,11 +487,12 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'benign_it_admin_email_v1': {
       const emailId = randomUUID();
+      const itNoticeMessageId = `<${randomUUID()}@${LOOKALIKE_INTERNAL_DOMAIN}>`;
       ctx.emailMessages.push({
         id: emailId,
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
-        messageId: `<${randomUUID()}@${LOOKALIKE_INTERNAL_DOMAIN}>`,
+        messageId: itNoticeMessageId,
         direction: 'inbound',
         senderAddress: `it-notifications@${LOOKALIKE_INTERNAL_DOMAIN}`,
         senderDisplayName: 'IT Notifications',
@@ -490,10 +500,16 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         subject: 'Scheduled Maintenance Window This Weekend',
         bodyHtml:
           '<p>Reminder: IT will perform scheduled maintenance on internal systems this weekend. No action needed.</p>',
-        headersRaw: {
-          'Received-Chain': [`mail.${LOOKALIKE_INTERNAL_DOMAIN}`],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${LOOKALIKE_INTERNAL_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+        headersRaw: buildEmailHeaders({
+          messageId: itNoticeMessageId,
+          senderDisplayName: 'IT Notifications',
+          senderAddress: `it-notifications@${LOOKALIKE_INTERNAL_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: 'Scheduled Maintenance Window This Weekend',
+          occurredAt: ctx.occurredAt,
+          receivedChain: [`mail.${LOOKALIKE_INTERNAL_DOMAIN}`],
+          authenticationResults: `spf=fail smtp.mailfrom=${LOOKALIKE_INTERNAL_DOMAIN}; dkim=none; dmarc=fail`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
@@ -559,25 +575,39 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'bec_wire_transfer_request_v1': {
+      const becMessageId = `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`;
+      const becSubject =
+        'URGENT: Confidential Wire Transfer — Approval Needed Today';
       ctx.emailMessages.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`,
+        messageId: becMessageId,
         direction: 'inbound',
         senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
         senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
         recipientAddresses: [ctx.identity.userPrincipalName as string],
-        subject: 'URGENT: Confidential Wire Transfer — Approval Needed Today',
+        subject: becSubject,
         bodyHtml: `<p>I need you to process a wire transfer to a new vendor today — this is time-sensitive and confidential, so please don't discuss it with anyone else on the team yet. I'm in meetings all day and won't be reachable by phone. Reply here with the transfer confirmation once it's done.</p>`,
-        headersRaw: {
-          'Received-Chain': [
+        headersRaw: buildEmailHeaders({
+          messageId: becMessageId,
+          senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
+          senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: becSubject,
+          occurredAt: ctx.occurredAt,
+          receivedChain: [
             `mail.${EXEC_LOOKALIKE_DOMAIN}`,
             'edge-relay-01.example-mx.net',
           ],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+          authenticationResults: `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
+          // The message asks the recipient to "reply here" while quietly routing replies to a
+          // different mailbox than the executive it impersonates — the defining BEC tell, and
+          // one the Student can only find by opening the headers.
+          replyTo: `m.reyes.finance@${EXEC_LOOKALIKE_DOMAIN}`,
+          returnPath: `bounce@${EXEC_LOOKALIKE_DOMAIN}`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
@@ -587,26 +617,36 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       break;
     }
     case 'bec_wire_transfer_followup_v1': {
+      const followupMessageId = `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`;
+      const followupSubject =
+        'Re: URGENT: Confidential Wire Transfer — Approval Needed Today';
       ctx.emailMessages.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${EXEC_LOOKALIKE_DOMAIN}>`,
+        messageId: followupMessageId,
         direction: 'inbound',
         senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
         senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
         recipientAddresses: [ctx.identity.userPrincipalName as string],
-        subject:
-          'Re: URGENT: Confidential Wire Transfer — Approval Needed Today',
+        subject: followupSubject,
         bodyHtml: `<p>Following up — I need this completed before end of day. Please confirm as soon as the transfer is sent.</p>`,
-        headersRaw: {
-          'Received-Chain': [
+        headersRaw: buildEmailHeaders({
+          messageId: followupMessageId,
+          senderDisplayName: `${EXEC_NAME} (${EXEC_TITLE})`,
+          senderAddress: `m.reyes@${EXEC_LOOKALIKE_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: followupSubject,
+          occurredAt: ctx.occurredAt,
+          receivedChain: [
             `mail.${EXEC_LOOKALIKE_DOMAIN}`,
             'edge-relay-01.example-mx.net',
           ],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+          authenticationResults: `spf=fail smtp.mailfrom=${EXEC_LOOKALIKE_DOMAIN}; dkim=none; dmarc=fail`,
+          replyTo: `m.reyes.finance@${EXEC_LOOKALIKE_DOMAIN}`,
+          returnPath: `bounce@${EXEC_LOOKALIKE_DOMAIN}`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
@@ -722,24 +762,33 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
           .replace(/\s+/g, '.') + ctx.rng.intBetween(10, 999);
       const personalAddress = `${personalLocalPart}@${PERSONAL_EMAIL_DOMAIN_FOR_GENERATION}`;
       const filename = ctx.rng.pick(SENSITIVE_ATTACHMENT_FILENAMES);
+      const insiderMessageId = `<${randomUUID()}@${ORG_DOMAIN}>`;
       ctx.emailMessages.push({
         id: emailId,
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${ORG_DOMAIN}>`,
+        messageId: insiderMessageId,
         direction: 'outbound',
         senderAddress: ctx.identity.userPrincipalName as string,
         senderDisplayName: ctx.identity.displayName as string,
         recipientAddresses: [personalAddress],
         subject: 'Backup copy',
         bodyHtml: '<p>Saving a copy of this for my records.</p>',
-        headersRaw: {
-          'Received-Chain': [`mail.${ORG_DOMAIN}`],
-          // Genuinely sent by the org's own mail system — not spoofed, unlike every other
-          // scenario's ground-truth email (§8.2's evaluateOutboundPersonalEmailRule note).
-          'Authentication-Results': `spf=pass smtp.mailfrom=${ORG_DOMAIN}; dkim=pass; dmarc=pass`,
-        },
+        // Genuinely sent by the org's own mail system — not spoofed, unlike every other
+        // scenario's ground-truth email (§8.2's evaluateOutboundPersonalEmailRule note). The
+        // headers here stay clean on purpose: the Student can't lean on an auth failure and
+        // has to reason about the destination and the attachment instead.
+        headersRaw: buildEmailHeaders({
+          messageId: insiderMessageId,
+          senderDisplayName: ctx.identity.displayName as string,
+          senderAddress: ctx.identity.userPrincipalName as string,
+          recipientAddresses: [personalAddress],
+          subject: 'Backup copy',
+          occurredAt: ctx.occurredAt,
+          receivedChain: [`mail.${ORG_DOMAIN}`],
+          authenticationResults: `spf=pass smtp.mailfrom=${ORG_DOMAIN}; dkim=pass; dmarc=pass`,
+        }),
         spfResult: 'pass',
         dkimResult: 'pass',
         dmarcResult: 'pass',
@@ -762,12 +811,13 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'malicious_attachment_email_v1': {
       const emailId = randomUUID();
+      const malwareMessageId = `<${randomUUID()}@${MALWARE_DELIVERY_DOMAIN}>`;
       ctx.emailMessages.push({
         id: emailId,
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${MALWARE_DELIVERY_DOMAIN}>`,
+        messageId: malwareMessageId,
         direction: 'inbound',
         senderAddress: `statements@${MALWARE_DELIVERY_DOMAIN}`,
         senderDisplayName: 'Billing Statements',
@@ -775,13 +825,20 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         subject: 'Your Monthly Statement is Ready',
         bodyHtml:
           '<p>Please find your statement attached. Open the document and click "Enable Content" to view the full report.</p>',
-        headersRaw: {
-          'Received-Chain': [
+        headersRaw: buildEmailHeaders({
+          messageId: malwareMessageId,
+          senderDisplayName: 'Billing Statements',
+          senderAddress: `statements@${MALWARE_DELIVERY_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: 'Your Monthly Statement is Ready',
+          occurredAt: ctx.occurredAt,
+          receivedChain: [
             `mail.${MALWARE_DELIVERY_DOMAIN}`,
             'edge-relay-02.example-mx.net',
           ],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${MALWARE_DELIVERY_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+          authenticationResults: `spf=fail smtp.mailfrom=${MALWARE_DELIVERY_DOMAIN}; dkim=none; dmarc=fail`,
+          returnPath: `bounce@${MALWARE_DELIVERY_DOMAIN}`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
@@ -1563,12 +1620,13 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
     }
     case 'oauth_consent_phishing_email_v1': {
       const emailId = randomUUID();
+      const oauthMessageId = `<${randomUUID()}@${OAUTH_PHISHING_DOMAIN}>`;
       ctx.emailMessages.push({
         id: emailId,
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
         correlationId: ctx.correlationId,
-        messageId: `<${randomUUID()}@${OAUTH_PHISHING_DOMAIN}>`,
+        messageId: oauthMessageId,
         direction: 'inbound',
         senderAddress: `no-reply@${OAUTH_PHISHING_DOMAIN}`,
         senderDisplayName: 'Microsoft 365 App Permissions',
@@ -1576,13 +1634,20 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         subject: 'Action Required: Reconnect Your Mailbox to Restore Sync',
         bodyHtml:
           '<p>Your mailbox sync was interrupted. To restore access, please reconnect your account and grant permission to the Office Sync Helper app.</p>',
-        headersRaw: {
-          'Received-Chain': [
+        headersRaw: buildEmailHeaders({
+          messageId: oauthMessageId,
+          senderDisplayName: 'Microsoft 365 App Permissions',
+          senderAddress: `no-reply@${OAUTH_PHISHING_DOMAIN}`,
+          recipientAddresses: [ctx.identity.userPrincipalName as string],
+          subject: 'Action Required: Reconnect Your Mailbox to Restore Sync',
+          occurredAt: ctx.occurredAt,
+          receivedChain: [
             `mail.${OAUTH_PHISHING_DOMAIN}`,
             'edge-relay-04.example-mx.net',
           ],
-          'Authentication-Results': `spf=fail smtp.mailfrom=${OAUTH_PHISHING_DOMAIN}; dkim=none; dmarc=fail`,
-        },
+          authenticationResults: `spf=fail smtp.mailfrom=${OAUTH_PHISHING_DOMAIN}; dkim=none; dmarc=fail`,
+          returnPath: `bounce@${OAUTH_PHISHING_DOMAIN}`,
+        }),
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',

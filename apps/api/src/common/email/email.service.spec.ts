@@ -33,7 +33,7 @@ describe('EmailService', () => {
     global.fetch = fetchSpy as never;
     const service = buildService({
       RESEND_API_KEY: 're_test_key',
-      EMAIL_FROM: 'SOCVerse <hello@example.com>',
+      EMAIL_FROM: 'ThreatLens <hello@example.com>',
     });
 
     await service.send({
@@ -53,7 +53,7 @@ describe('EmailService', () => {
     );
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     expect(body).toMatchObject({
-      from: 'SOCVerse <hello@example.com>',
+      from: 'ThreatLens <hello@example.com>',
       to: 'a@example.com',
       subject: 'Hi',
       html: '<p>Hi</p>',

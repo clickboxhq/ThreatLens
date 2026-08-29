@@ -487,7 +487,7 @@ async function main() {
     create: {
       email: 'system@socverse.internal',
       role: 'platform_admin',
-      displayName: 'SOCVerse Content Team',
+      displayName: 'ThreatLens Content Team',
       status: 'active',
       emailVerifiedAt: new Date(),
     },

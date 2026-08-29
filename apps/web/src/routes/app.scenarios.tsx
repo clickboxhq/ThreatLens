@@ -44,7 +44,7 @@ function ScenarioLib() {
     <div className="px-4 py-6 md:px-8 md:py-8">
       <SectionHeader
         title="Scenario Library"
-        description="Real, published SOCVerse scenarios across identity, endpoint, cloud, and email."
+        description="Real, published scenarios across identity, endpoint, cloud, and email."
       />
 
       {error && (
