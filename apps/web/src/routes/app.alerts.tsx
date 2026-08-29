@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { Panel, SectionHeader, SeverityBadge, StatusBadge } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
+import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
+import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useAlerts, useUpdateAlertStatus } from "@/hooks/use-alerts";
 import { formatRelativeTime } from "@/lib/format-relative-time";
@@ -38,6 +41,12 @@ function AlertsPage() {
   } = useActiveSession();
   const alertsQuery = useAlerts(selectedSessionId);
   const updateStatus = useUpdateAlertStatus(selectedSessionId);
+  // An alert names the entity it fired on ("Possible LSASS memory dump on IT-WKS-07") and
+  // carries its id, but until now the queue dead-ended there: you had to go find that host
+  // yourself among every other device in the session. The alert is where an investigation
+  // actually starts, so it pivots straight into the entity.
+  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
+  const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
 
   if (sessionsLoading) {
     return (
@@ -118,7 +127,22 @@ function AlertsPage() {
                     <td className="px-4 py-3 font-mono text-[11.5px] text-secondary">
                       {a.mitreTechnique?.techniqueId ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-secondary">{a.entityDisplay ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {a.entityDisplay && a.primaryEntityType !== "mailbox" ? (
+                        <button
+                          onClick={() =>
+                            a.primaryEntityType === "identity"
+                              ? setOpenIdentityId(a.primaryEntityId)
+                              : setOpenDeviceId(a.primaryEntityId)
+                          }
+                          className="text-left text-[color:var(--info)] underline-offset-2 hover:underline"
+                        >
+                          {a.entityDisplay}
+                        </button>
+                      ) : (
+                        <span className="text-secondary">{a.entityDisplay ?? "—"}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {formatRelativeTime(a.lastSeenAt)}
                     </td>
@@ -142,6 +166,21 @@ function AlertsPage() {
           </div>
         )}
       </Panel>
+
+      {openIdentityId && selectedSessionId && (
+        <IdentityDetailDrawer
+          sessionId={selectedSessionId}
+          identityId={openIdentityId}
+          onClose={() => setOpenIdentityId(null)}
+        />
+      )}
+      {openDeviceId && selectedSessionId && (
+        <DeviceDetailDrawer
+          sessionId={selectedSessionId}
+          deviceId={openDeviceId}
+          onClose={() => setOpenDeviceId(null)}
+        />
+      )}
     </div>
   );
 }
