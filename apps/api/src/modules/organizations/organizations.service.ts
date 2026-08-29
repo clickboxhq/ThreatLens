@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
@@ -21,6 +22,7 @@ export class OrganizationsService {
     private readonly emailService: EmailService,
     private readonly auditLog: AuditLogService,
     private readonly config: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // Creating an org promotes the creator to org_admin — a deliberate, explicit action
@@ -223,6 +225,14 @@ export class OrganizationsService {
       action: 'organization_invite_accepted',
       targetType: 'organization',
       targetId: invite.organizationId,
+    });
+
+    await this.notificationsService.create({
+      userId: invite.invitedBy,
+      category: 'org_invitation',
+      title: `${me.displayName} joined your organization`,
+      body: `${me.displayName} (${me.email}) accepted your invite as ${invite.role === 'instructor' ? 'an' : 'a'} ${invite.role}.`,
+      link: '/app/organizations',
     });
 
     return this.toOrgDto(invite.organizationId);

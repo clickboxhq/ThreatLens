@@ -1,34 +1,18 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  Award,
-  Bell,
-  Building2,
-  Clock,
-  ClipboardCheck,
-  CreditCard,
-  Library,
-  MessageSquare,
-  ShieldAlert,
-  Target,
-  Users,
-} from "lucide-react";
+import { Award, Bell, Building2, ClipboardCheck, MessageSquare, Target } from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
 import { useNotifications } from "@/hooks/use-notifications";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 import type { NotificationCategory } from "@/types/notifications";
 
 const categoryIcon: Record<NotificationCategory, typeof Bell> = {
   assignment: ClipboardCheck,
-  "new-scenario": Library,
-  deadline: Clock,
-  "score-available": Target,
-  "instructor-feedback": MessageSquare,
-  "cohort-announcement": Users,
-  "org-invitation": Building2,
-  "certificate-issued": Award,
-  billing: CreditCard,
-  security: ShieldAlert,
+  score_available: Target,
+  instructor_feedback: MessageSquare,
+  certificate_issued: Award,
+  org_invitation: Building2,
 };
 
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
@@ -100,15 +84,17 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
                     <span className="truncate text-[12.5px] font-medium">{n.title}</span>
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-[11.5px] text-secondary">{n.body}</p>
-                  <div className="mt-1 text-[10.5px] text-muted-foreground">{n.ts}</div>
+                  <div className="mt-1 text-[10.5px] text-muted-foreground">
+                    {formatRelativeTime(n.createdAt)}
+                  </div>
                 </div>
               </div>
             );
             return (
               <li key={n.id} className="transition-colors hover:bg-background/60">
-                {n.href ? (
+                {n.link ? (
                   <Link
-                    to={n.href}
+                    to={n.link}
                     onClick={() => {
                       markAsRead(n.id);
                       onClose();

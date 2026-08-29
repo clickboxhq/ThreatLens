@@ -58,14 +58,23 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
   const emailService = { send: jest.fn(async () => undefined) };
   const auditLog = { record: jest.fn(async () => undefined) };
   const config = { get: jest.fn(() => 'https://threatlensapp.com') };
+  const notificationsService = { create: jest.fn(async () => undefined) };
 
   const service = new OrganizationsService(
     prisma as never,
     emailService as never,
     auditLog as never,
     config as never,
+    notificationsService as never,
   );
-  return { service, prisma, emailService, auditLog, orgId };
+  return {
+    service,
+    prisma,
+    emailService,
+    auditLog,
+    notificationsService,
+    orgId,
+  };
 }
 
 describe('OrganizationsService.create', () => {
@@ -231,7 +240,7 @@ describe('OrganizationsService invite preview and acceptance', () => {
   });
 
   it('acceptInvite() sets orgId and the invited role, and marks the invite accepted', async () => {
-    const { service, prisma } = buildService({
+    const { service, prisma, notificationsService } = buildService({
       email: 'me@contoso.com',
       orgId: null,
     });
@@ -242,6 +251,7 @@ describe('OrganizationsService invite preview and acceptance', () => {
       email: 'me@contoso.com',
       role: 'instructor',
       organizationId: 'org-1',
+      invitedBy: 'admin-1',
     });
     const user = buildUser();
 
@@ -255,6 +265,12 @@ describe('OrganizationsService invite preview and acceptance', () => {
     expect(prisma.organizationInvite.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: 'accepted' }),
+      }),
+    );
+    expect(notificationsService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'admin-1',
+        category: 'org_invitation',
       }),
     );
   });

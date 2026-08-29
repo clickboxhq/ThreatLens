@@ -121,6 +121,7 @@ model User {
   achievements          Achievement[]
   auditLogs             AuditLog[]
   sentOrgInvites        OrganizationInvite[]       @relation("OrganizationInviteInviter")
+  notifications         Notification[]
 
   @@map("users")
 }
@@ -1147,4 +1148,34 @@ model Achievement {
 
   @@unique([userId, key])
   @@map("achievements")
+}
+
+// §Phase 6 (merge plan): net-new. Only categories with a real backend trigger are modeled —
+// deliberately excludes ThreatLens's original mock categories with no backing event yet
+// (new-scenario, deadline, cohort-announcement, billing, security); add those only once the
+// feature that would actually fire them exists. `link` is a same-origin app path the client
+// navigates to on click (e.g. "/app/cases/<sessionId>"), never an absolute URL.
+enum NotificationCategory {
+  assignment
+  score_available
+  instructor_feedback
+  certificate_issued
+  org_invitation
+}
+
+model Notification {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  category  NotificationCategory
+  title     String
+  body      String
+  link      String?
+  read      Boolean              @default(false)
+  createdAt DateTime             @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

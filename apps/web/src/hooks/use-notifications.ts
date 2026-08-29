@@ -8,6 +8,9 @@ export function useNotifications() {
   const query = useQuery({
     queryKey: queryKeys.notifications,
     queryFn: () => notificationsService.listNotifications(),
+    // Notifications arrive from background jobs (scoring, cert issuance) the viewer isn't
+    // actively triggering — a light poll keeps the bell badge honest without real-time infra.
+    refetchInterval: 30_000,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications });

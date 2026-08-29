@@ -1,12 +1,9 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { NotificationsService } from "./notifications-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`NotificationsService.${method}`);
-};
+import type { Notification } from "@/types/notifications";
 
 export const apiNotificationsService: NotificationsService = {
-  listNotifications: () => notConnected("listNotifications"),
-  markAsRead: () => notConnected("markAsRead"),
-  markAllAsRead: () => notConnected("markAllAsRead"),
+  listNotifications: () => apiClient.get<Notification[]>("/notifications/mine"),
+  markAsRead: (id) => apiClient.patch<void>(`/notifications/${id}/read`),
+  markAllAsRead: () => apiClient.post<void>("/notifications/read-all"),
 };

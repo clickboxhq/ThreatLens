@@ -30,6 +30,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { AchievementsApiModule } from './modules/achievements/achievements-api.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
 
 @Module({
   imports: [
@@ -63,6 +65,8 @@ import { AchievementsApiModule } from './modules/achievements/achievements-api.m
     MetricsModule,
     OrganizationsModule,
     AchievementsApiModule,
+    NotificationsModule,
+    NotificationsApiModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

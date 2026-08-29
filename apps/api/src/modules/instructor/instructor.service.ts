@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
@@ -19,6 +20,7 @@ export class InstructorService {
     private readonly prisma: PrismaService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly auditLog: AuditLogService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createCohort(user: AuthenticatedUser, dto: CreateCohortDto) {
@@ -81,7 +83,7 @@ export class InstructorService {
     cohortId: string,
     dto: CreateAssignmentDto,
   ) {
-    await this.getOwnedCohort(cohortId, user);
+    const cohort = await this.getOwnedCohort(cohortId, user);
     const scenario = await this.prisma.attackScenario.findUnique({
       where: { id: dto.scenarioId },
     });
@@ -101,6 +103,23 @@ export class InstructorService {
         createdBy: user.id,
       },
     });
+
+    const roster = await this.prisma.cohortEnrollment.findMany({
+      where: { cohortId, status: 'active' },
+      select: { userId: true },
+    });
+    await Promise.all(
+      roster.map((r) =>
+        this.notificationsService.create({
+          userId: r.userId,
+          category: 'assignment',
+          title: `New assignment: ${scenario.title}`,
+          body: `Assigned to ${cohort.name}${dto.dueAt ? `, due ${new Date(dto.dueAt).toLocaleDateString()}` : ''}.`,
+          link: '/app/assessments',
+        }),
+      ),
+    );
+
     return this.toAssignmentDto(assignment.id);
   }
 
@@ -205,6 +224,19 @@ export class InstructorService {
         payload: { id: incidentId, status: 'reopened' },
       });
     }
+
+    const instructor = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    await this.notificationsService.create({
+      userId: incident.session.userId,
+      category: 'instructor_feedback',
+      title: `Feedback from ${instructor.displayName}`,
+      body: reopenSession
+        ? 'Your investigation was reopened with new feedback — see what to revisit.'
+        : 'New feedback on your investigation.',
+      link: `/app/cases/${incident.sessionId}`,
+    });
 
     return this.listFeedback(incidentId);
   }

@@ -4,6 +4,7 @@ import { computeScore, ScoringInput } from './scorer';
 import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
 import { CertificatesService } from '../learning/certificates.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
 
@@ -38,6 +39,7 @@ export class ScoringService {
     private readonly prisma: PrismaService,
     private readonly certificatesService: CertificatesService,
     private readonly achievementsService: AchievementsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** §12.4: fetches the facts computeScore needs, scores the session, and persists it. */
@@ -54,7 +56,7 @@ export class ScoringService {
 
     const session = await this.prisma.investigationSession.findUniqueOrThrow({
       where: { id: sessionId },
-      include: { scenarioVersion: true },
+      include: { scenarioVersion: true, scenario: true },
     });
     const def = session.scenarioVersion
       .groundTruthDefinition as unknown as GroundTruthDefinition & {
@@ -276,6 +278,13 @@ export class ScoringService {
       session.scenarioId,
     );
     await this.achievementsService.checkAndIssue(session.userId);
+    await this.notificationsService.create({
+      userId: session.userId,
+      category: 'score_available',
+      title: 'Investigation scored',
+      body: `${session.scenario.title} scored ${breakdown.overallPercent}%.`,
+      link: `/app/cases/${sessionId}`,
+    });
 
     this.logger.log(
       `Scored session ${sessionId}: ${breakdown.overallPercent}%`,

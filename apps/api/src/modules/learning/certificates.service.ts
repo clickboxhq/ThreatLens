@@ -1,13 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 @Injectable()
 export class CertificatesService {
   private readonly logger = new Logger(CertificatesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   // §13.4: called after a session is scored. Checks every learning path that includes the
   // just-scored scenario — if this score (or a better prior one) now clears the pass
@@ -86,6 +90,13 @@ export class CertificatesService {
         learningPathId,
         scoreSnapshot: scoreSnapshot as unknown as object,
       },
+    });
+    await this.notificationsService.create({
+      userId,
+      category: 'certificate_issued',
+      title: 'Certificate issued',
+      body: `${path.title} is ready to download.`,
+      link: '/app/certificates',
     });
     this.logger.log(
       `Issued certificate for user ${userId}, learning path ${learningPathId}.`,
