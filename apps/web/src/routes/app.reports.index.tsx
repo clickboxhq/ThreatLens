@@ -3,7 +3,7 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { useReports } from "@/hooks/use-reports";
 import { FileText } from "lucide-react";
 
-export const Route = createFileRoute("/app/reports")({
+export const Route = createFileRoute("/app/reports/")({
   component: ReportsPage,
   head: () => ({ meta: [{ title: "ThreatLens · Reports" }] }),
 });
