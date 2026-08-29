@@ -2,6 +2,7 @@
 // Idempotent: safe to re-run against the same database.
 
 import { PrismaClient } from '@prisma/client';
+import { canonicalJson } from './canonical-json';
 import type { Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -414,20 +415,36 @@ async function seedScenario(
     },
   });
 
-  let version = await prisma.scenarioVersion.findFirst({
-    where: { scenarioId: scenario.id, versionNumber: 1 },
+  // Content edits have to reach already-seeded environments, and the only safe way to deliver
+  // one is a NEW version: InvestigationSession pins scenarioVersionId at launch, so rewriting a
+  // published version's groundTruthDefinition would change the answer key underneath every
+  // in-flight attempt and desync it from the telemetry already generated for it. Previously
+  // this only ever created version 1 and skipped otherwise, so any change to a scenario's
+  // definition silently never left the developer's machine.
+  const latest = await prisma.scenarioVersion.findFirst({
+    where: { scenarioId: scenario.id },
+    orderBy: { versionNumber: 'desc' },
   });
-  if (!version) {
+
+  const definition = seed.groundTruthDefinition as unknown as Prisma.InputJsonValue;
+  const unchanged =
+    latest !== null &&
+    canonicalJson(latest.groundTruthDefinition) === canonicalJson(definition);
+
+  let version = latest;
+  if (!unchanged) {
     version = await prisma.scenarioVersion.create({
       data: {
         scenarioId: scenario.id,
-        versionNumber: 1,
-        groundTruthDefinition: seed.groundTruthDefinition as unknown as Prisma.InputJsonValue,
+        versionNumber: (latest?.versionNumber ?? 0) + 1,
+        groundTruthDefinition: definition,
         publishedAt: new Date(),
         createdBy: systemAuthorId,
       },
     });
   }
+
+  if (!version) throw new Error(`no version resolved for "${seed.slug}"`);
 
   await prisma.attackScenario.update({
     where: { id: scenario.id },
@@ -450,7 +467,10 @@ async function seedScenario(
     });
   }
 
-  console.log(`  scenario "${scenario.slug}" v${version.versionNumber}`);
+  console.log(
+    `  scenario "${scenario.slug}" v${version.versionNumber}` +
+      (unchanged ? '' : ' (new version — definition changed)'),
+  );
 }
 
 async function main() {
