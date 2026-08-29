@@ -1,3 +1,4 @@
+import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { InvestigationsService } from "./investigations-service";
 import type {
@@ -85,6 +86,11 @@ export const apiInvestigationsService: InvestigationsService = {
   },
 
   listMitreTechniques: () => apiClient.get<MitreTechniqueDto[]>("/mitre-techniques"),
+
+  listFeedback: (sessionId, incidentId) =>
+    apiClient.get<InstructorFeedbackDto[]>(
+      `/sessions/${sessionId}/incidents/${incidentId}/feedback`,
+    ),
 
   lookupThreatIntel: (sessionId, type, value) => {
     const params = new URLSearchParams({ type, value });

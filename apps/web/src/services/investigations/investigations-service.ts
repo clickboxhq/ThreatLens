@@ -1,3 +1,4 @@
+import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
 import type {
   EvidenceItemDto,
   HintDto,
@@ -101,4 +102,7 @@ export interface InvestigationsService {
   submitSession(sessionId: string, incidentIds: string[]): Promise<void>;
   /** Returns null while the async scoring job hasn't finished yet (server's NOT_SCORED_YET). */
   getScore(sessionId: string): Promise<ScoreDto | null>;
+  /** Instructor feedback on a closed incident — the student-facing read side of the review
+   * loop (§2.15/§6.20). Empty until an instructor actually reviews the submission. */
+  listFeedback(sessionId: string, incidentId: string): Promise<InstructorFeedbackDto[]>;
 }

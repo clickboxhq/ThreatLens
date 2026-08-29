@@ -15,6 +15,8 @@ const keys = {
     ["session", sessionId, "incident", incidentId, "notes"] as const,
   hints: (sessionId: string) => ["session", sessionId, "hints"] as const,
   score: (sessionId: string) => ["session", sessionId, "score"] as const,
+  feedback: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId, "feedback"] as const,
   mitreTechniques: ["mitre-techniques"] as const,
 };
 
@@ -200,4 +202,24 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     lookupThreatIntel: lookupThreatIntel.mutateAsync,
     lookingUpThreatIntel: lookupThreatIntel.isPending,
   };
+}
+
+/**
+ * Instructor feedback on a closed incident. The endpoint has existed since Phase 4 and the
+ * instructor's Feedback Center has been writing to it, but nothing ever read it back — so
+ * review comments were written and stored where the student could never see them. Polls
+ * while the case is closed, since feedback arrives whenever the instructor gets to it, not
+ * at submit time.
+ */
+export function useIncidentFeedback(
+  sessionId: string | undefined,
+  incidentId: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: sessionId && incidentId ? keys.feedback(sessionId, incidentId) : ["feedback", "none"],
+    queryFn: () => investigationsService.listFeedback(sessionId!, incidentId!),
+    enabled: Boolean(sessionId && incidentId && enabled),
+    refetchInterval: 60_000,
+  });
 }

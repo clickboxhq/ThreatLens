@@ -11,6 +11,7 @@ import {
   useSessionIncident,
   useSessionReadiness,
   useSessionScore,
+  useIncidentFeedback,
 } from "@/hooks/use-investigations";
 import { ApiError } from "@/lib/api-client";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
@@ -743,7 +744,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           {/* Closure */}
           <Panel title="Submit verdict">
             {locked ? (
-              <ScoreResult sessionId={sessionId} />
+              <ScoreResult sessionId={sessionId} incidentId={incident?.id} />
             ) : (
               <>
                 <div className="flex flex-col gap-1.5">
@@ -869,8 +870,15 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   );
 }
 
-function ScoreResult({ sessionId }: { sessionId: string }) {
+function ScoreResult({
+  sessionId,
+  incidentId,
+}: {
+  sessionId: string;
+  incidentId: string | undefined;
+}) {
   const { data: score } = useSessionScore(sessionId);
+  const { data: feedback } = useIncidentFeedback(sessionId, incidentId, true);
 
   if (!score) {
     return (
@@ -915,6 +923,28 @@ function ScoreResult({ sessionId }: { sessionId: string }) {
           </li>
         ))}
       </ul>
+
+      {/* Instructor review, kept visually distinct from the automated rubric above — §2.15
+       * asks for the two to be distinctly attributed, and a human's comment carries different
+       * weight to a computed percentage. */}
+      {feedback && feedback.length > 0 && (
+        <div className="mt-4 rounded-md border border-[color:var(--info)]/40 bg-[color:var(--info)]/5 p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--info)]">
+            Instructor review
+          </div>
+          {feedback.map((f) => (
+            <div key={f.id} className="mt-2">
+              <p className="text-[12px] leading-[1.6] text-secondary">{f.comment}</p>
+              <div className="mt-1.5 text-[10.5px] text-muted-foreground">
+                {f.instructorDisplayName} · {new Date(f.createdAt).toLocaleDateString()}
+                {f.reopenedSession && (
+                  <span className="text-[color:var(--warning)]"> · reopened this case</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-col gap-2 text-[11.5px]">
         {score.rubricBreakdown.missedEvidence.length > 0 && (
