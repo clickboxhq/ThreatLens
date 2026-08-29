@@ -33,6 +33,7 @@ import {
   MALWARE_PERSISTENCE_STARTUP_PATH,
   MONITORING_USER_AGENT,
   NON_BROWSER_USER_AGENTS,
+  BROWSER_USER_AGENT,
   OAUTH_PHISHING_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
@@ -435,14 +436,43 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         mitreTechniqueId: ctx.mitreTechniqueId,
       });
+      const phishUrl = `https://${MALICIOUS_DOMAIN}/invoice/verify?ref=48213`;
       ctx.emailUrls.push({
         id: randomUUID(),
         emailMessageId: emailId,
-        url: `https://${MALICIOUS_DOMAIN}/invoice/verify?ref=48213`,
+        url: phishUrl,
         displayText: 'Review Invoice #48213',
         reputation: 'malicious',
         isRewrittenBySafeLinks: false,
       });
+      // The victim actually opening the link. This scenario's whole narrative turns on that
+      // click — it is what connects the phishing email to the credential theft and the risky
+      // sign-in that follows — but nothing previously recorded it, so an analyst asking the
+      // obvious question ("did anyone actually click this?") found no evidence either way and
+      // had to infer the whole causal chain from sign-in timing alone. The URL must match the
+      // EmailUrl above exactly, since that string equality is what correlates the two.
+      if (ctx.device) {
+        ctx.httpRequests.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(
+            ctx.occurredAt.getTime() + ctx.rng.intBetween(2, 9) * 60 * 1000,
+          ),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'phishing_link_click' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          identityId: ctx.identity.id,
+          method: 'GET',
+          url: phishUrl,
+          userAgent: BROWSER_USER_AGENT,
+          statusCode: 200,
+          // An internal workstation address, not the synthetic external one used for
+          // attacker-originated traffic — this request comes from inside the network.
+          sourceIp: `10.20.30.${ctx.rng.intBetween(40, 200)}`,
+        });
+      }
       break;
     }
     case 'risky_signin_new_country_v1': {

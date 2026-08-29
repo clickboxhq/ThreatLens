@@ -122,14 +122,21 @@ export function buildEmailHeaders(input: {
   // assignable to it.
 }): Prisma.InputJsonValue {
   const date = input.occurredAt.toUTCString();
-  const hops = [...input.receivedChain].reverse();
+
+  // Real Received headers are a chain of "from <sender> by <receiver>" hops, each one stamped
+  // by the server that accepted the message, and stacked newest-first — so the topmost line is
+  // the final delivery and the bottom line is the origin. Build the hop pairs along the actual
+  // path (origin → … → edge → our MX), then reverse for display. Getting this backwards would
+  // teach the opposite of how to read a header chain, which is the whole point of the exercise.
+  const path = [...input.receivedChain, 'mx.corp.internal'];
+  const hops = path
+    .slice(0, -1)
+    .map((sender, i) => `from ${sender} by ${path[i + 1]} with ESMTPS; ${date}`)
+    .reverse();
 
   return {
     'Return-Path': `<${input.returnPath ?? input.senderAddress}>`,
-    Received: hops.map(
-      (host, i) =>
-        `from ${host} by ${hops[i + 1] ?? 'mx.corp.internal'} with ESMTPS; ${date}`,
-    ),
+    Received: hops,
     'Message-ID': input.messageId,
     Date: date,
     From: `"${input.senderDisplayName}" <${input.senderAddress}>`,

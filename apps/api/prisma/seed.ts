@@ -529,6 +529,10 @@ async function main() {
             step_order: 1,
             mitre_technique_id: 'T1566.002',
             entity_ref: 'victim_identity_1',
+            // The victim's workstation, so the template can emit the web request that proves
+            // the link was actually opened — without it the scenario asserts a click in its
+            // narrative but leaves no evidence of one anywhere in the telemetry.
+            device_ref: 'victim_device_1',
             event_template_id: 'phishing_email_invoice_lookalike_login_v1',
             relative_timestamp: '+2h',
             correlation_group: 'phish-chain-1',

@@ -29,6 +29,7 @@ function buildDefinition(): GroundTruthDefinition {
         step_order: 1,
         mitre_technique_id: 'T1566.002',
         entity_ref: 'victim_identity_1',
+        device_ref: 'victim_device_1',
         event_template_id: 'phishing_email_invoice_lookalike_login_v1',
         relative_timestamp: '+2h',
         correlation_group: 'phish-chain-1',
@@ -140,6 +141,44 @@ describe('generateTelemetry (§7.2)', () => {
       (m) => !m.isGroundTruthEvidence,
     );
     expect(noiseEmails).toHaveLength(2);
+  });
+
+  // This scenario's narrative turns on the victim opening the phishing link — it is what
+  // connects the email to the credential theft and the risky sign-in after it. That click
+  // previously generated no telemetry at all, so an analyst asking the obvious question
+  // ("did anyone actually click this?") found nothing either way and had to infer the whole
+  // causal chain from sign-in timing. Assert the request exists AND that its URL matches the
+  // EmailUrl exactly, since that string equality is the only thing correlating the two.
+  it('records the victim actually opening the phishing link, matching the email URL exactly', () => {
+    const def = buildDefinition();
+    const result = generateTelemetry(randomUUID(), 7n, def, techniqueIdBySlug);
+
+    const emailUrl = result.emailUrls.find((u) => u.reputation === 'malicious');
+    expect(emailUrl).toBeDefined();
+
+    const clicks = result.httpRequests.filter(
+      (r) => (r.raw as { pattern?: string })?.pattern === 'phishing_link_click',
+    );
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].url).toBe(emailUrl!.url);
+
+    // Attributed to the victim and their workstation, or the link-activity pivot cannot say
+    // *who* clicked — which is the entire point of asking.
+    const victim = result.identities.find(
+      (i) =>
+        i.department === 'Finance' &&
+        i.jobTitle === 'Accounts Payable Specialist',
+    );
+    expect(clicks[0].identityId).toBe(victim!.id);
+    expect(clicks[0].deviceId).toBe(result.devices[0].id);
+
+    // And it lands after the email arrives, not before it.
+    const phishEmail = result.emailMessages.find(
+      (m) => m.isGroundTruthEvidence,
+    );
+    expect(new Date(clicks[0].occurredAt as Date).getTime()).toBeGreaterThan(
+      new Date(phishEmail!.occurredAt as Date).getTime(),
+    );
   });
 });
 
