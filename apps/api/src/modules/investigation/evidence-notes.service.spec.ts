@@ -208,3 +208,84 @@ describe('EvidenceNotesService.listEvidence display enrichment', () => {
     expect(evidence[1].display).toBeNull();
   });
 });
+
+// §2.10's Evidence Locker aggregate — every artifact pinned across every incident the Student
+// has ever worked, scoped to their own sessions via the incident->session->userId join.
+describe('EvidenceNotesService.listMine', () => {
+  it('returns [] when the Student has pinned nothing', async () => {
+    const prisma = {
+      evidenceCollection: { findMany: jest.fn(async () => []) },
+    };
+    const service = new EvidenceNotesService(
+      prisma as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(service.listMine(USER)).resolves.toEqual([]);
+  });
+
+  it('joins incident/session/scenario context and resolves each technique + display', async () => {
+    const prisma = {
+      evidenceCollection: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'ev-1',
+            incidentId: 'incident-1',
+            eventTable: 'sign_in_events',
+            eventId: 'sign-in-1',
+            justification: 'because',
+            mitreTechniqueId: 'technique-uuid-1',
+            pinnedAt: new Date('2026-08-01T00:00:00Z'),
+            incident: {
+              sessionId: 'session-1',
+              title: 'Case A',
+              session: { scenario: { title: 'Impossible Travel' } },
+            },
+          },
+        ]),
+      },
+      mitreTechnique: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'technique-uuid-1',
+            techniqueId: 'T1078',
+            name: 'Valid Accounts',
+          },
+        ]),
+      },
+      signInEvent: {
+        findUnique: jest.fn(async () => ({
+          sourceCity: 'Lagos',
+          sourceCountry: 'NG',
+          result: 'success',
+          identity: { displayName: 'Jane Doe' },
+        })),
+      },
+    };
+    const service = new EvidenceNotesService(
+      prisma as never,
+      {} as never,
+      {} as never,
+    );
+
+    const result = await service.listMine(USER);
+
+    expect(result).toEqual([
+      {
+        id: 'ev-1',
+        sessionId: 'session-1',
+        scenarioTitle: 'Impossible Travel',
+        incidentId: 'incident-1',
+        incidentTitle: 'Case A',
+        eventTable: 'sign_in_events',
+        justification: 'because',
+        mitreTechnique: { techniqueId: 'T1078', name: 'Valid Accounts' },
+        pinnedAt: new Date('2026-08-01T00:00:00Z'),
+        display: {
+          title: 'Sign-in: Jane Doe',
+          summary: 'From Lagos, NG (success)',
+        },
+      },
+    ]);
+  });
+});

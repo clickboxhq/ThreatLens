@@ -4,17 +4,13 @@ import { queryKeys } from "./query-keys";
 import { deriveViewState } from "./use-query-state";
 
 export function useThreatIntel() {
-  const actorsQuery = useQuery({
-    queryKey: [...queryKeys.threatIntel, "actors"],
-    queryFn: () => threatIntelService.listActors(),
-  });
-  const iocsQuery = useQuery({
-    queryKey: [...queryKeys.threatIntel, "iocs"],
-    queryFn: () => threatIntelService.listIocs(),
+  const query = useQuery({
+    queryKey: [...queryKeys.threatIntel, "mine"],
+    queryFn: () => threatIntelService.listMine(),
   });
   return {
-    actors: actorsQuery.data ?? [],
-    iocs: iocsQuery.data ?? [],
-    state: deriveViewState(actorsQuery),
+    actors: query.data?.actors ?? [],
+    iocs: query.data?.indicators ?? [],
+    state: deriveViewState(query, (data) => data.indicators.length === 0),
   };
 }

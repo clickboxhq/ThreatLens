@@ -1,13 +1,6 @@
-import type {
-  EvidenceArtifact,
-  EvidenceLockerStats,
-  EvidenceCoverageItem,
-  GradingImpactItem,
-} from "@/types/evidence-locker";
+import type { EvidenceArtifact } from "@/types/evidence-locker";
 
 export interface EvidenceLockerService {
-  listArtifacts(): Promise<EvidenceArtifact[]>;
-  getStats(): Promise<EvidenceLockerStats>;
-  listCoverageBySource(): Promise<EvidenceCoverageItem[]>;
-  listGradingImpact(): Promise<GradingImpactItem[]>;
+  /** Every artifact the Student has pinned across every incident they've ever worked. */
+  listMine(): Promise<EvidenceArtifact[]>;
 }

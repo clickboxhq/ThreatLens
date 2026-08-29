@@ -1,8 +1,7 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { TimelineService } from "./timeline-service";
+import type { GlobalTimelineItem } from "@/types/timeline";
 
 export const apiTimelineService: TimelineService = {
-  eventsFor: () => {
-    throw new NotConnectedError("TimelineService.eventsFor");
-  },
+  listMine: () => apiClient.get<GlobalTimelineItem[]>("/timeline/mine"),
 };

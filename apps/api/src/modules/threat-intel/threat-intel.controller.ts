@@ -6,8 +6,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { SessionAccessService } from '../session-core/session-access.service';
+import { ThreatIntelService } from './threat-intel.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -17,10 +16,7 @@ import type { IndicatorType } from '@prisma/client';
 @Controller('sessions/:sessionId/threat-intel')
 @UseGuards(JwtAuthGuard)
 export class ThreatIntelController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly sessionAccess: SessionAccessService,
-  ) {}
+  constructor(private readonly threatIntelService: ThreatIntelService) {}
 
   @Get()
   async lookup(
@@ -29,29 +25,19 @@ export class ThreatIntelController {
     @Query('type') type: IndicatorType,
     @Query('value') value: string,
   ) {
-    const session = await this.sessionAccess.getOwnedSession(sessionId, user);
-    const indicator = await this.prisma.threatIntelIndicator.findFirst({
-      where: {
-        scenarioVersionId: session.scenarioVersionId,
-        indicatorType: type,
-        value,
-      },
-    });
-    if (!indicator) {
-      return {
-        value,
-        type,
-        reputation: 'unknown',
-        actorAttribution: null,
-        context: null,
-      };
-    }
-    return {
-      value: indicator.value,
-      type: indicator.indicatorType,
-      reputation: indicator.reputation,
-      actorAttribution: indicator.actorAttribution,
-      context: indicator.context,
-    };
+    return this.threatIntelService.lookup(sessionId, user, type, value);
+  }
+}
+
+// A Student's own cross-session threat-intel lookup history — see ThreatIntelService.listMine
+// for why this can never become a way to browse a scenario's full indicator set.
+@Controller('threat-intel')
+@UseGuards(JwtAuthGuard)
+export class ThreatIntelHistoryController {
+  constructor(private readonly threatIntelService: ThreatIntelService) {}
+
+  @Get('mine')
+  async listMine(@CurrentUser() user: AuthenticatedUser) {
+    return this.threatIntelService.listMine(user);
   }
 }

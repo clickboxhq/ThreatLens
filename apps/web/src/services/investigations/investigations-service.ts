@@ -83,6 +83,21 @@ export interface InvestigationsService {
 
   listMitreTechniques(): Promise<MitreTechniqueDto[]>;
 
+  /** Answers one specific (type, value) query against this session's scenario — never a
+   * browsable list, since that would hand back the scenario's full indicator set. A real
+   * match is recorded server-side into the Student's own Threat Intelligence history. */
+  lookupThreatIntel(
+    sessionId: string,
+    type: "hash" | "ip" | "domain" | "url",
+    value: string,
+  ): Promise<{
+    value: string;
+    type: string;
+    reputation: "malicious" | "suspicious" | "unknown" | "known_good";
+    actorAttribution: string | null;
+    context: string | null;
+  }>;
+
   submitSession(sessionId: string, incidentIds: string[]): Promise<void>;
   /** Returns null while the async scoring job hasn't finished yet (server's NOT_SCORED_YET). */
   getScore(sessionId: string): Promise<ScoreDto | null>;

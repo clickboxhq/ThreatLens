@@ -995,6 +995,10 @@ enum InvestigationActionType {
   force_password_reset
   revoke_tokens
   block_ip
+  // Recorded only when a threat-intel lookup actually matches a real indicator (see
+  // 20260829140000_add_view_threat_intel) — backs a Student's own "Threat Intelligence"
+  // history without ever exposing a scenario's full indicator set (its ground truth).
+  view_threat_intel
 }
 
 model InvestigationAction {

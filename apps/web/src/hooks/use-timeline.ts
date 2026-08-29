@@ -1,12 +1,19 @@
-import { useSoc } from "@/lib/store";
+import { useQuery } from "@tanstack/react-query";
 import { timelineService } from "@/services/timeline";
+import { queryKeys } from "./query-keys";
+import { deriveViewState } from "./use-query-state";
 
 export function useTimeline() {
-  const globalTimeline = useSoc((s) => s.globalTimeline);
-  const cases = useSoc((s) => s.cases);
-  const events = timelineService.eventsFor(globalTimeline);
-  const casesWithTimelineCount = Object.keys(cases).filter(
-    (k) => cases[k].timeline.length > 0,
-  ).length;
-  return { globalTimeline, events, casesWithTimelineCount };
+  const query = useQuery({
+    queryKey: [...queryKeys.timeline, "mine"],
+    queryFn: () => timelineService.listMine(),
+  });
+  const events = query.data ?? [];
+  const casesWithTimelineCount = new Set(events.map((e) => e.incidentId)).size;
+
+  return {
+    events,
+    casesWithTimelineCount,
+    state: deriveViewState(query),
+  };
 }

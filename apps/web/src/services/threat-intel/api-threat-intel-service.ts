@@ -1,11 +1,8 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { ThreatIntelService } from "./threat-intel-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`ThreatIntelService.${method}`);
-};
+import type { ThreatActor, IocSighting } from "@/types/threat-intel-page";
 
 export const apiThreatIntelService: ThreatIntelService = {
-  listActors: () => notConnected("listActors"),
-  listIocs: () => notConnected("listIocs"),
+  listMine: () =>
+    apiClient.get<{ indicators: IocSighting[]; actors: ThreatActor[] }>("/threat-intel/mine"),
 };

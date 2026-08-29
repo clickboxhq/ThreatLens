@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ThreatIntelController } from './threat-intel.controller';
+import {
+  ThreatIntelController,
+  ThreatIntelHistoryController,
+} from './threat-intel.controller';
+import { ThreatIntelService } from './threat-intel.service';
 
 @Module({
-  controllers: [ThreatIntelController],
+  controllers: [ThreatIntelController, ThreatIntelHistoryController],
+  providers: [ThreatIntelService],
 })
 export class ThreatIntelModule {}

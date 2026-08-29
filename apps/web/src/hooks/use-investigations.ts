@@ -165,6 +165,10 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     mutationFn: (input: { filters?: { field: string; value: string }[]; freetext?: string }) =>
       investigationsService.search(sessionId, input),
   });
+  const lookupThreatIntel = useMutation({
+    mutationFn: ({ type, value }: { type: "hash" | "ip" | "domain" | "url"; value: string }) =>
+      investigationsService.lookupThreatIntel(sessionId, type, value),
+  });
 
   return {
     incident: incidentQuery.data,
@@ -189,5 +193,7 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     submittingSession: submitSession.isPending,
     search: search.mutateAsync,
     searching: search.isPending,
+    lookupThreatIntel: lookupThreatIntel.mutateAsync,
+    lookingUpThreatIntel: lookupThreatIntel.isPending,
   };
 }

@@ -77,6 +77,55 @@ export class EvidenceNotesService {
     return resolved;
   }
 
+  // §2.10's Evidence Locker aggregate — every artifact the Student has pinned across every
+  // incident they've ever worked, newest first. There is no cross-session "evidence" table to
+  // query directly, so this joins EvidenceCollection back to the incidents/sessions/scenarios
+  // it belongs to, scoped to this user's own sessions only.
+  async listMine(user: AuthenticatedUser) {
+    const rows = await this.prisma.evidenceCollection.findMany({
+      where: { incident: { session: { userId: user.id } } },
+      include: {
+        incident: { include: { session: { include: { scenario: true } } } },
+      },
+      orderBy: { pinnedAt: 'desc' },
+    });
+    if (rows.length === 0) return [];
+
+    const techniqueIds = [
+      ...new Set(
+        rows
+          .map((r) => r.mitreTechniqueId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const techniques = techniqueIds.length
+      ? await this.prisma.mitreTechnique.findMany({
+          where: { id: { in: techniqueIds } },
+        })
+      : [];
+    const techniqueById = new Map(techniques.map((t) => [t.id, t]));
+
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        sessionId: row.incident.sessionId,
+        scenarioTitle: row.incident.session.scenario.title,
+        incidentId: row.incidentId,
+        incidentTitle: row.incident.title,
+        eventTable: row.eventTable,
+        justification: row.justification,
+        mitreTechnique: row.mitreTechniqueId
+          ? (() => {
+              const t = techniqueById.get(row.mitreTechniqueId as string);
+              return t ? { techniqueId: t.techniqueId, name: t.name } : null;
+            })()
+          : null,
+        pinnedAt: row.pinnedAt,
+        display: await this.resolveDisplay(row.eventTable, row.eventId),
+      })),
+    );
+  }
+
   private async resolveDisplay(
     eventTable: string,
     eventId: string,

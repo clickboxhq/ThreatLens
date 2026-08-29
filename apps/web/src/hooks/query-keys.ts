@@ -27,6 +27,7 @@ export const queryKeys = {
   studentAnalytics: ["student-analytics"] as const,
   threatIntel: ["threat-intel"] as const,
   evidenceLocker: ["evidence-locker"] as const,
+  timeline: ["timeline"] as const,
   emailInvestigations: ["email-investigations"] as const,
   notifications: ["notifications"] as const,
 };

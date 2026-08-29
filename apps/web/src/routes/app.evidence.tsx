@@ -1,8 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { WorkspacePage } from "@/components/soc/workspace-page";
-import { SeverityBadge } from "@/components/soc/primitives";
 import { useEvidenceLocker } from "@/hooks/use-evidence-locker";
-import { Download } from "lucide-react";
 
 export const Route = createFileRoute("/app/evidence")({
   component: EvidenceLocker,
@@ -11,80 +9,101 @@ export const Route = createFileRoute("/app/evidence")({
       { title: "ThreatLens · Evidence Locker" },
       {
         name: "description",
-        content: "Chain-of-custody store for artifacts collected during SOC investigations.",
+        content: "Every artifact you've pinned as evidence across your investigations.",
       },
       { property: "og:title", content: "ThreatLens · Evidence Locker" },
       {
         property: "og:description",
-        content: "Artifacts, hashes, and chain of custody for every investigation.",
+        content: "Pinned evidence, grouped by investigation and MITRE technique.",
       },
     ],
   }),
 });
 
 function EvidenceLocker() {
-  const { artifacts, stats, coverageBySource, gradingImpact, state } = useEvidenceLocker();
+  const { artifacts, stats, coverageBySource, state } = useEvidenceLocker();
+  const maxCoverage = Math.max(1, ...coverageBySource.map((c) => c.count));
+
   return (
     <WorkspacePage
       title="Evidence Locker"
-      description="Every artifact you collect is hashed, timestamped, and bound to an investigation for grading."
+      description="Every artifact you pin as evidence during an investigation, in one place."
       state={state}
-      actions={
-        <button className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-[12px] text-secondary hover:text-foreground">
-          <Download className="size-3.5" /> Export manifest
-        </button>
-      }
+      emptyState={{
+        title: "No evidence pinned yet",
+        description:
+          "Open an active investigation and use Pin as Evidence on anything relevant — it'll show up here.",
+      }}
       stats={[
         {
-          label: "Artifacts collected",
+          label: "Artifacts pinned",
           value: stats ? String(stats.artifactsCollected) : "—",
-          delta: "+18 this week",
         },
         {
-          label: "Collection rate",
-          value: stats ? `${stats.collectionRate}%` : "—",
-          delta: "+6% this month",
-          tone: "success",
+          label: "Investigations covered",
+          value: stats ? String(stats.investigationsCovered) : "—",
+          tone: "info",
         },
         {
-          label: "Required outstanding",
-          value: stats ? String(stats.requiredOutstanding) : "—",
-          delta: "across 3 investigations",
-          tone: "high",
-        },
-        {
-          label: "Chain of custody",
-          value: stats ? `${stats.chainOfCustody}%` : "—",
-          delta: "verified",
+          label: "Technique-tagged",
+          value: stats ? `${stats.techniqueTaggedPercent}%` : "—",
           tone: "success",
         },
       ]}
       table={{
-        title: "Collected artifacts",
-        columns: [
-          "ID",
-          "Artifact",
-          "Type",
-          "Investigation",
-          "Severity",
-          "SHA-256",
-          "Collected by",
-          "When",
-        ],
+        title: "Pinned evidence",
+        columns: ["Investigation", "Artifact", "MITRE technique", "Justification", "Pinned"],
         rows: artifacts.map((a) => [
-          <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>,
-          <span className="font-medium">{a.name}</span>,
-          a.type,
-          <span className="font-mono text-[11px] text-secondary">{a.inv}</span>,
-          <SeverityBadge level={a.sev} />,
-          <span className="font-mono text-[11px] text-muted-foreground">{a.hash}</span>,
-          a.who,
-          <span className="text-muted-foreground">{a.when}</span>,
+          <div key="inv" className="min-w-0">
+            <Link
+              to="/app/cases/$id"
+              params={{ id: a.sessionId }}
+              className="truncate font-medium text-[color:var(--info)] hover:underline"
+            >
+              {a.scenarioTitle}
+            </Link>
+            <div className="truncate text-[10.5px] text-muted-foreground">{a.incidentTitle}</div>
+          </div>,
+          <div key="artifact" className="min-w-0">
+            <div className="truncate font-medium">{a.title}</div>
+            {a.summary && (
+              <div className="truncate text-[10.5px] text-muted-foreground">{a.summary}</div>
+            )}
+          </div>,
+          a.mitreTechnique ? (
+            <span
+              key="mitre"
+              className="rounded border border-[color:var(--info)]/40 px-1.5 py-0.5 font-mono text-[10.5px] text-[color:var(--info)]"
+            >
+              {a.mitreTechnique.techniqueId}
+            </span>
+          ) : (
+            <span key="mitre" className="text-[11px] text-muted-foreground">
+              —
+            </span>
+          ),
+          <span key="just" className="text-[11.5px] text-secondary">
+            {a.justification}
+          </span>,
+          <span key="when" className="text-muted-foreground">
+            {new Date(a.pinnedAt).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>,
         ]),
       }}
       asides={[
-        { title: "Coverage by source", items: coverageBySource },
-        { title: "Grading impact", items: gradingImpact },
+        {
+          title: "Coverage by source",
+          items: coverageBySource.map((c) => ({
+            label: c.label,
+            value: String(c.count),
+            meter: Math.round((c.count / maxCoverage) * 100),
+          })),
+        },
       ]}
     />
   );

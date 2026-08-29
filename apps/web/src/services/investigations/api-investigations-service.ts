@@ -86,6 +86,17 @@ export const apiInvestigationsService: InvestigationsService = {
 
   listMitreTechniques: () => apiClient.get<MitreTechniqueDto[]>("/mitre-techniques"),
 
+  lookupThreatIntel: (sessionId, type, value) => {
+    const params = new URLSearchParams({ type, value });
+    return apiClient.get<{
+      value: string;
+      type: string;
+      reputation: "malicious" | "suspicious" | "unknown" | "known_good";
+      actorAttribution: string | null;
+      context: string | null;
+    }>(`/sessions/${sessionId}/threat-intel?${params.toString()}`);
+  },
+
   submitSession: async (sessionId, incidentIds) => {
     await apiClient.post(`/sessions/${sessionId}/submit`, { incidentIds });
   },

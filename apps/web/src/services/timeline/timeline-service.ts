@@ -1,6 +1,6 @@
-import type { SecurityEvent } from "@/types/telemetry";
+import type { GlobalTimelineItem } from "@/types/timeline";
 
 export interface TimelineService {
-  /** Resolves curated event ids to full events, chronologically sorted. */
-  eventsFor(ids: string[]): SecurityEvent[];
+  /** Every curated event across every incident the Student has ever worked, chronologically. */
+  listMine(): Promise<GlobalTimelineItem[]>;
 }

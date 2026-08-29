@@ -15,6 +15,7 @@ import {
   type ResponseActionType,
   type SearchEntityType,
 } from "@/types/socverse-investigation";
+import { REPUTATION_SEVERITY } from "@/types/threat-intel-page";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -25,6 +26,7 @@ import {
   Paperclip,
   Pin,
   PinOff,
+  Radar,
   Search,
   ShieldCheck,
   Trash2,
@@ -222,6 +224,8 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     submitSession,
     search,
     searching,
+    lookupThreatIntel,
+    lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
 
   const [query, setQuery] = useState("");
@@ -234,6 +238,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const [selectedTechniqueIds, setSelectedTechniqueIds] = useState<string[]>([]);
   const [takenActions, setTakenActions] = useState<ResponseActionType[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [tiType, setTiType] = useState<"hash" | "ip" | "domain" | "url">("ip");
+  const [tiValue, setTiValue] = useState("");
+  const [tiResult, setTiResult] = useState<Awaited<ReturnType<typeof lookupThreatIntel>> | null>(
+    null,
+  );
+  const [tiError, setTiError] = useState<string | null>(null);
 
   // Debounced — every keystroke would otherwise fire a real network call, unlike the old
   // mock's instant client-side filter over a static array.
@@ -497,6 +507,74 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                 );
               })}
             </div>
+          </Panel>
+
+          {/* Threat intel lookup */}
+          <Panel title="Threat intelligence lookup">
+            <p className="mb-3 text-[11.5px] text-secondary">
+              Check whether an IP, domain, hash, or URL you found is a known indicator in this
+              investigation.
+            </p>
+            <div className="flex gap-2">
+              <select
+                value={tiType}
+                onChange={(e) => setTiType(e.target.value as typeof tiType)}
+                className="h-9 rounded-md border border-border bg-background px-2 text-[12px]"
+              >
+                <option value="ip">IP</option>
+                <option value="domain">Domain</option>
+                <option value="hash">Hash</option>
+                <option value="url">URL</option>
+              </select>
+              <input
+                value={tiValue}
+                onChange={(e) => setTiValue(e.target.value)}
+                placeholder="e.g. 185.220.101.44"
+                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 text-[12px]"
+              />
+            </div>
+            <button
+              disabled={!tiValue.trim() || lookingUpThreatIntel}
+              onClick={async () => {
+                setTiError(null);
+                try {
+                  const result = await lookupThreatIntel({
+                    type: tiType,
+                    value: tiValue.trim(),
+                  });
+                  setTiResult(result);
+                } catch (err) {
+                  setTiError(err instanceof ApiError ? err.message : "Lookup failed.");
+                }
+              }}
+              className="mt-2 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-[12px] hover:border-[color:var(--info)]/50 disabled:opacity-60"
+            >
+              {lookingUpThreatIntel ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Radar className="size-3.5" />
+              )}
+              Look up
+            </button>
+            {tiResult && (
+              <div className="mt-3 rounded-md border border-border bg-background p-3 text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono">{tiResult.value}</span>
+                  <SeverityBadge level={REPUTATION_SEVERITY[tiResult.reputation]} />
+                </div>
+                {tiResult.actorAttribution && (
+                  <div className="mt-1 text-secondary">
+                    Attributed to {tiResult.actorAttribution}
+                  </div>
+                )}
+                {tiResult.context && (
+                  <div className="mt-1 text-muted-foreground">{tiResult.context}</div>
+                )}
+              </div>
+            )}
+            {tiError && (
+              <p className="mt-2 text-[11.5px] text-[color:var(--critical)]">{tiError}</p>
+            )}
           </Panel>
 
           {/* Notes */}
