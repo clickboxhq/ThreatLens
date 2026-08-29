@@ -1,5 +1,5 @@
+import { apiAnalyticsService } from "./api-analytics-service";
 import type { AnalyticsService } from "./analytics-service";
-import { mockAnalyticsService } from "./mock-analytics-service";
 
-export const analyticsService: AnalyticsService = mockAnalyticsService;
+export const analyticsService: AnalyticsService = apiAnalyticsService;
 export type { AnalyticsService } from "./analytics-service";

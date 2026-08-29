@@ -36,6 +36,10 @@ interface SearchFilter {
   value: string;
 }
 
+// A single session's id, or a Prisma "in" clause over several — searchMine() below reuses the
+// exact same multi-table query this way rather than duplicating the field-routing logic.
+type SessionScope = string | { in: string[] };
+
 // §2.8 / §16.12: field=value search over the session's own telemetry — deliberately not a
 // general-purpose query language (§1.6), but wide enough to cover every entity surface the
 // ThreatLens frontend's search box implies (identity, endpoint, email, cloud), which the
@@ -63,13 +67,78 @@ export class SearchService {
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
 
-    const signInWhere: Prisma.SignInEventWhereInput = { sessionId };
-    const emailWhere: Prisma.EmailMessageWhereInput = { sessionId };
-    const cloudWhere: Prisma.CloudEventWhereInput = { sessionId };
-    const processWhere: Prisma.ProcessEventWhereInput = { sessionId };
-    const fileWhere: Prisma.FileEventWhereInput = { sessionId };
-    const networkWhere: Prisma.NetworkEventWhereInput = { sessionId };
-    const httpWhere: Prisma.HttpRequestWhereInput = { sessionId };
+    const rows = await this.runQuery(sessionId, filters, freetext);
+
+    await this.investigationActions.record({
+      sessionId,
+      userId: user.id,
+      actionType: 'search',
+      targetType: 'session',
+      targetId: sessionId,
+      metadata: { filters, freetext } as unknown as Prisma.InputJsonValue,
+    });
+
+    return { results: this.toResults(rows) };
+  }
+
+  // §2.8's "Global Search" — the same multi-table query as search(), scoped to every session
+  // the Student has ever run instead of just one. No InvestigationAction is recorded here (it
+  // isn't part of any one graded investigation's audit trail — that would need to pick one
+  // arbitrary sessionId out of possibly many, which would misrepresent where the search
+  // happened). Each result carries its originating session/scenario so the UI can link back.
+  async searchMine(
+    user: AuthenticatedUser,
+    filters: SearchFilter[],
+    freetext?: string,
+  ) {
+    const sessions = await this.prisma.investigationSession.findMany({
+      where: { userId: user.id },
+      include: { scenario: true },
+    });
+    if (sessions.length === 0) return { results: [] };
+
+    const scenarioTitleBySessionId = new Map(
+      sessions.map((s) => [s.id, s.scenario.title]),
+    );
+    const rows = await this.runQuery(
+      { in: sessions.map((s) => s.id) },
+      filters,
+      freetext,
+    );
+
+    return {
+      results: this.toResults(rows).map((r) => ({
+        ...r,
+        sessionId: r.sessionId,
+        scenarioTitle: scenarioTitleBySessionId.get(r.sessionId) ?? '',
+      })),
+    };
+  }
+
+  private async runQuery(
+    sessionScope: SessionScope,
+    filters: SearchFilter[],
+    freetext?: string,
+  ) {
+    const signInWhere: Prisma.SignInEventWhereInput = {
+      sessionId: sessionScope,
+    };
+    const emailWhere: Prisma.EmailMessageWhereInput = {
+      sessionId: sessionScope,
+    };
+    const cloudWhere: Prisma.CloudEventWhereInput = {
+      sessionId: sessionScope,
+    };
+    const processWhere: Prisma.ProcessEventWhereInput = {
+      sessionId: sessionScope,
+    };
+    const fileWhere: Prisma.FileEventWhereInput = { sessionId: sessionScope };
+    const networkWhere: Prisma.NetworkEventWhereInput = {
+      sessionId: sessionScope,
+    };
+    const httpWhere: Prisma.HttpRequestWhereInput = {
+      sessionId: sessionScope,
+    };
 
     for (const filter of filters) {
       if (SIGN_IN_FIELDS.has(filter.field)) {
@@ -214,53 +283,61 @@ export class SearchService {
         : Promise.resolve([]),
     ]);
 
-    await this.investigationActions.record({
-      sessionId,
-      userId: user.id,
-      actionType: 'search',
-      targetType: 'session',
-      targetId: sessionId,
-      metadata: { filters, freetext } as unknown as Prisma.InputJsonValue,
-    });
+    return {
+      signIns,
+      emails,
+      cloudEvents,
+      processEvents,
+      fileEvents,
+      networkEvents,
+      httpRequests,
+    };
+  }
 
-    const results = [
-      ...signIns.map((event) => ({
+  private toResults(rows: Awaited<ReturnType<SearchService['runQuery']>>) {
+    return [
+      ...rows.signIns.map((event) => ({
         entityType: 'sign_in_event' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentSignInDto(event),
       })),
-      ...emails.map((email) => ({
+      ...rows.emails.map((email) => ({
         entityType: 'email_message' as const,
         occurredAt: email.occurredAt,
+        sessionId: email.sessionId,
         data: toStudentEmailDto(email),
       })),
-      ...cloudEvents.map((event) => ({
+      ...rows.cloudEvents.map((event) => ({
         entityType: 'cloud_event' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentCloudEventDto(event),
       })),
-      ...processEvents.map((event) => ({
+      ...rows.processEvents.map((event) => ({
         entityType: 'process_event' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentProcessEventDto(event),
       })),
-      ...fileEvents.map((event) => ({
+      ...rows.fileEvents.map((event) => ({
         entityType: 'file_event' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentFileEventDto(event),
       })),
-      ...networkEvents.map((event) => ({
+      ...rows.networkEvents.map((event) => ({
         entityType: 'network_event' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentNetworkEventDto(event),
       })),
-      ...httpRequests.map((event) => ({
+      ...rows.httpRequests.map((event) => ({
         entityType: 'http_request' as const,
         occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
         data: toStudentHttpRequestDto(event),
       })),
     ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
-
-    return { results };
   }
 }

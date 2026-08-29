@@ -63,6 +63,7 @@ import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$tok
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
 import { Route as AppCasesIndexRouteImport } from './routes/app.cases.index'
 import { Route as AppCasesIdRouteImport } from './routes/app.cases.$id'
+import { Route as AppReportsSessionIdIncidentIdRouteImport } from './routes/app.reports.$sessionId.$incidentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -334,6 +335,12 @@ const AppCasesIdRoute = AppCasesIdRouteImport.update({
   path: '/cases/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsSessionIdIncidentIdRoute =
+  AppReportsSessionIdIncidentIdRouteImport.update({
+    id: '/$sessionId/$incidentId',
+    path: '/$sessionId/$incidentId',
+    getParentRoute: () => AppReportsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -376,7 +383,7 @@ export interface FileRoutesByFullPath {
   '/app/mitre': typeof AppMitreRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -390,6 +397,7 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases/': typeof AppCasesIndexRoute
+  '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -431,7 +439,7 @@ export interface FileRoutesByTo {
   '/app/mitre': typeof AppMitreRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -445,6 +453,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases': typeof AppCasesIndexRoute
+  '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -488,7 +497,7 @@ export interface FileRoutesById {
   '/app/mitre': typeof AppMitreRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -502,6 +511,7 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases/': typeof AppCasesIndexRoute
+  '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/cases/$id'
     | '/app/cases/'
+    | '/app/reports/$sessionId/$incidentId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -615,6 +626,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/cases/$id'
     | '/app/cases'
+    | '/app/reports/$sessionId/$incidentId'
   id:
     | '__root__'
     | '/'
@@ -671,6 +683,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/cases/$id'
     | '/app/cases/'
+    | '/app/reports/$sessionId/$incidentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1079,8 +1092,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCasesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/reports/$sessionId/$incidentId': {
+      id: '/app/reports/$sessionId/$incidentId'
+      path: '/$sessionId/$incidentId'
+      fullPath: '/app/reports/$sessionId/$incidentId'
+      preLoaderRoute: typeof AppReportsSessionIdIncidentIdRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
   }
 }
+
+interface AppReportsRouteChildren {
+  AppReportsSessionIdIncidentIdRoute: typeof AppReportsSessionIdIncidentIdRoute
+}
+
+const AppReportsRouteChildren: AppReportsRouteChildren = {
+  AppReportsSessionIdIncidentIdRoute: AppReportsSessionIdIncidentIdRoute,
+}
+
+const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
+  AppReportsRouteChildren,
+)
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
@@ -1103,7 +1135,7 @@ interface AppRouteChildren {
   AppMitreRoute: typeof AppMitreRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppReportsRoute: typeof AppReportsRoute
+  AppReportsRoute: typeof AppReportsRouteWithChildren
   AppScenarioBuilderRoute: typeof AppScenarioBuilderRoute
   AppScenariosRoute: typeof AppScenariosRoute
   AppSearchRoute: typeof AppSearchRoute
@@ -1137,7 +1169,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMitreRoute: AppMitreRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
-  AppReportsRoute: AppReportsRoute,
+  AppReportsRoute: AppReportsRouteWithChildren,
   AppScenarioBuilderRoute: AppScenarioBuilderRoute,
   AppScenariosRoute: AppScenariosRoute,
   AppSearchRoute: AppSearchRoute,

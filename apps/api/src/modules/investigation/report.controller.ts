@@ -25,3 +25,16 @@ export class ReportController {
     return this.service.getReport(sessionId, incidentId, user);
   }
 }
+
+// §2.14's Reports list — every closed incident the Student has ever produced a final report
+// for, across every session.
+@Controller('reports')
+@UseGuards(JwtAuthGuard)
+export class ReportsListController {
+  constructor(private readonly service: ReportService) {}
+
+  @Get('mine')
+  async listMine(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.listMine(user);
+  }
+}

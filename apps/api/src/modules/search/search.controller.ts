@@ -31,3 +31,19 @@ export class SearchController {
     );
   }
 }
+
+// §2.8's "Global Search" — the same field=value/freetext query as SearchController, across
+// every session the Student has ever run instead of just the one it's nested under.
+@Controller('search')
+@UseGuards(JwtAuthGuard)
+export class GlobalSearchController {
+  constructor(private readonly searchService: SearchService) {}
+
+  @Post('mine')
+  async searchMine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SearchDto,
+  ) {
+    return this.searchService.searchMine(user, dto.filters ?? [], dto.freetext);
+  }
+}

@@ -9,7 +9,7 @@ import { EvidenceLockerController } from './evidence-locker.controller';
 import { TimelineController } from './timeline.controller';
 import { TimelineService } from './timeline.service';
 import { GlobalTimelineController } from './global-timeline.controller';
-import { ReportController } from './report.controller';
+import { ReportController, ReportsListController } from './report.controller';
 import { ReportService } from './report.service';
 
 @Module({
@@ -21,6 +21,7 @@ import { ReportService } from './report.service';
     TimelineController,
     GlobalTimelineController,
     ReportController,
+    ReportsListController,
   ],
   providers: [
     AlertsService,

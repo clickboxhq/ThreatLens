@@ -301,37 +301,9 @@ export const endpoints = [
   },
 ];
 
-export const signedOverTime = [
-  { m: "Jan", investigations: 120, target: 100 },
-  { m: "Feb", investigations: 168, target: 140 },
-  { m: "Mar", investigations: 205, target: 180 },
-  { m: "Apr", investigations: 244, target: 220 },
-  { m: "May", investigations: 281, target: 260 },
-  { m: "Jun", investigations: 322, target: 300 },
-  { m: "Jul", investigations: 361, target: 330 },
-];
-
-export const mitreCoverage = [
-  { tactic: "Initial Access", cov: 78 },
-  { tactic: "Execution", cov: 84 },
-  { tactic: "Persistence", cov: 62 },
-  { tactic: "Priv. Escalation", cov: 71 },
-  { tactic: "Defense Evasion", cov: 68 },
-  { tactic: "Credential Access", cov: 88 },
-  { tactic: "Discovery", cov: 74 },
-  { tactic: "Lateral Movement", cov: 66 },
-  { tactic: "Collection", cov: 59 },
-  { tactic: "Exfiltration", cov: 63 },
-  { tactic: "Impact", cov: 72 },
-];
-
-export const leaderboard = [
-  { name: "Elena Rossi", score: 9820, solved: 148 },
-  { name: "Marcus Chen", score: 9414, solved: 141 },
-  { name: "Priya Nair", score: 8977, solved: 133 },
-  { name: "Yusuf Demir", score: 8541, solved: 129 },
-  { name: "Amelia Ward", score: 8102, solved: 121 },
-];
+// signedOverTime, mitreCoverage, and leaderboard used to live here backing the mocked
+// Analytics/dashboard-performance panels — both are real now (see api-analytics-service.ts and
+// use-dashboard-performance.ts), so those exports are gone.
 
 export const scenarios = [
   {

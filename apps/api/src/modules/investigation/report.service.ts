@@ -137,4 +137,24 @@ export class ReportService {
         : null,
     };
   }
+
+  // §2.14's Reports list — every closed incident the Student has ever produced a final report
+  // for, across every session, newest-first. Each row here is just enough to link to
+  // getReport() above; the full document is only assembled on demand.
+  async listMine(user: AuthenticatedUser) {
+    const incidents = await this.prisma.incident.findMany({
+      where: { status: 'closed', session: { userId: user.id } },
+      include: { session: { include: { scenario: true } } },
+      orderBy: { closedAt: 'desc' },
+    });
+
+    return incidents.map((incident) => ({
+      sessionId: incident.sessionId,
+      incidentId: incident.id,
+      incidentTitle: incident.title,
+      scenarioTitle: incident.session.scenario.title,
+      verdict: incident.verdict,
+      closedAt: incident.closedAt,
+    }));
+  }
 }

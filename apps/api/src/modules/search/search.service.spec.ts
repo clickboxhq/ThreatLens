@@ -24,6 +24,7 @@ function buildService() {
     fileEvent: { findMany: findManyMock([]) },
     networkEvent: { findMany: findManyMock([]) },
     httpRequest: { findMany: findManyMock([]) },
+    investigationSession: { findMany: findManyMock([]) },
   };
   const sessionAccess = {
     getOwnedSession: jest.fn(async () => ({ id: SESSION_ID })),
@@ -210,5 +211,79 @@ describe('SearchService (§2.8, §16.12)', () => {
     ]) {
       expect(table.findMany).not.toHaveBeenCalled();
     }
+  });
+});
+
+// §2.8's "Global Search" — same query, scoped to every session the Student owns.
+describe('SearchService.searchMine', () => {
+  it('returns [] without querying any telemetry table when the Student has no sessions', async () => {
+    const { service, prisma } = buildService();
+    const result = await service.searchMine(USER, []);
+
+    expect(result).toEqual({ results: [] });
+    expect(prisma.signInEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it("queries across every owned session and attaches each result's scenario title", async () => {
+    const { service, prisma } = buildService();
+    prisma.investigationSession.findMany = findManyMock([
+      { id: 'session-a', scenario: { title: 'Impossible Travel' } },
+      { id: 'session-b', scenario: { title: 'Password Spraying' } },
+    ]) as never;
+    prisma.signInEvent.findMany = findManyMock([
+      {
+        id: 's1',
+        sessionId: 'session-a',
+        occurredAt: new Date('2026-01-01T00:00:00Z'),
+        identityId: 'i1',
+        deviceId: null,
+        sourceIp: '1.1.1.1',
+        sourceCountry: 'US',
+        sourceCity: 'NYC',
+        application: 'Outlook',
+        result: 'success',
+        failureReason: null,
+        isLegacyAuth: false,
+        clientApp: 'modern',
+      },
+      {
+        id: 's2',
+        sessionId: 'session-b',
+        occurredAt: new Date('2026-01-02T00:00:00Z'),
+        identityId: 'i2',
+        deviceId: null,
+        sourceIp: '2.2.2.2',
+        sourceCountry: 'RU',
+        sourceCity: 'Moscow',
+        application: 'Outlook',
+        result: 'success',
+        failureReason: null,
+        isLegacyAuth: false,
+        clientApp: 'modern',
+      },
+    ]) as never;
+
+    const result = await service.searchMine(USER, []);
+
+    expect(prisma.signInEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          sessionId: { in: ['session-a', 'session-b'] },
+        }),
+      }),
+    );
+    expect(
+      result.results.map((r) => (r as { scenarioTitle: string }).scenarioTitle),
+    ).toEqual(['Password Spraying', 'Impossible Travel']);
+  });
+
+  it('does not record an InvestigationAction (no single session to attribute it to)', async () => {
+    const { service, prisma, investigationActions } = buildService();
+    prisma.investigationSession.findMany = findManyMock([
+      { id: 'session-a', scenario: { title: 'Impossible Travel' } },
+    ]) as never;
+
+    await service.searchMine(USER, []);
+    expect(investigationActions.record).not.toHaveBeenCalled();
   });
 });

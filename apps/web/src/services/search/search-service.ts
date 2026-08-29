@@ -1,6 +1,6 @@
-import type { SearchCategory, SearchResult } from "@/types/search";
+import type { GlobalSearchResult } from "@/types/search";
 
 export interface SearchService {
-  listCategories(): Promise<SearchCategory[]>;
-  listTopResults(): Promise<SearchResult[]>;
+  /** Empty string returns everything (matches the backend's own "no filters" behavior). */
+  search(freetext: string): Promise<GlobalSearchResult[]>;
 }

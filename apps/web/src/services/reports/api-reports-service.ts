@@ -1,8 +1,9 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { ReportsService } from "./reports-service";
+import type { ReportListItem, IncidentReport } from "@/types/reports";
 
 export const apiReportsService: ReportsService = {
-  listReports: () => {
-    throw new NotConnectedError("ReportsService.listReports");
-  },
+  listMine: () => apiClient.get<ReportListItem[]>("/reports/mine"),
+  getReport: (sessionId, incidentId) =>
+    apiClient.get<IncidentReport>(`/sessions/${sessionId}/incidents/${incidentId}/report`),
 };

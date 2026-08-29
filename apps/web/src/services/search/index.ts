@@ -1,5 +1,5 @@
+import { apiSearchService } from "./api-search-service";
 import type { SearchService } from "./search-service";
-import { mockSearchService } from "./mock-search-service";
 
-export const searchService: SearchService = mockSearchService;
+export const searchService: SearchService = apiSearchService;
 export type { SearchService } from "./search-service";

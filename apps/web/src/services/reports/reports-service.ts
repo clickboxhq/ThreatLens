@@ -1,5 +1,6 @@
-import type { ReportItem } from "@/types/reports";
+import type { ReportListItem, IncidentReport } from "@/types/reports";
 
 export interface ReportsService {
-  listReports(): Promise<ReportItem[]>;
+  listMine(): Promise<ReportListItem[]>;
+  getReport(sessionId: string, incidentId: string): Promise<IncidentReport>;
 }

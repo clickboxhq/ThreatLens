@@ -1,5 +1,5 @@
+import { apiReportsService } from "./api-reports-service";
 import type { ReportsService } from "./reports-service";
-import { mockReportsService } from "./mock-reports-service";
 
-export const reportsService: ReportsService = mockReportsService;
+export const reportsService: ReportsService = apiReportsService;
 export type { ReportsService } from "./reports-service";
