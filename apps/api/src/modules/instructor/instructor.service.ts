@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { toNumber } from '../../common/dto/decimal';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
@@ -159,7 +160,7 @@ export class InstructorService {
       scenarioTitle: s.scenario.title,
       status: s.status,
       submittedAt: s.submittedAt,
-      overallPercent: s.score?.overallPercent ?? null,
+      overallPercent: toNumber(s.score?.overallPercent),
       verdictCorrect: s.score?.verdictCorrect ?? null,
     }));
   }

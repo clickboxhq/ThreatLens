@@ -279,6 +279,37 @@ describe('Investigation flow (e2e)', () => {
     expect(Number(scoreBody.techniqueAccuracyPercent)).toBe(100);
   });
 
+  // Score fields are Decimal(5,2) in Postgres, which Prisma serialises as a quoted string
+  // unless converted. The DTOs have always declared `number`, and the dashboard believed it —
+  // `sum + value` concatenated and rendered "AVERAGE SCORE 186172%" in production. Assert the
+  // wire type, not just the value, since a string "85" passes any equality check on 85.
+  it('returns score percentages as JSON numbers, not Decimal strings', async () => {
+    const score = await http
+      .get(`/api/v1/sessions/${sessionId}/score`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    for (const field of [
+      'overallPercent',
+      'techniqueAccuracyPercent',
+      'evidencePrecisionPercent',
+      'evidenceRecallPercent',
+      'hintPenaltyPercent',
+    ]) {
+      expect(typeof score.body[field]).toBe('number');
+    }
+
+    const list = await http
+      .get('/api/v1/sessions')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const scored = (list.body as { overallPercent: unknown }[]).filter(
+      (s) => s.overallPercent !== null,
+    );
+    expect(scored.length).toBeGreaterThan(0);
+    for (const s of scored) expect(typeof s.overallPercent).toBe('number');
+  });
+
   it('reflects the completed session in Progress and Skill Radar', async () => {
     const sessions = await http
       .get('/api/v1/sessions')

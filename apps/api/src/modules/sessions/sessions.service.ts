@@ -11,6 +11,7 @@ import {
   SCORING_QUEUE,
 } from '../../common/queue/queue.module';
 import { computeSkillRadar, computeTechniqueMastery } from './skill-radar';
+import { toNumber } from '../../common/dto/decimal';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { TelemetryGenerationJobData } from '../telemetry-generator/telemetry-generator.processor';
 import type { ScoringJobData } from '../scoring/scoring.types';
@@ -119,7 +120,7 @@ export class SessionsService {
       scenarioTitle: session.scenario.title,
       scenarioCategory: session.scenario.category,
       status: session.status,
-      overallPercent: session.score?.overallPercent ?? null,
+      overallPercent: toNumber(session.score?.overallPercent),
       verdictCorrect: session.score?.verdictCorrect ?? null,
       startedAt: session.startedAt,
       submittedAt: session.submittedAt,
@@ -266,12 +267,12 @@ export class SessionsService {
       );
     }
     return {
-      overallPercent: score.overallPercent,
-      techniqueAccuracyPercent: score.techniqueAccuracyPercent,
-      evidencePrecisionPercent: score.evidencePrecisionPercent,
-      evidenceRecallPercent: score.evidenceRecallPercent,
+      overallPercent: toNumber(score.overallPercent),
+      techniqueAccuracyPercent: toNumber(score.techniqueAccuracyPercent),
+      evidencePrecisionPercent: toNumber(score.evidencePrecisionPercent),
+      evidenceRecallPercent: toNumber(score.evidenceRecallPercent),
       falsePositiveCount: score.falsePositiveCount,
-      hintPenaltyPercent: score.hintPenaltyPercent,
+      hintPenaltyPercent: toNumber(score.hintPenaltyPercent),
       timeToResolutionSeconds: score.timeToResolutionSeconds,
       verdictCorrect: score.verdictCorrect,
       rubricBreakdown: score.rubricBreakdown,
