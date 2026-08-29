@@ -558,10 +558,31 @@ export class AuthService {
       type: argon2.argon2id,
     });
 
+    // A password reset is only reachable by clicking a real, single-use, time-limited link
+    // sent to the account's registered email — the same trust level this codebase already
+    // relies on to prove account ownership elsewhere. For a role where MFA is optional, that's
+    // strong enough to also serve as "I lost my authenticator and have no recovery codes"
+    // recovery: without clearing it here, a Student/Instructor who resets their password would
+    // still be stuck at the login MFA prompt with no way to satisfy it, i.e. still fully locked
+    // out. For org_admin/platform_admin, MFA is mandatory (§15.2) specifically so it can't be
+    // casually removed — mirroring mfaDisable()'s own rule, a password reset does not clear it
+    // for those roles, so an attacker who compromises only the mailbox still can't strip 2FA
+    // off a privileged account this way.
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    const clearsMfa = user.mfaEnabled && !MFA_MANDATORY_ROLES.has(user.role);
+
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data: { passwordHash, sessionVersion: { increment: 1 } },
+        data: {
+          passwordHash,
+          sessionVersion: { increment: 1 },
+          ...(clearsMfa
+            ? { mfaEnabled: false, mfaSecret: null, mfaRecoveryCodesHash: [] }
+            : {}),
+        },
       }),
       this.prisma.refreshToken.updateMany({
         where: { userId, revokedAt: null },
@@ -575,6 +596,7 @@ export class AuthService {
       action: 'password_reset',
       targetType: 'user',
       targetId: userId,
+      metadata: clearsMfa ? { mfaCleared: true } : undefined,
       correlationId,
     });
   }
