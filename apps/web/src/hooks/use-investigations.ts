@@ -28,7 +28,11 @@ export function useSessionReadiness(sessionId: string | undefined) {
     queryKey: sessionId ? keys.session(sessionId) : ["session", "none"],
     queryFn: () => investigationsService.getSession(sessionId!),
     enabled: Boolean(sessionId),
-    refetchInterval: (query) => (query.state.data?.ready ? false : 1500),
+    // A session that doesn't exist (deleted, expired, or a mistyped/stale URL) 404s every
+    // time — without the error check here, this would poll a 404 forever instead of settling
+    // on CaseWorkspace's own "Could not load this session" branch.
+    refetchInterval: (query) =>
+      query.state.status === "error" || query.state.data?.ready ? false : 1500,
   });
 }
 
