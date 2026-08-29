@@ -1,7 +1,8 @@
 import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useScenarios } from "@/hooks/use-scenarios";
+import { useQuery } from "@tanstack/react-query";
+import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
 import {
   LayoutGrid,
   ShieldAlert,
@@ -53,7 +54,12 @@ export function CommandPalette({
 }) {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
-  const { scenarios } = useScenarios();
+  // Real, published scenarios — the command palette used to read a fabricated list from a
+  // mock store (fake ids like "SC-081", fake MITRE tags) with no real backing at all.
+  const { data: scenarios = [] } = useQuery({
+    queryKey: ["scenarios", "command-palette"],
+    queryFn: () => listRealScenarios(),
+  });
 
   useEffect(() => {
     if (!open) setQ("");
@@ -121,12 +127,12 @@ export function CommandPalette({
               {scenarios.map((s) => (
                 <Command.Item
                   key={s.id}
-                  value={`scenario ${s.id} ${s.title} ${s.mitre.join(" ")}`}
+                  value={`scenario ${s.slug} ${s.title} ${s.techniqueIds.join(" ")}`}
                   onSelect={() => go("/app/scenarios")}
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
                 >
                   <Library className="size-3.5 text-muted-foreground" />
-                  <span className="font-mono text-[11px] text-muted-foreground">{s.id}</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{s.slug}</span>
                   <span className="truncate">{s.title}</span>
                 </Command.Item>
               ))}
