@@ -43,6 +43,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
         _count: { users: 3 },
         createdAt: new Date(),
       })),
+      update: jest.fn(async () => undefined),
     },
     organizationInvite: {
       findUnique: jest.fn(async () => null),
@@ -173,6 +174,47 @@ describe('OrganizationsService member/invite access control', () => {
         role: 'student',
       }),
     ).rejects.toMatchObject({ status: 409, code: 'ALREADY_A_MEMBER' });
+  });
+});
+
+describe('OrganizationsService.rename', () => {
+  it('rejects a non-org_admin caller', async () => {
+    const { service } = buildService();
+    const user = buildUser({ role: 'instructor' });
+
+    await expect(
+      service.rename(user, { name: 'New Name' }),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('rejects an org_admin with no organization', async () => {
+    const { service } = buildService({ orgId: null });
+    const user = buildUser({ role: 'org_admin' });
+
+    await expect(
+      service.rename(user, { name: 'New Name' }),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_IN_ORGANIZATION' });
+  });
+
+  it("updates the org's name and returns the refreshed org DTO", async () => {
+    const { service, prisma, orgId } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    const user = buildUser({ role: 'org_admin' });
+
+    const result = await service.rename(user, { name: 'New Name' });
+
+    expect(prisma.organization.update).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+      data: { name: 'New Name' },
+    });
+    expect(result).toEqual({
+      id: orgId,
+      name: 'Contoso University',
+      memberCount: 3,
+      createdAt: expect.any(Date),
+    });
   });
 });
 

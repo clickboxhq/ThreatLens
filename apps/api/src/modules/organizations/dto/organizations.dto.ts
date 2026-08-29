@@ -6,6 +6,12 @@ export class CreateOrganizationDto {
   name!: string;
 }
 
+export class UpdateOrganizationDto {
+  @IsString()
+  @MinLength(1)
+  name!: string;
+}
+
 export class CreateInviteDto {
   @IsEmail()
   email!: string;

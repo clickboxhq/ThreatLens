@@ -1,7 +1,8 @@
-import type { SecurityToggle, DataResidencyRegion, SettingsSection } from "@/types/settings";
+import type { MfaStatus, MfaSetup } from "@/types/settings";
 
 export interface SettingsService {
-  listSections(): Promise<SettingsSection[]>;
-  listSecurityToggles(): Promise<SecurityToggle[]>;
-  listDataResidencyRegions(): Promise<DataResidencyRegion[]>;
+  getMfaStatus(): Promise<MfaStatus>;
+  setupMfa(): Promise<MfaSetup>;
+  enableMfa(code: string): Promise<{ recoveryCodes: string[] }>;
+  disableMfa(password: string): Promise<void>;
 }

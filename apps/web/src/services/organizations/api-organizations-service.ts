@@ -20,6 +20,8 @@ export const apiOrganizationsService: OrganizationsService = {
     }
   },
 
+  rename: (name) => apiClient.patch<OrganizationDto>("/organizations/mine", { name }),
+
   listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
 
   listInvites: () => apiClient.get<OrganizationInviteDto[]>("/organizations/mine/invites"),

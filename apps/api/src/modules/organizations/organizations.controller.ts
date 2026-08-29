@@ -1,8 +1,17 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import {
   CreateInviteDto,
   CreateOrganizationDto,
+  UpdateOrganizationDto,
 } from './dto/organizations.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -28,6 +37,14 @@ export class OrganizationsController {
   @Get('mine')
   async getMine(@CurrentUser() user: AuthenticatedUser) {
     return this.organizationsService.getMine(user);
+  }
+
+  @Patch('mine')
+  async rename(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateOrganizationDto,
+  ) {
+    return this.organizationsService.rename(user, dto);
   }
 
   @Get('mine/members')

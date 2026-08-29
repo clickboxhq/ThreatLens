@@ -1,12 +1,15 @@
-import { NotConnectedError } from "@/services/shared/not-connected-error";
+import { apiClient } from "@/lib/api-client";
 import type { SettingsService } from "./settings-service";
-
-const notConnected = (method: string): never => {
-  throw new NotConnectedError(`SettingsService.${method}`);
-};
+import type { MfaStatus, MfaSetup } from "@/types/settings";
 
 export const apiSettingsService: SettingsService = {
-  listSections: () => notConnected("listSections"),
-  listSecurityToggles: () => notConnected("listSecurityToggles"),
-  listDataResidencyRegions: () => notConnected("listDataResidencyRegions"),
+  getMfaStatus: () => apiClient.get<MfaStatus>("/auth/mfa/status"),
+
+  setupMfa: () => apiClient.post<MfaSetup>("/auth/mfa/setup"),
+
+  enableMfa: (code) => apiClient.post<{ recoveryCodes: string[] }>("/auth/mfa/enable", { code }),
+
+  disableMfa: async (password) => {
+    await apiClient.post("/auth/mfa/disable", { password });
+  },
 };

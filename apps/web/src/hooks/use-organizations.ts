@@ -32,6 +32,16 @@ export function useCreateOrganization() {
   });
 }
 
+export function useRenameOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => organizationsService.rename(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
+  });
+}
+
 export function useOrganizationMembers(enabled: boolean) {
   const query = useQuery({
     queryKey: keys.members,

@@ -1,25 +1,33 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { settingsService } from "@/services/settings";
 import { queryKeys } from "./query-keys";
-import { deriveViewState } from "./use-query-state";
 
-export function useSettings() {
-  const sectionsQuery = useQuery({
-    queryKey: [...queryKeys.settings, "sections"],
-    queryFn: () => settingsService.listSections(),
+export function useMfaStatus() {
+  const query = useQuery({
+    queryKey: [...queryKeys.settings, "mfa-status"],
+    queryFn: () => settingsService.getMfaStatus(),
   });
-  const togglesQuery = useQuery({
-    queryKey: [...queryKeys.settings, "toggles"],
-    queryFn: () => settingsService.listSecurityToggles(),
+  return { status: query.data, isPending: query.isPending };
+}
+
+export function useSetupMfa() {
+  return useMutation({ mutationFn: () => settingsService.setupMfa() });
+}
+
+export function useEnableMfa() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) => settingsService.enableMfa(code),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.settings, "mfa-status"] }),
   });
-  const regionsQuery = useQuery({
-    queryKey: [...queryKeys.settings, "regions"],
-    queryFn: () => settingsService.listDataResidencyRegions(),
+}
+
+export function useDisableMfa() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => settingsService.disableMfa(password),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.settings, "mfa-status"] }),
   });
-  return {
-    sections: sectionsQuery.data ?? [],
-    securityToggles: togglesQuery.data ?? [],
-    dataResidencyRegions: regionsQuery.data ?? [],
-    state: deriveViewState(sectionsQuery),
-  };
 }

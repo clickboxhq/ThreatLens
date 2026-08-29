@@ -9,8 +9,9 @@ import {
   useOrganizationMembers,
   useOrganizationInvites,
   useCreateInvite,
+  useRenameOrganization,
 } from "@/hooks/use-organizations";
-import { Building2, Clock, UserPlus } from "lucide-react";
+import { Building2, Clock, Pencil, UserPlus } from "lucide-react";
 import type { InviteRole } from "@/types/socverse-organizations";
 
 export const Route = createFileRoute("/app/organizations")({
@@ -92,9 +93,21 @@ function OrgRoster({
   } = useOrganizationMembers(true);
   const { invites } = useOrganizationInvites(true);
   const createInvite = useCreateInvite();
+  const renameOrg = useRenameOrganization();
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InviteRole>("student");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(organization.name);
+
+  const submitRename = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nameDraft.trim() || nameDraft === organization.name) {
+      setEditingName(false);
+      return;
+    }
+    renameOrg.mutate(nameDraft.trim(), { onSuccess: () => setEditingName(false) });
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,11 +143,56 @@ function OrgRoster({
           <IconTile tone="info" size="lg">
             <Building2 className="size-5" />
           </IconTile>
-          <div>
-            <div className="text-[14px] font-medium">{organization.name}</div>
+          <div className="flex-1">
+            {editingName ? (
+              <form onSubmit={submitRename} className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  className="h-8 rounded-md border border-border bg-background px-2.5 text-[13px] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={renameOrg.isPending}
+                  className="h-8 rounded-md bg-primary px-2.5 text-[11.5px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                >
+                  {renameOrg.isPending ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingName(false);
+                    setNameDraft(organization.name);
+                  }}
+                  className="h-8 rounded-md border border-border px-2.5 text-[11.5px] text-secondary hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="text-[14px] font-medium">{organization.name}</div>
+                <button
+                  onClick={() => {
+                    setNameDraft(organization.name);
+                    setEditingName(true);
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Rename organization"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              </div>
+            )}
             <div className="text-[12px] text-muted-foreground">
               {organization.memberCount} {organization.memberCount === 1 ? "member" : "members"}
             </div>
+            {renameOrg.isError && (
+              <p className="mt-1 text-[11.5px] text-[color:var(--critical)]">
+                Couldn't rename the organization — try again.
+              </p>
+            )}
           </div>
         </div>
       </Panel>

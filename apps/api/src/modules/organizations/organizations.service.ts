@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   CreateInviteDto,
   CreateOrganizationDto,
+  UpdateOrganizationDto,
 } from './dto/organizations.dto';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — long enough to reach someone over a
@@ -87,6 +88,15 @@ export class OrganizationsService {
       );
     }
     return this.toOrgDto(me.orgId);
+  }
+
+  async rename(user: AuthenticatedUser, dto: UpdateOrganizationDto) {
+    const orgId = await this.getOwnedOrgId(user);
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { name: dto.name },
+    });
+    return this.toOrgDto(orgId);
   }
 
   async listMembers(user: AuthenticatedUser) {

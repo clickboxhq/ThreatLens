@@ -9,6 +9,7 @@ import type {
 export interface OrganizationsService {
   create(name: string): Promise<OrganizationDto>;
   getMine(): Promise<OrganizationDto | null>;
+  rename(name: string): Promise<OrganizationDto>;
   listMembers(): Promise<OrganizationMemberDto[]>;
   listInvites(): Promise<OrganizationInviteDto[]>;
   createInvite(email: string, role: InviteRole): Promise<OrganizationInviteDto>;
