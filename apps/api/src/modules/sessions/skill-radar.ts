@@ -134,7 +134,7 @@ export function computeTechniqueMastery(
         techniqueId,
         name: meta?.name ?? techniqueId,
         tactic: meta?.tactic ?? '',
-        tacticName: TACTIC_NAMES[meta?.tactic ?? ''] ?? (meta?.tactic ?? ''),
+        tacticName: TACTIC_NAMES[meta?.tactic ?? ''] ?? meta?.tactic ?? '',
         requiredCount,
         hitCount,
         percent: Math.round((hitCount / requiredCount) * 1000) / 10,

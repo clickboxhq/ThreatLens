@@ -131,8 +131,7 @@ export class SessionsService {
   // computation (rubric JSON + closed-incident IncidentTechnique rows) rather than reading
   // back through Score.rubricBreakdown, since that field never captured a tactic or a hit list.
   async getSkillRadar(user: AuthenticatedUser) {
-    const { outcomes, allTechniques } =
-      await this.loadTechniqueOutcomes(user);
+    const { outcomes, allTechniques } = await this.loadTechniqueOutcomes(user);
     const tacticByTechniqueId = new Map(
       allTechniques.map((t) => [t.techniqueId, t.tactic]),
     );
@@ -142,8 +141,7 @@ export class SessionsService {
   // Same required-vs-tagged aggregation as getSkillRadar, but rolled up per individual
   // technique rather than per tactic — backs the MITRE ATT&CK Explorer's technique table.
   async getTechniqueMastery(user: AuthenticatedUser) {
-    const { outcomes, allTechniques } =
-      await this.loadTechniqueOutcomes(user);
+    const { outcomes, allTechniques } = await this.loadTechniqueOutcomes(user);
     const metaByTechniqueId = new Map(
       allTechniques.map((t) => [t.techniqueId, t]),
     );
