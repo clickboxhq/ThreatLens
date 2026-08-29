@@ -19,17 +19,25 @@ import type {
 // is a plain `@IsObject()` here plus real structural validation in the service, since the cross-
 // field rules involved — entity refs resolving, techniques existing, required techniques
 // actually appearing in the kill chain — aren't expressible as per-field decorators anyway).
+// `attributes` is a real nested wrapper, not a flattening convenience — generator.ts's own
+// GroundTruthDefinition interface reads `narrative.attributes.department` etc., so a flat shape
+// here would silently read as `undefined` at telemetry-generation time (a synchronous throw
+// inside the BullMQ job, with no ready-flag ever set) rather than fail validation up front.
 export interface AuthoredNarrativeIdentity {
   ref: string;
-  department: string;
-  job_title: string;
-  home_country: string;
+  attributes: {
+    department: string;
+    job_title: string;
+    home_country: string;
+  };
 }
 
 export interface AuthoredNarrativeDevice {
   ref: string;
-  hostname: string;
-  os_platform: string;
+  attributes: {
+    hostname: string;
+    os_platform: string;
+  };
 }
 
 export interface AuthoredKillChainStep {

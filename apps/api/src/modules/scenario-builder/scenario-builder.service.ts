@@ -67,13 +67,19 @@ export class ScenarioBuilderService {
     }
     for (const identity of identities) {
       if (!identity.ref) errors.push('Every narrative identity needs a ref.');
-      if (!identity.department)
+      if (!identity.attributes) {
+        errors.push(
+          `Identity "${identity.ref}" is missing its attributes object.`,
+        );
+        continue;
+      }
+      if (!identity.attributes.department)
         errors.push(`Identity "${identity.ref}" is missing a department.`);
-      if (!identity.job_title)
+      if (!identity.attributes.job_title)
         errors.push(`Identity "${identity.ref}" is missing a job_title.`);
       if (
         !(NARRATIVE_HOME_COUNTRIES as readonly string[]).includes(
-          identity.home_country,
+          identity.attributes.home_country,
         )
       ) {
         errors.push(
@@ -83,11 +89,15 @@ export class ScenarioBuilderService {
     }
     for (const device of devices) {
       if (!device.ref) errors.push('Every narrative device needs a ref.');
-      if (!device.hostname)
+      if (!device.attributes) {
+        errors.push(`Device "${device.ref}" is missing its attributes object.`);
+        continue;
+      }
+      if (!device.attributes.hostname)
         errors.push(`Device "${device.ref}" is missing a hostname.`);
       if (
         !(NARRATIVE_OS_PLATFORMS as readonly string[]).includes(
-          device.os_platform,
+          device.attributes.os_platform,
         )
       ) {
         errors.push(

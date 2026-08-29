@@ -18,16 +18,23 @@ function toGroundTruthDefinition(draft: ScenarioDraft) {
   return {
     metadata: draft.narrativeSummary ? { narrative_summary: draft.narrativeSummary } : undefined,
     population: {
+      // `attributes` is a real nested wrapper the generator's own interface requires
+      // (narrative.attributes.department, not a flattened narrative.department) — not a
+      // flattening convenience, so it has to round-trip through the wire shape unchanged.
       narrative_identities: draft.identities.map((i) => ({
         ref: i.ref,
-        department: i.department,
-        job_title: i.jobTitle,
-        home_country: i.homeCountry,
+        attributes: {
+          department: i.department,
+          job_title: i.jobTitle,
+          home_country: i.homeCountry,
+        },
       })),
       narrative_devices: draft.devices.map((d) => ({
         ref: d.ref,
-        hostname: d.hostname,
-        os_platform: d.osPlatform,
+        attributes: {
+          hostname: d.hostname,
+          os_platform: d.osPlatform,
+        },
       })),
       decoy_population_size: {
         identities: draft.decoyIdentities,

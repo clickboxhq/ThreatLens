@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
 import { ScenarioBuilderService } from './scenario-builder.service';
+import { generateTelemetry } from '../telemetry-generator/generator';
+import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type {
   AuthoredGroundTruthDefinition,
   CreateScenarioDto,
@@ -49,9 +52,11 @@ function validDefinition(): AuthoredGroundTruthDefinition {
       narrative_identities: [
         {
           ref: 'victim_1',
-          department: 'Legal',
-          job_title: 'Compliance Analyst',
-          home_country: 'US',
+          attributes: {
+            department: 'Legal',
+            job_title: 'Compliance Analyst',
+            home_country: 'US',
+          },
         },
       ],
       narrative_devices: [],
@@ -140,7 +145,10 @@ describe('ScenarioBuilderService.validate', () => {
     const { service } = buildService();
     const def = validDefinition();
     def.population.narrative_devices = [
-      { ref: 'device_1', hostname: 'FIN-WKS-01', os_platform: 'windows' },
+      {
+        ref: 'device_1',
+        attributes: { hostname: 'FIN-WKS-01', os_platform: 'windows' },
+      },
     ];
     def.kill_chain[0].event_template_id = 'credential_dumping_lsass_dump_v1';
     def.kill_chain[0].device_ref = 'device_1';
@@ -151,7 +159,7 @@ describe('ScenarioBuilderService.validate', () => {
   it('rejects a home_country outside the 5 the generator recognizes', async () => {
     const { service } = buildService();
     const def = validDefinition();
-    def.population.narrative_identities[0].home_country = 'FR';
+    def.population.narrative_identities[0].attributes.home_country = 'FR';
     const errors = await service.validate(def);
     expect(errors.some((e) => e.includes('home_country'))).toBe(true);
   });
@@ -184,12 +192,57 @@ describe('ScenarioBuilderService.validate', () => {
     expect(errors.some((e) => e.includes('min_evidence_items'))).toBe(true);
   });
 
+  it('rejects a narrative identity missing its attributes wrapper — the exact shape generator.ts requires, not a flattened one', async () => {
+    const { service } = buildService();
+    const def = validDefinition();
+    // Deliberately malformed (as an unchecked HTTP payload could arrive) to prove validate()
+    // catches it rather than trusting the TS type.
+    def.population.narrative_identities[0] = {
+      ref: 'victim_1',
+      department: 'Legal',
+    } as unknown as (typeof def.population.narrative_identities)[number];
+    const errors = await service.validate(def);
+    expect(errors.some((e) => e.includes('attributes'))).toBe(true);
+  });
+
   it('rejects an empty kill chain', async () => {
     const { service } = buildService();
     const def = validDefinition();
     def.kill_chain = [];
     const errors = await service.validate(def);
     expect(errors.some((e) => e.includes('kill-chain step is required'))).toBe(
+      true,
+    );
+  });
+
+  // The regression guard for the exact bug that shipped once: validate() and
+  // generateTelemetry() must agree on the *real* shape (narrative.attributes.department,
+  // not a flattened narrative.department) — a unit test that only checks validate() against
+  // its own DTO type can't catch a mismatch against generator.ts's actual interface. This
+  // feeds a definition that already passed validate() into the real generator and confirms
+  // it produces real telemetry instead of throwing.
+  it('produces real telemetry from a definition that already passed validate() — no drift between the two', async () => {
+    const { service } = buildService();
+    const def = validDefinition();
+    expect(await service.validate(def)).toEqual([]);
+
+    const techniqueIdBySlug = new Map(
+      KNOWN_TECHNIQUES.map((t) => [t.techniqueId, t.id]),
+    );
+    // `metadata` is typed differently between the two interfaces (generator.ts's own
+    // `metadata.world_time_window_hours` is itself dead — confirmed nothing reads it, the real
+    // value lives at `population.world_time_window_hours`) — every field generateTelemetry
+    // actually consumes is what this test is really checking type-compatibility on.
+    const telemetry = generateTelemetry(
+      randomUUID(),
+      42n,
+      def as unknown as GroundTruthDefinition,
+      techniqueIdBySlug,
+    );
+
+    expect(telemetry.identities.length).toBeGreaterThan(0);
+    expect(telemetry.signInEvents.length).toBeGreaterThan(0);
+    expect(telemetry.signInEvents.some((e) => e.isGroundTruthEvidence)).toBe(
       true,
     );
   });
