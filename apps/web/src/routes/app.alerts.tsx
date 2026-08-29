@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge, StatusBadge } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
@@ -7,7 +7,7 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { useActiveSession } from "@/hooks/use-active-session";
-import { useAlerts, useUpdateAlertStatus } from "@/hooks/use-alerts";
+import { useAlerts, useUpdateAlertStatus, useAlertEvidence } from "@/hooks/use-alerts";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import type { AlertSeverity, AlertStatus } from "@/types/socverse-operations";
 import type { Severity, Status } from "@/components/soc/primitives";
@@ -45,6 +45,8 @@ function AlertsPage() {
   // carries its id, but until now the queue dead-ended there: you had to go find that host
   // yourself among every other device in the session. The alert is where an investigation
   // actually starts, so it pivots straight into the entity.
+  // "Why did this fire?" — the rule's own working, one click from the row it belongs to.
+  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
   const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
 
@@ -111,55 +113,78 @@ function AlertsPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {alerts.map((a) => (
-                  <tr key={a.id} className="hover:bg-background/40">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{a.title}</div>
-                      <div className="mt-0.5 max-w-md text-[11px] text-muted-foreground">
-                        {a.description}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <SeverityBadge level={SEVERITY_LABEL[a.severity]} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={STATUS_LABEL[a.status]} />
-                    </td>
-                    <td className="px-4 py-3 font-mono text-[11.5px] text-secondary">
-                      {a.mitreTechnique?.techniqueId ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {a.entityDisplay && a.primaryEntityType !== "mailbox" ? (
+                  <Fragment key={a.id}>
+                    <tr className="hover:bg-background/40">
+                      <td className="px-4 py-3">
                         <button
                           onClick={() =>
-                            a.primaryEntityType === "identity"
-                              ? setOpenIdentityId(a.primaryEntityId)
-                              : setOpenDeviceId(a.primaryEntityId)
+                            setExpandedAlertId((prev) => (prev === a.id ? null : a.id))
                           }
-                          className="text-left text-[color:var(--info)] underline-offset-2 hover:underline"
+                          className="text-left"
                         >
-                          {a.entityDisplay}
+                          <div className="font-medium text-foreground hover:text-[color:var(--info)]">
+                            {a.title}
+                          </div>
+                          <div className="mt-0.5 max-w-md text-[11px] text-muted-foreground">
+                            {a.description}
+                          </div>
+                          <div className="mt-1 text-[10.5px] text-[color:var(--info)]">
+                            {expandedAlertId === a.id ? "Hide" : "Why did this fire?"}
+                          </div>
                         </button>
-                      ) : (
-                        <span className="text-secondary">{a.entityDisplay ?? "—"}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      {formatRelativeTime(a.lastSeenAt)}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      {a.status === "new" || a.status === "in_progress" ? (
-                        <button
-                          disabled={updateStatus.isPending}
-                          onClick={() => updateStatus.mutate({ alertId: a.id, status: "resolved" })}
-                          className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
-                        >
-                          Mark resolved
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-3">
+                        <SeverityBadge level={SEVERITY_LABEL[a.severity]} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={STATUS_LABEL[a.status]} />
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[11.5px] text-secondary">
+                        {a.mitreTechnique?.techniqueId ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {a.entityDisplay && a.primaryEntityType !== "mailbox" ? (
+                          <button
+                            onClick={() =>
+                              a.primaryEntityType === "identity"
+                                ? setOpenIdentityId(a.primaryEntityId)
+                                : setOpenDeviceId(a.primaryEntityId)
+                            }
+                            className="text-left text-[color:var(--info)] underline-offset-2 hover:underline"
+                          >
+                            {a.entityDisplay}
+                          </button>
+                        ) : (
+                          <span className="text-secondary">{a.entityDisplay ?? "—"}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {formatRelativeTime(a.lastSeenAt)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {a.status === "new" || a.status === "in_progress" ? (
+                          <button
+                            disabled={updateStatus.isPending}
+                            onClick={() =>
+                              updateStatus.mutate({ alertId: a.id, status: "resolved" })
+                            }
+                            className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
+                          >
+                            Mark resolved
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedAlertId === a.id && (
+                      <tr className="bg-background/40">
+                        <td colSpan={7} className="px-4 pb-3">
+                          <AlertEvidence sessionId={selectedSessionId!} alertId={a.id} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -181,6 +206,50 @@ function AlertsPage() {
           onClose={() => setOpenDeviceId(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** The events a detection fired on, shown inline under its row. Surfaces the rule's working
+ * so a learner can see the reasoning rather than infer it — and so the pivot from "an alert
+ * exists" to "here is the telemetry behind it" takes one click instead of a manual hunt. */
+function AlertEvidence({ sessionId, alertId }: { sessionId: string; alertId: string }) {
+  const { data, isPending, isError } = useAlertEvidence(sessionId, alertId);
+
+  if (isPending) {
+    return <div className="py-2 text-[11.5px] text-muted-foreground">Loading evidence…</div>;
+  }
+  if (isError || !data) {
+    return (
+      <div className="py-2 text-[11.5px] text-muted-foreground">
+        Could not load what triggered this alert.
+      </div>
+    );
+  }
+  if (data.evidence.length === 0) {
+    return (
+      <div className="py-2 text-[11.5px] text-muted-foreground">
+        This alert recorded no individual triggering events.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        What triggered this alert · {data.evidence.length}{" "}
+        {data.evidence.length === 1 ? "event" : "events"}
+      </div>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {data.evidence.map((e) => (
+          <li key={`${e.eventTable}:${e.eventId}`} className="flex items-baseline gap-2">
+            <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+              {new Date(e.occurredAt).toISOString().slice(11, 16)}
+            </span>
+            <span className="text-[11.5px] text-secondary">{e.summary}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import { apiClient } from "@/lib/api-client";
 import type { AlertsService } from "./alerts-service";
-import type { AlertDto } from "@/types/socverse-operations";
+import type { AlertDto, AlertEvidenceDto } from "@/types/socverse-operations";
 
 export const apiAlertsService: AlertsService = {
+  getEvidence: (sessionId, alertId) =>
+    apiClient.get<AlertEvidenceDto>(`/sessions/${sessionId}/alerts/${alertId}/evidence`),
+
   list: (sessionId, filters = {}) => {
     const params = new URLSearchParams();
     if (filters.severity) params.set("severity", filters.severity);

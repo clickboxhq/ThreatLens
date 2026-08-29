@@ -250,3 +250,18 @@ export interface CloudEventDto {
   resourceId: string | null;
   sourceIp: string;
 }
+
+/** GET /sessions/:id/alerts/:id/evidence — the telemetry a detection actually fired on.
+ * The rule's own working, so a learner can see why an alert exists rather than guess. */
+export interface AlertEvidenceItemDto {
+  eventTable: string;
+  eventId: string;
+  occurredAt: string;
+  summary: string;
+  detail: Record<string, unknown>;
+}
+
+export interface AlertEvidenceDto {
+  alertId: string;
+  evidence: AlertEvidenceItemDto[];
+}
