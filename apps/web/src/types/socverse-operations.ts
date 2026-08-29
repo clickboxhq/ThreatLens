@@ -183,3 +183,70 @@ export interface EmailLinkActivityDto {
   clickCount: number;
   clicks: EmailLinkClickDto[];
 }
+
+// Endpoint/cloud telemetry, mirroring apps/api's toStudent*Dto mappers. Ground-truth fields
+// (isGroundTruthEvidence, mitreTechniqueId, correlationId, raw) are stripped server-side and
+// deliberately absent here too.
+export interface ProcessEventDto {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  processGuid: string;
+  parentProcessGuid: string | null;
+  imagePath: string;
+  commandLine: string;
+  hashSha256: string;
+  parentImagePath: string | null;
+  integrityLevel: string;
+  identityId: string | null;
+}
+
+/** GET /devices/:id/process-tree returns roots with children nested by parentProcessGuid. */
+export interface ProcessTreeNodeDto extends ProcessEventDto {
+  children: ProcessTreeNodeDto[];
+}
+
+export interface FileEventDto {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  action: string;
+  filePath: string;
+  hashSha256: string | null;
+  processGuid: string | null;
+}
+
+export interface NetworkEventDto {
+  id: string;
+  occurredAt: string;
+  deviceId: string;
+  direction: string;
+  protocol: string;
+  localPort: number;
+  remoteIp: string;
+  remotePort: number;
+  bytesSent: number;
+  bytesReceived: number;
+  processGuid: string | null;
+}
+
+export interface HttpRequestDto {
+  id: string;
+  occurredAt: string;
+  deviceId: string | null;
+  method: string;
+  url: string;
+  userAgent: string;
+  statusCode: number;
+  sourceIp: string;
+}
+
+export interface CloudEventDto {
+  id: string;
+  occurredAt: string;
+  identityId: string;
+  provider: string;
+  actionName: string;
+  resourceId: string | null;
+  sourceIp: string;
+}

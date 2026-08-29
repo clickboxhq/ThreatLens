@@ -3,8 +3,12 @@ import { identitiesService } from "@/services/identities";
 
 const keys = {
   list: (sessionId: string) => ["session", sessionId, "identities"] as const,
+  profile: (sessionId: string, identityId: string) =>
+    ["session", sessionId, "identities", identityId] as const,
   signIns: (sessionId: string, identityId: string) =>
     ["session", sessionId, "identities", identityId, "signins"] as const,
+  cloudEvents: (sessionId: string, identityId: string) =>
+    ["session", sessionId, "identities", identityId, "cloud-events"] as const,
 };
 
 export function useIdentities(sessionId: string | undefined) {
@@ -15,10 +19,26 @@ export function useIdentities(sessionId: string | undefined) {
   });
 }
 
+export function useIdentityProfile(sessionId: string, identityId: string | null) {
+  return useQuery({
+    queryKey: identityId ? keys.profile(sessionId, identityId) : ["identity", "none"],
+    queryFn: () => identitiesService.getProfile(sessionId, identityId!),
+    enabled: Boolean(identityId),
+  });
+}
+
 export function useIdentitySignIns(sessionId: string | undefined, identityId: string | undefined) {
   return useQuery({
     queryKey: sessionId && identityId ? keys.signIns(sessionId, identityId) : ["signins", "none"],
     queryFn: () => identitiesService.getSignIns(sessionId!, identityId!),
     enabled: Boolean(sessionId && identityId),
+  });
+}
+
+export function useIdentityCloudEvents(sessionId: string, identityId: string | null) {
+  return useQuery({
+    queryKey: identityId ? keys.cloudEvents(sessionId, identityId) : ["cloud-events", "none"],
+    queryFn: () => identitiesService.getCloudEvents(sessionId, identityId!),
+    enabled: Boolean(identityId),
   });
 }

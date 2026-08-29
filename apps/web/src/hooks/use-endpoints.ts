@@ -3,6 +3,16 @@ import { endpointsService } from "@/services/endpoints";
 
 const keys = {
   list: (sessionId: string) => ["session", sessionId, "devices"] as const,
+  profile: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId] as const,
+  processTree: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId, "process-tree"] as const,
+  files: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId, "files"] as const,
+  network: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId, "network"] as const,
+  http: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId, "http"] as const,
 };
 
 export function useEndpoints(sessionId: string | undefined) {
@@ -10,6 +20,46 @@ export function useEndpoints(sessionId: string | undefined) {
     queryKey: sessionId ? keys.list(sessionId) : ["devices", "none"],
     queryFn: () => endpointsService.list(sessionId!),
     enabled: Boolean(sessionId),
+  });
+}
+
+export function useDeviceProfile(sessionId: string, deviceId: string | null) {
+  return useQuery({
+    queryKey: deviceId ? keys.profile(sessionId, deviceId) : ["device", "none"],
+    queryFn: () => endpointsService.getProfile(sessionId, deviceId!),
+    enabled: Boolean(deviceId),
+  });
+}
+
+export function useDeviceProcessTree(sessionId: string, deviceId: string | null) {
+  return useQuery({
+    queryKey: deviceId ? keys.processTree(sessionId, deviceId) : ["process-tree", "none"],
+    queryFn: () => endpointsService.getProcessTree(sessionId, deviceId!),
+    enabled: Boolean(deviceId),
+  });
+}
+
+export function useDeviceFiles(sessionId: string, deviceId: string | null) {
+  return useQuery({
+    queryKey: deviceId ? keys.files(sessionId, deviceId) : ["files", "none"],
+    queryFn: () => endpointsService.getFiles(sessionId, deviceId!),
+    enabled: Boolean(deviceId),
+  });
+}
+
+export function useDeviceNetwork(sessionId: string, deviceId: string | null) {
+  return useQuery({
+    queryKey: deviceId ? keys.network(sessionId, deviceId) : ["network", "none"],
+    queryFn: () => endpointsService.getNetwork(sessionId, deviceId!),
+    enabled: Boolean(deviceId),
+  });
+}
+
+export function useDeviceHttpRequests(sessionId: string, deviceId: string | null) {
+  return useQuery({
+    queryKey: deviceId ? keys.http(sessionId, deviceId) : ["http", "none"],
+    queryFn: () => endpointsService.getHttpRequests(sessionId, deviceId!),
+    enabled: Boolean(deviceId),
   });
 }
 

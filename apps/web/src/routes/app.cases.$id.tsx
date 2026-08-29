@@ -4,6 +4,8 @@ import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
+import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
+import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import {
   useInvestigation,
   useSessionIncident,
@@ -28,6 +30,7 @@ import {
   Lock,
   Loader2,
   Mail,
+  MonitorSmartphone,
   Paperclip,
   Pin,
   PinOff,
@@ -35,6 +38,7 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  UserRound,
   Zap,
 } from "lucide-react";
 
@@ -98,6 +102,41 @@ function severityForEntity(
   if (entityType === "process_event" || entityType === "network_event") return "high";
   if (entityType === "email_message" || entityType === "cloud_event") return "medium";
   return "info";
+}
+
+type Pivot = {
+  kind: "email" | "identity" | "device";
+  id: string;
+  label: string;
+  icon: typeof Mail;
+};
+
+/**
+ * What an analyst can follow from a given event. Every telemetry row carries the ids of the
+ * entities it belongs to (see apps/api's toStudent*Dto mappers), so each event type opens onto
+ * the entity view that actually explains it: a sign-in onto the account, a process/file/network
+ * event onto the machine, an email onto the message itself.
+ */
+function pivotsFor(entityType: SearchEntityType, data: Record<string, unknown>): Pivot[] {
+  const pivots: Pivot[] = [];
+  const identityId = typeof data.identityId === "string" ? data.identityId : null;
+  const deviceId = typeof data.deviceId === "string" ? data.deviceId : null;
+
+  if (entityType === "email_message") {
+    pivots.push({ kind: "email", id: String(data.id), label: "Open message", icon: Mail });
+  }
+  if (identityId) {
+    pivots.push({ kind: "identity", id: identityId, label: "View account", icon: UserRound });
+  }
+  if (deviceId) {
+    pivots.push({
+      kind: "device",
+      id: deviceId,
+      label: "View device",
+      icon: MonitorSmartphone,
+    });
+  }
+  return pivots;
 }
 
 function CaseWorkspace() {
@@ -214,6 +253,8 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   // Which email the analyst has opened, if any — the case workspace's read-the-actual-message
   // pivot (see EmailDetailDrawer).
   const [openEmailId, setOpenEmailId] = useState<string | null>(null);
+  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
+  const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
   // Already fetched by CaseWorkspace's readiness gate — react-query dedupes on the same key,
   // so this is a cache read, not a second request.
   const { data: session } = useSessionReadiness(sessionId);
@@ -363,16 +404,23 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
                           {detailForResult(r.entityType, r.data)}
                         </p>
-                        <div className="mt-1 flex items-center gap-2 text-[10.5px] text-muted-foreground">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10.5px] text-muted-foreground">
                           <span>{new Date(r.occurredAt).toUTCString().slice(5, 22)} UTC</span>
-                          {r.entityType === "email_message" && (
+                          {pivotsFor(r.entityType, r.data).map((p) => (
                             <button
-                              onClick={() => setOpenEmailId(eventId)}
+                              key={p.label}
+                              onClick={() =>
+                                p.kind === "email"
+                                  ? setOpenEmailId(p.id)
+                                  : p.kind === "identity"
+                                    ? setOpenIdentityId(p.id)
+                                    : setOpenDeviceId(p.id)
+                              }
                               className="inline-flex items-center gap-1 rounded border border-[color:var(--info)]/40 px-1.5 py-0.5 text-[10.5px] text-[color:var(--info)] hover:bg-[color:var(--info)]/10"
                             >
-                              <Mail className="size-3" /> Open message
+                              <p.icon className="size-3" /> {p.label}
                             </button>
-                          )}
+                          ))}
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col gap-1.5">
@@ -766,6 +814,21 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           emailId={openEmailId}
           onClose={() => setOpenEmailId(null)}
           onPin={(input) => pinEvidence(input)}
+          locked={locked}
+        />
+      )}
+      {openIdentityId && (
+        <IdentityDetailDrawer
+          sessionId={sessionId}
+          identityId={openIdentityId}
+          onClose={() => setOpenIdentityId(null)}
+        />
+      )}
+      {openDeviceId && (
+        <DeviceDetailDrawer
+          sessionId={sessionId}
+          deviceId={openDeviceId}
+          onClose={() => setOpenDeviceId(null)}
           locked={locked}
         />
       )}
