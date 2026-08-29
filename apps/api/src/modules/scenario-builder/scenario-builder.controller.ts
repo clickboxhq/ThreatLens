@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ScenarioBuilderService } from './scenario-builder.service';
 import {
   CreateScenarioDto,
@@ -37,5 +47,14 @@ export class ScenarioBuilderController {
     @Body() dto: CreateScenarioDto,
   ) {
     return this.scenarioBuilderService.create(user, dto);
+  }
+
+  @Post('scenarios/:id/archive')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async archive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.scenarioBuilderService.archive(user, id);
   }
 }

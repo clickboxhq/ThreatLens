@@ -306,3 +306,59 @@ describe('ScenarioBuilderService.create', () => {
     expect(result.slug).toBe('new-impossible-travel');
   });
 });
+
+describe('ScenarioBuilderService.archive', () => {
+  it('404s on a scenario that does not exist', async () => {
+    const { service } = buildService();
+    await expect(
+      service.archive(buildUser(), 'missing-id'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it("rejects an instructor who didn't author the scenario", async () => {
+    const { service, prisma } = buildService();
+    prisma.attackScenario.findUnique.mockResolvedValueOnce({
+      id: 'scenario-1',
+      authorId: 'someone-else',
+    });
+    await expect(
+      service.archive(buildUser(), 'scenario-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('lets a platform_admin archive any scenario regardless of author', async () => {
+    const { service, prisma } = buildService();
+    prisma.attackScenario.findUnique.mockResolvedValueOnce({
+      id: 'scenario-1',
+      authorId: 'someone-else',
+    });
+    const admin = {
+      id: 'admin-1',
+      role: 'platform_admin',
+      orgId: null,
+    } as AuthenticatedUser;
+
+    await service.archive(admin, 'scenario-1');
+
+    expect(prisma.attackScenario.update).toHaveBeenCalledWith({
+      where: { id: 'scenario-1' },
+      data: { status: 'archived' },
+    });
+  });
+
+  it('lets the original author archive their own scenario', async () => {
+    const { service, prisma } = buildService();
+    const user = buildUser();
+    prisma.attackScenario.findUnique.mockResolvedValueOnce({
+      id: 'scenario-1',
+      authorId: user.id,
+    });
+
+    await service.archive(user, 'scenario-1');
+
+    expect(prisma.attackScenario.update).toHaveBeenCalledWith({
+      where: { id: 'scenario-1' },
+      data: { status: 'archived' },
+    });
+  });
+});

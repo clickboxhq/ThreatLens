@@ -323,4 +323,29 @@ export class ScenarioBuilderService {
       estimatedMinutes: dto.estimatedMinutes,
     };
   }
+
+  // A real retirement path for a scenario that's broken or no longer wanted — e.g. one whose
+  // stored ground-truth-definition predates a validation fix and can never generate telemetry.
+  // Archived scenarios drop out of ScenarioCatalogController's `status: 'published'` listing
+  // immediately; existing in-flight sessions are untouched (§2.15's reopen/resubmit flow is the
+  // only thing that ever mutates a session after launch).
+  async archive(user: AuthenticatedUser, scenarioId: string): Promise<void> {
+    const scenario = await this.prisma.attackScenario.findUnique({
+      where: { id: scenarioId },
+    });
+    if (!scenario) {
+      throw new AppException(404, 'NOT_FOUND', 'Scenario not found.');
+    }
+    if (scenario.authorId !== user.id && user.role !== 'platform_admin') {
+      throw new AppException(
+        403,
+        'FORBIDDEN',
+        'Only the scenario author or a platform admin can archive it.',
+      );
+    }
+    await this.prisma.attackScenario.update({
+      where: { id: scenarioId },
+      data: { status: 'archived' },
+    });
+  }
 }
