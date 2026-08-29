@@ -94,4 +94,76 @@ export class EmailPortalService {
     });
     return similar.map(toStudentEmailDto);
   }
+
+  /**
+   * §2.6: "did anyone actually click it?" — the pivot that turns a suspicious email from a
+   * delivered message into a confirmed compromise. Matches each of the email's URLs against
+   * the session's own HTTP telemetry, so the answer is derived from the same evidence the
+   * Student can already find by hand rather than from any ground-truth flag (an email's
+   * isGroundTruthEvidence/mitreTechniqueId are never read here — a click on a benign link is
+   * reported exactly the same way as a click on a malicious one, and the Student still has to
+   * judge which is which).
+   */
+  async getLinkActivity(
+    sessionId: string,
+    emailId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const email = await this.prisma.emailMessage.findFirst({
+      where: { id: emailId, sessionId },
+      include: { urls: true },
+    });
+    if (!email) throw new AppException(404, 'NOT_FOUND', 'Email not found.');
+    if (email.urls.length === 0) return [];
+
+    const requests = await this.prisma.httpRequest.findMany({
+      where: { sessionId, url: { in: email.urls.map((u) => u.url) } },
+      include: { device: true },
+      orderBy: { occurredAt: 'asc' },
+    });
+
+    // HttpRequest.identityId is nullable and carries no relation, so the display name is
+    // resolved in one batched lookup rather than a per-row join.
+    const identityIds = [
+      ...new Set(
+        requests
+          .map((r) => r.identityId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const identities = identityIds.length
+      ? await this.prisma.identity.findMany({
+          where: { id: { in: identityIds } },
+          select: { id: true, displayName: true, userPrincipalName: true },
+        })
+      : [];
+    const identityById = new Map(identities.map((i) => [i.id, i]));
+
+    return email.urls.map((url) => {
+      const clicks = requests.filter((r) => r.url === url.url);
+      return {
+        urlId: url.id,
+        url: url.url,
+        reputation: url.reputation,
+        clickCount: clicks.length,
+        clicks: clicks.map((c) => {
+          const identity = c.identityId
+            ? identityById.get(c.identityId)
+            : undefined;
+          return {
+            occurredAt: c.occurredAt,
+            statusCode: c.statusCode,
+            sourceIp: c.sourceIp,
+            userAgent: c.userAgent,
+            identityId: c.identityId,
+            identityDisplayName: identity?.displayName ?? null,
+            identityUserPrincipalName: identity?.userPrincipalName ?? null,
+            deviceId: c.deviceId,
+            deviceHostname: c.device?.hostname ?? null,
+          };
+        }),
+      };
+    });
+  }
 }

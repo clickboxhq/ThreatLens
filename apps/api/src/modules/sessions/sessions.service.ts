@@ -311,11 +311,22 @@ export class SessionsService {
   private async toSessionDto(sessionId: string) {
     const session = await this.prisma.investigationSession.findUniqueOrThrow({
       where: { id: sessionId },
+      include: { scenario: true },
     });
     const alertCount = await this.prisma.alert.count({ where: { sessionId } });
     return {
       id: session.id,
       scenarioId: session.scenarioId,
+      // The Student-facing case briefing (§2.2): what they're being asked to look into, so the
+      // workspace opens with context rather than a bare log dump. Deliberately only the public
+      // catalog fields — the ground truth's own `metadata.narrative_summary` describes what
+      // actually happened ("an attacker registers a lookalike domain, impersonates the CFO…")
+      // and is the answer key, so it must never reach this DTO (§12.3).
+      scenarioTitle: session.scenario.title,
+      scenarioSummary: session.scenario.summary,
+      scenarioCategory: session.scenario.category,
+      scenarioDifficulty: session.scenario.difficulty,
+      estimatedMinutes: session.scenario.estimatedMinutes,
       status: session.status,
       // A crude but honest readiness signal for the skeleton's REST-polling fallback
       // (§17.9) — WebSocket push replaces this in the breadth phase (§5.10).

@@ -52,4 +52,13 @@ export class EmailPortalController {
   ) {
     return this.service.getSimilar(sessionId, id, user);
   }
+
+  @Get(':id/link-activity')
+  async getLinkActivity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getLinkActivity(sessionId, id, user);
+  }
 }

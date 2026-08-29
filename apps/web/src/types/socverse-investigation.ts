@@ -8,6 +8,14 @@ export type SessionStatus = "active" | "submitted" | "scored" | "abandoned";
 export interface SessionDto {
   id: string;
   scenarioId: string;
+  // The case briefing — what the Student is being asked to look into. These are the public
+  // scenario-catalog fields only; the ground truth's own narrative_summary (which describes
+  // what actually happened) is deliberately never sent to the client.
+  scenarioTitle: string;
+  scenarioSummary: string;
+  scenarioCategory: string;
+  scenarioDifficulty: string;
+  estimatedMinutes: number;
   status: SessionStatus;
   // A crude but honest readiness signal (§17.9's REST-polling fallback) — telemetry generation
   // runs as an async job, so a freshly-created session has nothing to investigate yet.

@@ -1,7 +1,9 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
+import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
+import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import {
   useInvestigation,
   useSessionIncident,
@@ -20,10 +22,12 @@ import { REPUTATION_SEVERITY } from "@/types/threat-intel-page";
 import {
   ArrowLeft,
   CheckCircle2,
+  FileText,
   Lightbulb,
   ListTree,
   Lock,
   Loader2,
+  Mail,
   Paperclip,
   Pin,
   PinOff,
@@ -207,6 +211,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     null,
   );
   const [tiError, setTiError] = useState<string | null>(null);
+  // Which email the analyst has opened, if any — the case workspace's read-the-actual-message
+  // pivot (see EmailDetailDrawer).
+  const [openEmailId, setOpenEmailId] = useState<string | null>(null);
+  // Already fetched by CaseWorkspace's readiness gate — react-query dedupes on the same key,
+  // so this is a cache read, not a second request.
+  const { data: session } = useSessionReadiness(sessionId);
 
   // Debounced — every keystroke would otherwise fire a real network call, unlike the old
   // mock's instant client-side filter over a static array.
@@ -262,7 +272,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
       </Link>
 
       <SectionHeader
-        title={incident.title}
+        title={session?.scenarioTitle ?? incident.title}
         description={`${incident.linkedAlertIds.length} linked alerts`}
         actions={
           locked ? (
@@ -272,6 +282,43 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           ) : undefined
         }
       />
+
+      {/* Case briefing — what you're being asked to look into. Deliberately only the public
+       * scenario summary; the ground truth's own narrative of what actually happened never
+       * reaches the client. */}
+      {session && (
+        <Panel className="mb-4">
+          <div className="flex items-start gap-3">
+            <IconTile tone="info" size="md">
+              <FileText className="size-4" />
+            </IconTile>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Case briefing
+              </div>
+              <p className="mt-1 text-[13px] leading-relaxed text-secondary">
+                {session.scenarioSummary}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                <span className="rounded border border-border bg-background px-1.5 py-0.5 capitalize text-muted-foreground">
+                  {session.scenarioCategory}
+                </span>
+                <span className="rounded border border-border bg-background px-1.5 py-0.5 capitalize text-muted-foreground">
+                  {session.scenarioDifficulty}
+                </span>
+                <span className="rounded border border-border bg-background px-1.5 py-0.5 text-muted-foreground">
+                  ~{session.estimatedMinutes} min
+                </span>
+              </div>
+              <p className="mt-2.5 text-[11.5px] text-muted-foreground">
+                Work the evidence below, pin what matters, build your timeline, then close the
+                incident with a verdict. Open any email to read it in full and trace who else
+                received it.
+              </p>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-4">
@@ -316,8 +363,16 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
                           {detailForResult(r.entityType, r.data)}
                         </p>
-                        <div className="mt-1 text-[10.5px] text-muted-foreground">
-                          {new Date(r.occurredAt).toUTCString().slice(5, 22)} UTC
+                        <div className="mt-1 flex items-center gap-2 text-[10.5px] text-muted-foreground">
+                          <span>{new Date(r.occurredAt).toUTCString().slice(5, 22)} UTC</span>
+                          {r.entityType === "email_message" && (
+                            <button
+                              onClick={() => setOpenEmailId(eventId)}
+                              className="inline-flex items-center gap-1 rounded border border-[color:var(--info)]/40 px-1.5 py-0.5 text-[10.5px] text-[color:var(--info)] hover:bg-[color:var(--info)]/10"
+                            >
+                              <Mail className="size-3" /> Open message
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col gap-1.5">
@@ -704,6 +759,16 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           </Panel>
         </div>
       </div>
+
+      {openEmailId && (
+        <EmailDetailDrawer
+          sessionId={sessionId}
+          emailId={openEmailId}
+          onClose={() => setOpenEmailId(null)}
+          onPin={(input) => pinEvidence(input)}
+          locked={locked}
+        />
+      )}
     </div>
   );
 }

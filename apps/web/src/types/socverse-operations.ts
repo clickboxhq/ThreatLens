@@ -160,3 +160,26 @@ export interface EmailMessageDto {
   attachments: EmailAttachmentDto[];
   urls: EmailUrlDto[];
 }
+
+/** GET /sessions/:id/emails/:id/link-activity — the "did anyone actually click it?" pivot.
+ * Correlates each of an email's URLs against the session's own HTTP telemetry, so a click is
+ * evidence the Student could also have found by hand, not a ground-truth flag. */
+export interface EmailLinkClickDto {
+  occurredAt: string;
+  statusCode: number;
+  sourceIp: string;
+  userAgent: string;
+  identityId: string | null;
+  identityDisplayName: string | null;
+  identityUserPrincipalName: string | null;
+  deviceId: string | null;
+  deviceHostname: string | null;
+}
+
+export interface EmailLinkActivityDto {
+  urlId: string;
+  url: string;
+  reputation: string;
+  clickCount: number;
+  clicks: EmailLinkClickDto[];
+}
