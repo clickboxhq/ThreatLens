@@ -102,7 +102,7 @@ describe('ScenarioBuilderService.listTemplates', () => {
   it('returns the real, fixed template catalog', () => {
     const { service } = buildService();
     const templates = service.listTemplates();
-    expect(templates.length).toBe(47);
+    expect(templates.length).toBe(52);
     expect(
       templates.find((t) => t.id === 'impossible_travel_first_signin_v1'),
     ).toBeTruthy();

@@ -287,3 +287,28 @@ export const DNS_BACKDOOR_TOOL_PATH =
 export const DNS_BACKDOOR_COMMAND_LINE =
   '"NetDiagTool.exe" --mode covert --relay dns';
 export const DNS_TUNNEL_C2_IP = '91.219.237.14';
+
+// ---- IDOR / broken access control (A01) --------------------------------------------------
+// The endpoint is legitimate and the caller is legitimately authenticated. What is wrong is
+// that the server never checks whether *this* user owns the record being asked for, so the
+// signature is a single session walking sequential object ids and getting 200s back.
+export const IDOR_ENDPOINT_PATH = '/api/invoices';
+export const IDOR_FIRST_OWNED_ID = 4021;
+
+// A nightly export legitimately walks the same endpoint the same way. It is the control case
+// for IDOR: identical shape, entirely authorised, and distinguishable only by who is calling
+// and from where.
+export const BATCH_EXPORT_SERVICE_UA =
+  'FinanceReporting/2.4 (+https://intranet.contoso-finance.example.com/reporting)';
+
+// ---- Credential attack infrastructure ----------------------------------------------------
+// Passwords a stuffing run pulls from a breach dump: already-cracked, human-chosen, and each
+// tied to a different account rather than sprayed across many.
+export const BREACH_REUSED_PASSWORD_HINTS = [
+  'Summer2023!',
+  'Liverpool99',
+  'Passw0rd123',
+  'Company@2022',
+  'Dragon!2021',
+  'Winter#2024',
+];

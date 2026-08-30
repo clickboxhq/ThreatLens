@@ -39,6 +39,38 @@ const MITRE_TECHNIQUES = [
     url: 'https://attack.mitre.org/techniques/T1110/',
   },
   {
+    techniqueId: 'T1110.001',
+    name: 'Brute Force: Password Guessing',
+    tactic: 'TA0006',
+    description:
+      'Adversaries guess many passwords against a single account. Unlike password spraying, the volume falls on one identity, so a per-account failure threshold detects it where a per-IP one may not.',
+    url: 'https://attack.mitre.org/techniques/T1110/001/',
+  },
+  {
+    techniqueId: 'T1110.004',
+    name: 'Brute Force: Credential Stuffing',
+    tactic: 'TA0006',
+    description:
+      'Adversaries replay username and password pairs obtained from an unrelated breach. Each account sees only one or two attempts, so the per-account volume stays low while the source and timing tie the run together.',
+    url: 'https://attack.mitre.org/techniques/T1110/004/',
+  },
+  {
+    techniqueId: 'T1098',
+    name: 'Account Manipulation',
+    tactic: 'TA0003',
+    description:
+      'Adversaries modify an account they already control — group membership, roles, credentials or mail rules — to keep access after the original entry point is closed.',
+    url: 'https://attack.mitre.org/techniques/T1098/',
+  },
+  {
+    techniqueId: 'T1213',
+    name: 'Data from Information Repositories',
+    tactic: 'TA0009',
+    description:
+      'Adversaries collect data from application repositories they can reach with valid access. Where the application fails to authorise per-record, this needs no exploit at all — only a guessable identifier.',
+    url: 'https://attack.mitre.org/techniques/T1213/',
+  },
+  {
     techniqueId: 'T1110.003',
     name: 'Brute Force: Password Spraying',
     tactic: 'TA0006',
@@ -2447,10 +2479,347 @@ async function main() {
     techniqueBySlug,
   );
 
+  await seedScenario(
+    {
+      slug: 'idor-invoice-enumeration',
+      title: 'Web — Customer Records Reached by Changing an ID',
+      summary:
+        'A logged-in customer requested a long run of consecutive invoice IDs, and the application returned every one of them. Establish whether they were entitled to what they received.',
+      category: 'web',
+      difficulty: 'intermediate',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1213'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'intermediate',
+          estimated_minutes: 25,
+          narrative_summary:
+            'Broken access control (OWASP A01), and the only scenario in the library where nothing is exploited in the usual sense. There is no injection, no malware, no stolen credential — the person is exactly who they say they are, the endpoint behaves exactly as written, and every response is a legitimate 200. What is missing is an ownership check on the server. The analytical work is recognising that authentication succeeding says nothing about authorisation, and that a run of sequential identifiers returning success is itself the finding.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'customer_1', attributes: { department: 'Sales', job_title: 'Account Executive', home_country: 'GB' } },
+          ],
+          narrative_devices: [
+            { ref: 'web_server_1', attributes: { hostname: 'WEB-PROD-03', os_platform: 'linux' } },
+          ],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1213',
+            entity_ref: 'customer_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'web_idor_enumeration_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'idor-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [
+            { event_template_id: 'legitimate_batch_export_v1', count: 1 },
+            { event_template_id: 'web_legitimate_monitoring_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1213'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Every request in the run succeeded. Before deciding whether that is normal, work out what the requests were asking for.' },
+          { unlock_cost_percent: 10, text: 'Look at the identifiers in the URLs rather than the status codes. What is the relationship between one request and the next?' },
+          { unlock_cost_percent: 15, text: 'Two different callers walk this endpoint sequentially in this session. Compare who they are authenticated as and where they are calling from before treating them the same way.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'brute-force-single-account',
+      title: 'Identity — Sustained Password Guessing Against One Account',
+      summary:
+        'One account accumulated dozens of failed sign-ins from a single address over about fifteen minutes. Determine what was attempted and whether it succeeded.',
+      category: 'identity',
+      difficulty: 'beginner',
+      estimatedMinutes: 20,
+      requiredTechniques: ['T1110.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'beginner',
+          estimated_minutes: 20,
+          narrative_summary:
+            'The mirror image of the password-spraying scenario, and deliberately placed alongside it. Spraying spreads a little volume across many accounts to stay under per-account thresholds; this concentrates all of it on one. Both are T1110, both come from one source address, and an analyst who has only ever seen one shape will mis-describe the other. The distinction matters operationally because the detection that catches each is different.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Controller', home_country: 'US' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 11, devices: 5 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1110.001',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'brute_force_single_account_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'brute-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1110.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Count the failures, then count how many distinct accounts they fall on. The ratio is the whole finding.' },
+          { unlock_cost_percent: 10, text: 'Check whether any attempt in the run succeeded. A failed campaign and a successful one call for very different responses.' },
+          { unlock_cost_percent: 15, text: 'Compare this against what a password-spraying run would look like. The source is similar; the distribution across accounts is not.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'credential-stuffing-reused-passwords',
+      title: 'Identity — Breach Credentials Replayed Against Staff Accounts',
+      summary:
+        'A dozen accounts each saw a single failed sign-in from one address within a few minutes, and one of them succeeded. Work out what was being attempted.',
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1110.004', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 25,
+          narrative_summary:
+            'The third shape of the same MITRE technique, and the hardest of the three to see. Spraying reuses one password across many accounts; guessing throws many passwords at one. Stuffing replays a specific known pair per account, so each identity sees a single attempt and no per-account threshold ever fires. What ties the run together is the source and the timing, not the volume — and the success is not a guess landing, it is somebody having reused a password that leaked somewhere else entirely.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Marketing', job_title: 'Content Strategist', home_country: 'CA' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 14, devices: 5 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1110.004',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'credential_stuffing_batch_v1',
+            relative_timestamp: '+5h',
+            correlation_group: 'stuffing-chain-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+5h40m',
+            correlation_group: 'stuffing-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+            { event_template_id: 'benign_it_admin_email_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1110.004', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Count the attempts per account rather than in total. One each is a deliberate choice, not a coincidence.' },
+          { unlock_cost_percent: 10, text: 'If only one attempt was made per account and one succeeded, the attacker was not guessing. Ask where a working password came from.' },
+          { unlock_cost_percent: 15, text: 'Follow the account that succeeded. What happened on it after the run finished?' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'privilege-escalation-group-membership',
+      title: 'Identity — Account Added Itself to an Administrator Group',
+      summary:
+        'A standard user account was added to a privileged group and assigned an administrator role within minutes, with no ticket and no approving actor recorded.',
+      category: 'identity',
+      difficulty: 'advanced',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1098', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'advanced',
+          estimated_minutes: 30,
+          narrative_summary:
+            'The first scenario that turns on the directory audit trail rather than sign-in or endpoint telemetry. The sign-in that follows is unremarkable in isolation — right person, right country, right application — and would be dismissed on its own. It only means something alongside what the account was granted four minutes earlier. The tell is the absent actor: a privilege change nobody approved, performed through the account itself, which is what account manipulation looks like when the attacker already holds the session.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Operations', job_title: 'Operations Coordinator', home_country: 'DE' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 12, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'privesc-chain-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1098',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'privilege_escalation_group_add_v1',
+            relative_timestamp: '+2h25m',
+            correlation_group: 'privesc-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.12,
+          false_positive_bait: [
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+            { event_template_id: 'benign_it_admin_email_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1098', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Open the audit log on the account, not just its sign-ins. Group and role changes are recorded separately from authentication.' },
+          { unlock_cost_percent: 10, text: 'Look at who performed the privilege change. An absent approver on a role assignment is worth explaining.' },
+          { unlock_cost_percent: 15, text: 'Put the sign-in and the group change on the same timeline. Neither is alarming alone; the order and the gap between them are the point.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'batch-export-mistaken-for-enumeration',
+      title: 'Web — Reporting Job Flagged as Record Enumeration',
+      summary:
+        'A monitoring rule fired on a long run of sequential record requests against the invoicing API overnight. Decide whether it needs a response.',
+      category: 'web',
+      difficulty: 'intermediate',
+      estimatedMinutes: 20,
+      requiredTechniques: [],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'intermediate',
+          estimated_minutes: 20,
+          narrative_summary:
+            'The control case for the IDOR scenario, and the third non-incident in the library. The traffic shape is identical — sequential identifiers, uniform 200s, one source — but it is the nightly finance export doing exactly its job. The correct verdict is benign, and reaching it requires checking the caller and the origin rather than pattern-matching on the shape. Closing this as an incident would mean an analyst has learned to recognise a silhouette instead of an attack.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'app_owner_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'US' } },
+          ],
+          narrative_devices: [
+            { ref: 'web_server_1', attributes: { hostname: 'WEB-PROD-03', os_platform: 'linux' } },
+          ],
+          decoy_population_size: { identities: 9, devices: 5 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1213',
+            entity_ref: 'app_owner_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'legitimate_batch_export_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'benign-export-1',
+            is_required_for_full_credit: false,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [
+            { event_template_id: 'web_legitimate_monitoring_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: [],
+          required_verdict: 'false_positive',
+          min_evidence_items: 1,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'The shape of this traffic is not in dispute. Ask who is making the requests before deciding what the shape means.' },
+          { unlock_cost_percent: 10, text: 'Check the user agent and the source address. Both say something about whether this is a person or a scheduled job.' },
+          { unlock_cost_percent: 15, text: 'Compare the origin address against the internal ranges in this environment. Traffic from inside the estate on a fixed schedule is a different proposition from a browser session.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   await seedLearningPlatform();
 
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 25 scenarios, learning platform content.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 30 scenarios, learning platform content.`,
   );
 }
 

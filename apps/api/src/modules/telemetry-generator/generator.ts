@@ -36,6 +36,9 @@ import {
   MONITORING_USER_AGENT,
   NON_BROWSER_USER_AGENTS,
   BROWSER_USER_AGENT,
+  IDOR_ENDPOINT_PATH,
+  IDOR_FIRST_OWNED_ID,
+  BATCH_EXPORT_SERVICE_UA,
   OAUTH_PHISHING_DOMAIN,
   ORG_DOMAIN,
   PERSONAL_EMAIL_DOMAIN_FOR_GENERATION,
@@ -365,6 +368,7 @@ export function generateTelemetry(
       emailMessages,
       emailAttachments,
       emailUrls,
+      directoryAuditEvents,
     });
   }
 
@@ -400,6 +404,7 @@ export function generateTelemetry(
         emailMessages,
         emailAttachments,
         emailUrls,
+        directoryAuditEvents,
       });
     }
   }
@@ -448,6 +453,9 @@ interface TemplateContext {
   emailMessages: Prisma.EmailMessageCreateManyInput[];
   emailAttachments: Prisma.EmailAttachmentCreateManyInput[];
   emailUrls: Prisma.EmailUrlCreateManyInput[];
+  // Templates can now write to the directory audit trail as ground truth, not just the
+  // baseline noise generated per-identity above.
+  directoryAuditEvents: Prisma.DirectoryAuditEventCreateManyInput[];
 }
 
 function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
@@ -599,6 +607,177 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       });
       break;
     }
+    // ---- IDOR: a legitimately authenticated user reading records that are not theirs -------
+    // Deliberately distinct from every other web scenario in the library: nothing is
+    // unauthenticated, nothing is injected, and no payload is malicious. The endpoint works
+    // exactly as built — it simply never checks ownership. The only signal is one session
+    // walking sequential object ids and being handed 200s for records belonging to others.
+    case 'web_idor_enumeration_v1': {
+      if (!ctx.device) break;
+      // Their own invoice first, which is the request that teaches them the id is guessable.
+      // Everything after it belongs to somebody else.
+      for (let i = 0; i < 24; i++) {
+        const objectId = IDOR_FIRST_OWNED_ID + i;
+        ctx.httpRequests.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 6 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'idor_enumeration' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          deviceId: ctx.device.id,
+          identityId: ctx.identity.id,
+          method: 'GET',
+          url: `${IDOR_ENDPOINT_PATH}/${objectId}`,
+          userAgent: BROWSER_USER_AGENT,
+          // Every one succeeds. That is the finding: the server authorises none of them.
+          statusCode: 200,
+          sourceIp: `10.20.30.${40 + (i % 60)}`,
+        });
+      }
+      break;
+    }
+
+    // The control case for IDOR. A nightly reporting job walks the same endpoint in the same
+    // sequential way and is entirely authorised to do so. Same shape, different meaning — the
+    // distinction is the service account, the service user agent, and the internal host.
+    case 'legitimate_batch_export_v1': {
+      if (!ctx.device) break;
+      for (let i = 0; i < 18; i++) {
+        ctx.httpRequests.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 4 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'noise', pattern: 'batch_export' },
+          isGroundTruthEvidence: false,
+          mitreTechniqueId: null,
+          deviceId: ctx.device.id,
+          identityId: null,
+          method: 'GET',
+          url: `${IDOR_ENDPOINT_PATH}/${IDOR_FIRST_OWNED_ID + 500 + i}`,
+          userAgent: BATCH_EXPORT_SERVICE_UA,
+          statusCode: 200,
+          sourceIp: FILE_SERVER_IP,
+        });
+      }
+      break;
+    }
+
+    // ---- Brute force against a single account ---------------------------------------------
+    // The mirror image of password spraying: one account and many passwords, rather than many
+    // accounts and one password. A per-IP threshold catches both; a per-account threshold
+    // catches only this one, which is exactly why analysts are taught to apply both.
+    case 'brute_force_single_account_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'brute');
+      const attempts = ctx.rng.intBetween(28, 42);
+      for (let i = 0; i < attempts; i++) {
+        ctx.signInEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 20 * 1000),
+          correlationId: ctx.correlationId,
+          raw: { source: 'ground_truth', pattern: 'brute_force_attempt' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          sourceIp: attacker.ip,
+          sourceCountry: attacker.country,
+          sourceCity: attacker.city,
+          application: 'Office 365 Exchange Online',
+          result: 'failure',
+          failureReason: 'Invalid username or password.',
+          isLegacyAuth: false,
+          clientApp: 'Browser',
+        });
+      }
+      break;
+    }
+
+    // ---- Credential stuffing ---------------------------------------------------------------
+    // Distinct again from both: many accounts, but only ONE attempt each, because the attacker
+    // already holds a specific password for each address from a breach dump. Low per-account
+    // volume is the whole point — it slips under a per-account threshold, and an attempt
+    // succeeds where that person reused the same password here.
+    case 'credential_stuffing_batch_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'stuffing');
+      const targets = [
+        ctx.identity,
+        ...ctx.rng.sample(ctx.decoyIdentities, 11),
+      ];
+      targets.forEach((target, i) => {
+        const succeeded = target.id === ctx.identity.id;
+        ctx.signInEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt: new Date(ctx.occurredAt.getTime() + i * 45 * 1000),
+          correlationId: ctx.correlationId,
+          raw: {
+            source: 'ground_truth',
+            pattern: succeeded
+              ? 'credential_stuffing_success'
+              : 'credential_stuffing_attempt',
+          },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: target.id,
+          sourceIp: attacker.ip,
+          sourceCountry: attacker.country,
+          sourceCity: attacker.city,
+          application: 'Office 365 Exchange Online',
+          result: succeeded ? 'success' : 'failure',
+          failureReason: succeeded ? null : 'Invalid username or password.',
+          isLegacyAuth: false,
+          clientApp: 'Browser',
+        });
+      });
+      break;
+    }
+
+    // ---- Privilege escalation via group membership ------------------------------------------
+    // Exercises the directory audit trail as ground truth rather than background noise. The
+    // sign-in that follows is unremarkable on its own; it only matters because of what the
+    // account was granted minutes earlier, which is the correlation being taught.
+    case 'privilege_escalation_group_add_v1': {
+      const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'privesc');
+      ctx.directoryAuditEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        targetIdentityId: ctx.identity.id,
+        // Null actor: performed through the hijacked session of the account itself, which is
+        // precisely how this looks in a real directory and why it is easy to miss.
+        actorIdentityId: null,
+        actorDisplayName: 'Self-service',
+        category: 'group_membership',
+        action: 'Add member to group',
+        result: 'success',
+        detail: { group: 'Global Administrators', via: 'Azure AD Portal' },
+        sourceIp: attacker.ip,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      ctx.directoryAuditEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: new Date(ctx.occurredAt.getTime() + 4 * 60 * 1000),
+        correlationId: ctx.correlationId,
+        targetIdentityId: ctx.identity.id,
+        actorIdentityId: null,
+        actorDisplayName: 'Self-service',
+        category: 'role_assignment',
+        action: 'Assign privileged role',
+        result: 'success',
+        detail: { role: 'Exchange Administrator' },
+        sourceIp: attacker.ip,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+
     case 'password_spray_batch_v1': {
       const attacker = attackerProfileFromSeed(ctx.correlationId ?? 'spray');
       // Victim plus a handful of decoys — enough to cross the Alert Engine's distinct-identity
