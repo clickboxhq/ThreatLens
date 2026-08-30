@@ -153,6 +153,11 @@ export class EmailPortalService {
             ? identityById.get(c.identityId)
             : undefined;
           return {
+            // The HttpRequest's own id, so the click can be pinned as evidence straight from
+            // the link-activity panel. Without it a learner who has just established that the
+            // link *was* opened — the fact that connects the email to everything after it —
+            // would have to go and find the same event again through search to cite it.
+            id: c.id,
             occurredAt: c.occurredAt,
             statusCode: c.statusCode,
             sourceIp: c.sourceIp,

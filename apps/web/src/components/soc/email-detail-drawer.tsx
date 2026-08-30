@@ -405,8 +405,8 @@ function LinksTab({ sessionId, emailId }: { sessionId: string; emailId: string }
           </div>
           {a.clicks.length > 0 && (
             <ul className="divide-y divide-border">
-              {a.clicks.map((c, i) => (
-                <li key={i} className="px-3 py-2 text-[12px]">
+              {a.clicks.map((c) => (
+                <li key={c.id} className="px-3 py-2 text-[12px]">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="font-medium">
                       {c.identityDisplayName ?? c.deviceHostname ?? "Unattributed request"}
@@ -427,6 +427,25 @@ function LinksTab({ sessionId, emailId }: { sessionId: string; emailId: string }
                     })}
                     {c.deviceHostname && ` · ${c.deviceHostname}`} · {c.sourceIp}
                   </div>
+                  {/* The click is the fact that connects this email to everything after it, so
+                   * it has to be pinnable from here — otherwise a learner who has just
+                   * established it has to go and find the same event again through search. */}
+                  {onPin && !locked && (
+                    <button
+                      onClick={() =>
+                        onPin({
+                          eventTable: "http_requests",
+                          eventId: c.id,
+                          justification: `Link in this message was opened by ${
+                            c.identityDisplayName ?? c.deviceHostname ?? "an unattributed host"
+                          }`,
+                        })
+                      }
+                      className="mt-1.5 inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 text-[10.5px] text-secondary hover:text-foreground"
+                    >
+                      <Pin className="size-2.5" /> Pin this visit
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

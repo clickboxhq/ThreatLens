@@ -165,6 +165,8 @@ export interface EmailMessageDto {
  * Correlates each of an email's URLs against the session's own HTTP telemetry, so a click is
  * evidence the Student could also have found by hand, not a ground-truth flag. */
 export interface EmailLinkClickDto {
+  /** The underlying http_requests event id, so the click can be pinned as evidence. */
+  id: string;
   occurredAt: string;
   statusCode: number;
   sourceIp: string;
