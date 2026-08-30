@@ -148,3 +148,18 @@ export interface SearchResultItem {
   occurredAt: string;
   data: Record<string, unknown>;
 }
+
+/** Sentinel-style investigation checklist. Definitions are static and category-derived on the
+ * backend; only `completed` is per-incident state. */
+export interface InvestigationTaskDto {
+  key: string;
+  label: string;
+  detail: string;
+  completed: boolean;
+}
+
+export interface InvestigationTaskListDto {
+  tasks: InvestigationTaskDto[];
+  completedCount: number;
+  totalCount: number;
+}

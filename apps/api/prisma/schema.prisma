@@ -942,6 +942,11 @@ model Incident {
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @updatedAt @map("updated_at")
 
+  // Which investigation-checklist steps the analyst has ticked off. The task definitions
+  // themselves are static and category-derived (investigation-tasks.ts) — only the completion
+  // state is per-incident, so this is a set of keys rather than rows of duplicated copy.
+  completedTaskKeys String[] @default([]) @map("completed_task_keys")
+
   session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   alertLinks           IncidentAlert[]

@@ -14,6 +14,7 @@ import {
   CreateIncidentDto,
   LinkAlertsDto,
   UpdateIncidentStatusDto,
+  SetTaskCompletionDto,
 } from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -69,6 +70,34 @@ export class IncidentsController {
     @Body() dto: UpdateIncidentStatusDto,
   ) {
     return this.incidentsService.updateStatus(sessionId, id, user, dto);
+  }
+
+  // Sentinel-style investigation checklist: the definitions are static and derived from the
+  // scenario category, so the client only ever asks for them and reports which are done.
+  @Get(':id/tasks')
+  async listTasks(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.incidentsService.listTasks(sessionId, id, user);
+  }
+
+  @Patch(':id/tasks/:taskKey')
+  async setTaskCompletion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('taskKey') taskKey: string,
+    @Body() dto: SetTaskCompletionDto,
+  ) {
+    return this.incidentsService.setTaskCompletion(
+      sessionId,
+      id,
+      user,
+      taskKey,
+      dto.completed,
+    );
   }
 
   @Post(':id/close')

@@ -1,4 +1,4 @@
-import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
+import type { InvestigationTaskListDto, InstructorFeedbackDto } from "@/types/socverse-instructor";
 import type {
   EvidenceItemDto,
   HintDto,
@@ -98,6 +98,14 @@ export interface InvestigationsService {
     actorAttribution: string | null;
     context: string | null;
   }>;
+
+  listTasks(sessionId: string, incidentId: string): Promise<InvestigationTaskListDto>;
+  setTaskCompletion(
+    sessionId: string,
+    incidentId: string,
+    taskKey: string,
+    completed: boolean,
+  ): Promise<InvestigationTaskListDto>;
 
   submitSession(sessionId: string, incidentIds: string[]): Promise<void>;
   /** Returns null while the async scoring job hasn't finished yet (server's NOT_SCORED_YET). */

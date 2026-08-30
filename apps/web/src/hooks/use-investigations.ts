@@ -15,6 +15,8 @@ const keys = {
     ["session", sessionId, "incident", incidentId, "notes"] as const,
   hints: (sessionId: string) => ["session", sessionId, "hints"] as const,
   score: (sessionId: string) => ["session", sessionId, "score"] as const,
+  tasks: (sessionId: string, incidentId: string) =>
+    ["session", sessionId, "incident", incidentId, "tasks"] as const,
   feedback: (sessionId: string, incidentId: string) =>
     ["session", sessionId, "incident", incidentId, "feedback"] as const,
   mitreTechniques: ["mitre-techniques"] as const,
@@ -222,4 +224,40 @@ export function useIncidentFeedback(
     enabled: Boolean(sessionId && incidentId && enabled),
     refetchInterval: 60_000,
   });
+}
+
+/** The investigation checklist for this incident — Sentinel-style task list. Definitions come
+ * from the backend (category-derived), so rewording a step never needs a frontend release. */
+export function useInvestigationTasks(
+  sessionId: string | undefined,
+  incidentId: string | undefined,
+) {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: sessionId && incidentId ? keys.tasks(sessionId, incidentId) : ["tasks", "none"],
+    queryFn: () => investigationsService.listTasks(sessionId!, incidentId!),
+    enabled: Boolean(sessionId && incidentId),
+  });
+
+  const toggle = useMutation({
+    mutationFn: ({ taskKey, completed }: { taskKey: string; completed: boolean }) =>
+      investigationsService.setTaskCompletion(sessionId!, incidentId!, taskKey, completed),
+    // The server returns the whole recomputed list, so seed the cache with it rather than
+    // refetching — ticking a box should feel instant.
+    onSuccess: (data) => {
+      if (sessionId && incidentId) {
+        queryClient.setQueryData(keys.tasks(sessionId, incidentId), data);
+      }
+    },
+  });
+
+  return {
+    tasks: query.data?.tasks ?? [],
+    completedCount: query.data?.completedCount ?? 0,
+    totalCount: query.data?.totalCount ?? 0,
+    isPending: query.isPending,
+    toggleTask: toggle.mutate,
+    isToggling: toggle.isPending,
+  };
 }

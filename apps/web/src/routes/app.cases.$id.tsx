@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
+import { InvestigationChecklist } from "@/components/soc/investigation-checklist";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
@@ -757,6 +758,8 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           </Panel>
 
           {/* Hints */}
+          <InvestigationChecklist sessionId={sessionId} incidentId={incident?.id} locked={locked} />
+
           <Panel title="Hints">
             <p className="text-[11.5px] text-secondary">
               Each hint costs points. Unlocked:{" "}

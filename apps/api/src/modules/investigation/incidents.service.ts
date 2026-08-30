@@ -12,6 +12,7 @@ import type {
   UpdateIncidentStatusDto,
 } from './dto/incident.dto';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
+import { tasksForCategory } from './investigation-tasks';
 
 @Injectable()
 export class IncidentsService {
@@ -207,6 +208,83 @@ export class IncidentsService {
       type: 'incident.status_changed',
       payload: { id: incidentId, status },
     });
+  }
+
+  // The investigation checklist for this incident: static, category-derived task definitions
+  // (see investigation-tasks.ts) joined to whichever keys the analyst has ticked off. Returning
+  // them together means the client never has to know the definitions, so adding or rewording a
+  // step is a backend-only change.
+  async listTasks(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+  ) {
+    const session = await this.sessionAccess.getOwnedSession(sessionId, user);
+    const incident = await this.getIncidentOrThrow(sessionId, incidentId);
+
+    const scenario = await this.prisma.attackScenario.findUniqueOrThrow({
+      where: { id: session.scenarioId },
+      select: { category: true },
+    });
+
+    const done = new Set(incident.completedTaskKeys);
+    const tasks = tasksForCategory(scenario.category).map((task) => ({
+      ...task,
+      completed: done.has(task.key),
+    }));
+
+    return {
+      tasks,
+      completedCount: tasks.filter((t) => t.completed).length,
+      totalCount: tasks.length,
+    };
+  }
+
+  async setTaskCompletion(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    taskKey: string,
+    completed: boolean,
+  ) {
+    const session = await this.sessionAccess.getOwnedSession(sessionId, user);
+    const incident = await this.getIncidentOrThrow(sessionId, incidentId);
+
+    // A submitted case is a record of what the analyst concluded and how they got there;
+    // letting the checklist move afterwards would rewrite that record.
+    if (incident.status === 'closed') {
+      throw new AppException(
+        409,
+        'INCIDENT_CLOSED',
+        'This incident is closed and its checklist can no longer be changed.',
+      );
+    }
+
+    const scenario = await this.prisma.attackScenario.findUniqueOrThrow({
+      where: { id: session.scenarioId },
+      select: { category: true },
+    });
+    const valid = new Set(
+      tasksForCategory(scenario.category).map((t) => t.key),
+    );
+    if (!valid.has(taskKey)) {
+      throw new AppException(
+        400,
+        'UNKNOWN_TASK',
+        'That checklist step does not belong to this investigation.',
+      );
+    }
+
+    const current = new Set(incident.completedTaskKeys);
+    if (completed) current.add(taskKey);
+    else current.delete(taskKey);
+
+    await this.prisma.incident.update({
+      where: { id: incidentId },
+      data: { completedTaskKeys: [...current] },
+    });
+
+    return this.listTasks(sessionId, incidentId, user);
   }
 
   private async getIncidentOrThrow(sessionId: string, incidentId: string) {

@@ -1,6 +1,7 @@
 import {
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -93,4 +94,9 @@ export class LogResponseActionDto {
   @IsString()
   @MinLength(1)
   targetType!: string;
+}
+
+export class SetTaskCompletionDto {
+  @IsBoolean()
+  completed!: boolean;
 }

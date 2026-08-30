@@ -1,4 +1,4 @@
-import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
+import type { InvestigationTaskListDto, InstructorFeedbackDto } from "@/types/socverse-instructor";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { InvestigationsService } from "./investigations-service";
 import type {
@@ -102,6 +102,15 @@ export const apiInvestigationsService: InvestigationsService = {
       context: string | null;
     }>(`/sessions/${sessionId}/threat-intel?${params.toString()}`);
   },
+
+  listTasks: (sessionId, incidentId) =>
+    apiClient.get<InvestigationTaskListDto>(`/sessions/${sessionId}/incidents/${incidentId}/tasks`),
+
+  setTaskCompletion: (sessionId, incidentId, taskKey, completed) =>
+    apiClient.patch<InvestigationTaskListDto>(
+      `/sessions/${sessionId}/incidents/${incidentId}/tasks/${taskKey}`,
+      { completed },
+    ),
 
   submitSession: async (sessionId, incidentIds) => {
     await apiClient.post(`/sessions/${sessionId}/submit`, { incidentIds });
