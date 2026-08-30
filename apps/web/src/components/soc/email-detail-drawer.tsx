@@ -121,7 +121,9 @@ export function EmailDetailDrawer({
               )}
               {tab === "headers" && <EmailHeaderAnalysis email={email} />}
               {tab === "recipients" && <RecipientsTab sessionId={sessionId} emailId={emailId} />}
-              {tab === "links" && <LinksTab sessionId={sessionId} emailId={emailId} />}
+              {tab === "links" && (
+                <LinksTab sessionId={sessionId} emailId={emailId} onPin={onPin} locked={locked} />
+              )}
             </div>
 
             {onPin && (
@@ -364,7 +366,17 @@ function RecipientsTab({ sessionId, emailId }: { sessionId: string; emailId: str
   );
 }
 
-function LinksTab({ sessionId, emailId }: { sessionId: string; emailId: string }) {
+function LinksTab({
+  sessionId,
+  emailId,
+  onPin,
+  locked,
+}: {
+  sessionId: string;
+  emailId: string;
+  onPin?: (input: { eventTable: string; eventId: string; justification: string }) => void;
+  locked?: boolean;
+}) {
   const { data: activity, isPending } = useEmailLinkActivity(sessionId, emailId);
 
   if (isPending) {

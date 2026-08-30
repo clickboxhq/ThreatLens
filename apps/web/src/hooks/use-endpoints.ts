@@ -11,6 +11,8 @@ const keys = {
     ["session", sessionId, "devices", deviceId, "files"] as const,
   network: (sessionId: string, deviceId: string) =>
     ["session", sessionId, "devices", deviceId, "network"] as const,
+  insights: (sessionId: string, deviceId: string) =>
+    ["session", sessionId, "devices", deviceId, "insights"] as const,
   http: (sessionId: string, deviceId: string) =>
     ["session", sessionId, "devices", deviceId, "http"] as const,
 };

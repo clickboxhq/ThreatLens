@@ -14,7 +14,11 @@ export type AuthUser = {
 
 type Session = { accessToken: string; refreshToken: string; expiresIn: number; user: AuthUser };
 type LoginOutcome =
-  { mfaRequired: false; user: AuthUser } | { mfaRequired: true; mfaChallengeId: string };
+  | { mfaRequired: false; user: AuthUser }
+  | { mfaRequired: true; mfaChallengeId: string }
+  // A privileged account that has not enrolled MFA yet. Login cannot complete until it does,
+  // but the challenge lets it enrol without a token — see auth.service.ts's mfaEnrolSetup.
+  | { mfaEnrolmentRequired: true; enrolmentChallengeId: string };
 
 const USER_STORAGE_KEY = "threatlens_user";
 
@@ -39,6 +43,15 @@ interface AuthState {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<LoginOutcome>;
   completeMfaLogin: (mfaChallengeId: string, code: string) => Promise<AuthUser>;
+  /** Start enrolment for an account blocked at login pending mandatory MFA. */
+  startMfaEnrolment: (
+    enrolmentChallengeId: string,
+  ) => Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }>;
+  /** Finish enrolment; completes the login and returns the one-time recovery codes. */
+  completeMfaEnrolment: (
+    enrolmentChallengeId: string,
+    code: string,
+  ) => Promise<{ user: AuthUser; recoveryCodes: string[] }>;
   signup: (
     email: string,
     password: string,
@@ -73,15 +86,39 @@ export const useAuthStore = create<AuthState>()(() => ({
   user: null,
 
   async login(email, password) {
-    const result = await apiClient.post<Session | { mfaRequired: true; mfaChallengeId: string }>(
-      "/auth/login",
-      { email, password },
-    );
+    const result = await apiClient.post<
+      | Session
+      | { mfaRequired: true; mfaChallengeId: string }
+      | { mfaEnrolmentRequired: true; enrolmentChallengeId: string }
+    >("/auth/login", { email, password });
+    if ("mfaEnrolmentRequired" in result) {
+      return {
+        mfaEnrolmentRequired: true,
+        enrolmentChallengeId: result.enrolmentChallengeId,
+      };
+    }
     if ("mfaRequired" in result) {
       return { mfaRequired: true, mfaChallengeId: result.mfaChallengeId };
     }
     applySession(result);
     return { mfaRequired: false, user: result.user };
+  },
+
+  async startMfaEnrolment(enrolmentChallengeId) {
+    return apiClient.post<{
+      secret: string;
+      otpauthUrl: string;
+      qrCodeDataUrl: string;
+    }>("/auth/mfa/enrol/setup", { enrolmentChallengeId });
+  },
+
+  async completeMfaEnrolment(enrolmentChallengeId, code) {
+    const result = await apiClient.post<Session & { recoveryCodes: string[] }>(
+      "/auth/mfa/enrol/complete",
+      { enrolmentChallengeId, code },
+    );
+    applySession(result);
+    return { user: result.user, recoveryCodes: result.recoveryCodes };
   },
 
   async completeMfaLogin(mfaChallengeId, code) {

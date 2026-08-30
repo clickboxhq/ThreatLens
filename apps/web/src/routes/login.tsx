@@ -7,6 +7,7 @@ import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
 import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import { MfaEnrolment } from "@/components/soc/mfa-enrolment";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -35,6 +36,8 @@ function LoginPage() {
   // was right (see AuthService.mfaVerify), so a wrong code can't just be retried against the
   // same challenge — the error below sends the user back to re-enter their password instead.
   const [mfaChallengeId, setMfaChallengeId] = useState<string | null>(null);
+  // Set when a privileged account signs in without MFA enrolled — see MfaEnrolment.
+  const [enrolmentChallengeId, setEnrolmentChallengeId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [verifyingMfa, setVerifyingMfa] = useState(false);
 
@@ -44,7 +47,14 @@ function LoginPage() {
     setSubmitting(true);
     try {
       const result = await login(email, password);
-      if (result.mfaRequired) {
+      if ("mfaEnrolmentRequired" in result) {
+        // A privileged account that has never enrolled MFA. It cannot finish signing in until
+        // it does, so hand off to the enrolment step rather than reporting a failure.
+        setSubmitting(false);
+        setEnrolmentChallengeId(result.enrolmentChallengeId);
+        return;
+      }
+      if ("mfaRequired" in result && result.mfaRequired) {
         setSubmitting(false);
         setMfaChallengeId(result.mfaChallengeId);
         return;
@@ -142,130 +152,134 @@ function LoginPage() {
         </div>
 
         <div className="flex flex-1 items-center justify-center px-6 py-10">
-          <div className="w-full max-w-[400px]">
-            <h2
-              className="text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-              style={displayFont}
-            >
-              {mfaChallengeId ? "Two-factor verification" : "Welcome back"}
-            </h2>
-            <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-              {mfaChallengeId
-                ? "Enter the 6-digit code from your authenticator app, or one of your recovery codes."
-                : "Access your investigations, training, and progress."}
-            </p>
+          {enrolmentChallengeId ? (
+            <MfaEnrolment enrolmentChallengeId={enrolmentChallengeId} />
+          ) : (
+            <div className="w-full max-w-[400px]">
+              <h2
+                className="text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
+                style={displayFont}
+              >
+                {mfaChallengeId ? "Two-factor verification" : "Welcome back"}
+              </h2>
+              <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+                {mfaChallengeId
+                  ? "Enter the 6-digit code from your authenticator app, or one of your recovery codes."
+                  : "Access your investigations, training, and progress."}
+              </p>
 
-            {mfaChallengeId ? (
-              <form className="mt-8 space-y-4" onSubmit={handleMfaSubmit}>
-                <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                    Authentication code
-                  </span>
-                  <input
-                    autoFocus
-                    required
-                    autoComplete="one-time-code"
-                    value={mfaCode}
-                    onChange={(e) => setMfaCode(e.target.value)}
-                    placeholder="123456"
-                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 font-mono text-[14px] tracking-widest text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                  />
-                </label>
+              {mfaChallengeId ? (
+                <form className="mt-8 space-y-4" onSubmit={handleMfaSubmit}>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                      Authentication code
+                    </span>
+                    <input
+                      autoFocus
+                      required
+                      autoComplete="one-time-code"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value)}
+                      placeholder="123456"
+                      className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 font-mono text-[14px] tracking-widest text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                    />
+                  </label>
 
-                {error && (
-                  <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={verifyingMfa || !mfaCode.trim()}
-                  className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
-                >
-                  {verifyingMfa ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" /> Verifying…
-                    </>
-                  ) : (
-                    <>
-                      Verify <ArrowRight className="size-3.5" />
-                    </>
+                  {error && (
+                    <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
+                      {error}
+                    </p>
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMfaChallengeId(null);
-                    setMfaCode("");
-                    setError(null);
-                  }}
-                  className="w-full text-center text-[12.5px] text-black/45 hover:text-black"
-                >
-                  Back to login
-                </button>
-              </form>
-            ) : (
-              <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-                <label className="block">
-                  <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                    Work email
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@organization.com"
-                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                  />
-                </label>
-                <label className="block">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-black/70">Password</span>
-                    <Link
-                      to="/forgot-password"
-                      className="text-[12px] text-black/45 hover:text-black"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                  />
-                </label>
 
-                {error && (
-                  <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
-                    {error}
-                  </p>
-                )}
+                  <button
+                    type="submit"
+                    disabled={verifyingMfa || !mfaCode.trim()}
+                    className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+                  >
+                    {verifyingMfa ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Verifying…
+                      </>
+                    ) : (
+                      <>
+                        Verify <ArrowRight className="size-3.5" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMfaChallengeId(null);
+                      setMfaCode("");
+                      setError(null);
+                    }}
+                    className="w-full text-center text-[12.5px] text-black/45 hover:text-black"
+                  >
+                    Back to login
+                  </button>
+                </form>
+              ) : (
+                <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                      Work email
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="username"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@organization.com"
+                      className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[12px] font-medium text-black/70">Password</span>
+                      <Link
+                        to="/forgot-password"
+                        className="text-[12px] text-black/45 hover:text-black"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                    />
+                  </label>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" /> Logging in…
-                    </>
-                  ) : (
-                    <>
-                      Log in <ArrowRight className="size-3.5" />
-                    </>
+                  {error && (
+                    <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
+                      {error}
+                    </p>
                   )}
-                </button>
-              </form>
-            )}
-          </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Logging in…
+                      </>
+                    ) : (
+                      <>
+                        Log in <ArrowRight className="size-3.5" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-black/8 px-6 py-5 text-[12px] text-black/40">

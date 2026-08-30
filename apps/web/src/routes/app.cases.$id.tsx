@@ -85,6 +85,18 @@ const RESPONSE_ACTIONS: { id: ResponseActionType; label: string; target: string 
   { id: "block_ip", label: "Block IP at egress", target: "device" },
 ];
 
+// Readable names for the telemetry type filter chips. Singular entity types here, distinct
+// from the plural event-table names the evidence and timeline endpoints are keyed by.
+const ENTITY_TYPE_LABEL: Record<string, string> = {
+  sign_in_event: "Sign-ins",
+  email_message: "Emails",
+  cloud_event: "Cloud",
+  process_event: "Processes",
+  file_event: "Files",
+  network_event: "Network",
+  http_request: "Web",
+};
+
 // Maps a search result's entityType to the eventTable string the evidence/timeline endpoints
 // expect (apps/api's EvidenceCollection/TimelineItem rows are keyed by this table name).
 const EVENT_TABLE_BY_ENTITY_TYPE: Record<SearchEntityType, string> = {

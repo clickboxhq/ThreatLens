@@ -36,7 +36,11 @@ export type LoginResult =
         emailVerified: boolean;
       };
     })
-  | { mfaRequired: true; mfaChallengeId: string };
+  | { mfaRequired: true; mfaChallengeId: string }
+  // A privileged account that has not enrolled MFA yet. Distinct from mfaRequired: nothing to
+  // verify against, so the client must take the caller through enrolment before login can
+  // complete.
+  | { mfaEnrolmentRequired: true; enrolmentChallengeId: string };
 
 const MFA_ISSUER = 'ThreatLens';
 const RECOVERY_CODE_COUNT = 10;
@@ -243,6 +247,17 @@ export class AuthService {
       return { mfaRequired: true, mfaChallengeId };
     }
 
+    // §15.2: MFA is mandatory for the privileged roles, and this is where that is actually
+    // enforced rather than merely declared. Such an account cannot complete login without
+    // enrolling — but it is handed an enrolment challenge to do so, because withholding the
+    // token AND requiring a token to enrol would lock the account out permanently.
+    if (MFA_MANDATORY_ROLES.has(user.role)) {
+      const enrolmentChallengeId = await this.mfaChallenges.createEnrolment(
+        user.id,
+      );
+      return { mfaEnrolmentRequired: true, enrolmentChallengeId };
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -402,6 +417,78 @@ export class AuthService {
     });
     const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
     return { secret, otpauthUrl, qrCodeDataUrl };
+  }
+
+  /**
+   * Begin enrolment for an account that is blocked at login pending MFA. Authorised by the
+   * enrolment challenge rather than a token, since the token is precisely what is withheld.
+   * Does not consume the challenge — a first attempt often fails on a mis-scanned QR.
+   */
+  async mfaEnrolSetup(
+    enrolmentChallengeId: string,
+  ): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
+    const userId = await this.mfaChallenges.peekEnrolment(enrolmentChallengeId);
+    if (!userId) {
+      throw new AppException(
+        401,
+        'INVALID_MFA_CHALLENGE',
+        'That enrolment session has expired. Sign in again to restart it.',
+      );
+    }
+    return this.mfaSetup(userId);
+  }
+
+  /**
+   * Complete enrolment and finish the login it was blocking, returning tokens alongside the
+   * recovery codes.
+   *
+   * The codes matter more here than anywhere else in the product: for a role in
+   * MFA_MANDATORY_ROLES the password-reset path deliberately does NOT clear MFA, so if the
+   * authenticator is lost these codes are the only remaining way into the account.
+   */
+  async mfaEnrolComplete(
+    enrolmentChallengeId: string,
+    code: string,
+    sourceIp?: string,
+    correlationId?: string,
+  ) {
+    const userId = await this.mfaChallenges.peekEnrolment(enrolmentChallengeId);
+    if (!userId) {
+      throw new AppException(
+        401,
+        'INVALID_MFA_CHALLENGE',
+        'That enrolment session has expired. Sign in again to restart it.',
+      );
+    }
+
+    // mfaEnable does the real verification and throws on a bad code, leaving the challenge
+    // intact so the caller can simply try again with the next code from their app.
+    const { recoveryCodes } = await this.mfaEnable(
+      userId,
+      code,
+      sourceIp,
+      correlationId,
+    );
+    await this.mfaChallenges.consumeEnrolment(enrolmentChallengeId);
+
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { lastLoginAt: new Date() },
+    });
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'auth.mfa_enrolment_completed',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
+
+    const tokens = await this.issueTokenPair(user);
+    return { ...tokens, recoveryCodes };
   }
 
   /** §16.2 `POST /auth/mfa/enable`: verifies the pending secret and turns MFA on, issuing one-time recovery codes. */

@@ -20,6 +20,7 @@ import { MfaDisableDto } from './dto/mfa-disable.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { EmailVerificationConfirmDto } from './dto/email-verification-confirm.dto';
+import { MfaEnrolSetupDto, MfaEnrolCompleteDto } from './dto/mfa-enrol.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -92,6 +93,39 @@ export class AuthController {
   async mfaVerify(@Body() dto: MfaVerifyDto, @Req() req: Request) {
     return this.authService.mfaVerify(
       dto.mfaChallengeId,
+      dto.code,
+      req.ip,
+      correlationIdOf(req),
+    );
+  }
+
+  // Enrolment for an account blocked at login pending mandatory MFA. Deliberately NOT behind
+  // JwtAuthGuard: the whole point is that no token has been issued yet. Authorisation comes
+  // from the enrolment challenge, which is only handed out after a successful password check.
+  @Post('mfa/enrol/setup')
+  @HttpCode(HttpStatus.OK)
+  async mfaEnrolSetup(@Body() dto: MfaEnrolSetupDto) {
+    await this.rateLimiter.enforce(
+      `mfa-enrol-setup:${dto.enrolmentChallengeId}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
+    return this.authService.mfaEnrolSetup(dto.enrolmentChallengeId);
+  }
+
+  @Post('mfa/enrol/complete')
+  @HttpCode(HttpStatus.OK)
+  async mfaEnrolComplete(
+    @Body() dto: MfaEnrolCompleteDto,
+    @Req() req: Request,
+  ) {
+    await this.rateLimiter.enforce(
+      `mfa-enrol-complete:${dto.enrolmentChallengeId}`,
+      AUTH_RATE_LIMIT,
+      AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    );
+    return this.authService.mfaEnrolComplete(
+      dto.enrolmentChallengeId,
       dto.code,
       req.ip,
       correlationIdOf(req),

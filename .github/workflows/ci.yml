@@ -91,6 +91,9 @@ jobs:
       - run: npm ci
 
       - run: npm run lint --workspace=apps/web
+      # Vite strips types without checking them, so `build` passing says nothing about type
+      # correctness — ten real type errors reached production before this step existed.
+      - run: npm run typecheck --workspace=apps/web
 
       - run: npm run build --workspace=apps/web
 

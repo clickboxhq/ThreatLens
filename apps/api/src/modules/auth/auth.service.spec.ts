@@ -55,6 +55,24 @@ class FakeMfaChallengeStore {
     this.byId.delete(challengeId);
     return userId;
   }
+
+  private readonly enrolments = new Map<string, string>();
+
+  async createEnrolment(userId: string): Promise<string> {
+    const id = randomUUID();
+    this.enrolments.set(id, userId);
+    return id;
+  }
+
+  async peekEnrolment(challengeId: string): Promise<string | null> {
+    return this.enrolments.get(challengeId) ?? null;
+  }
+
+  async consumeEnrolment(challengeId: string): Promise<string | null> {
+    const userId = this.enrolments.get(challengeId) ?? null;
+    this.enrolments.delete(challengeId);
+    return userId;
+  }
 }
 
 // Same rationale as FakeMfaChallengeStore — deliberately not extending PasswordResetTokenStore.
@@ -883,5 +901,175 @@ describe('AuthService audit logging (§6.22)', () => {
 
     await service.logoutAll(target.id, TEST_IP);
     expect(actionsRecorded(auditLog)).toEqual(['logout_all']);
+  });
+});
+
+// §15.2. Before this, MFA was described as mandatory for the privileged roles but only ever
+// prevented *disabling* it — an admin who never enrolled simply logged in with a password
+// forever. These cover the enforcement and, just as importantly, the escape hatch that stops
+// the enforcement becoming a lockout.
+describe('mandatory MFA enrolment for privileged roles', () => {
+  const PASSWORD = 'correct horse battery staple';
+
+  async function privileged(role: 'platform_admin' | 'org_admin') {
+    const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    return user({ role, mfaEnabled: false, passwordHash });
+  }
+
+  it('blocks a platform_admin who has not enrolled, and hands them a way to enrol', async () => {
+    const admin = await privileged('platform_admin');
+    const users = new Map([[admin.id, admin]]);
+    const { service } = buildService(users);
+
+    const result = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+
+    expect('mfaEnrolmentRequired' in result).toBe(true);
+    // No tokens: the login has not completed.
+    expect('accessToken' in result).toBe(false);
+    // But a challenge, or they could neither log in nor enrol.
+    expect(
+      'enrolmentChallengeId' in result && result.enrolmentChallengeId,
+    ).toBeTruthy();
+  });
+
+  it('applies to org_admin as well as platform_admin', async () => {
+    const admin = await privileged('org_admin');
+    const users = new Map([[admin.id, admin]]);
+    const { service } = buildService(users);
+
+    const result = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+    expect('mfaEnrolmentRequired' in result).toBe(true);
+  });
+
+  it('leaves unprivileged accounts entirely alone', async () => {
+    // Students and instructors must keep logging in with a password only.
+    const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    for (const role of ['student', 'instructor'] as const) {
+      const learner = user({ role, mfaEnabled: false, passwordHash });
+      const { service } = buildService(new Map([[learner.id, learner]]));
+      const result = await service.login(
+        { email: learner.email, password: PASSWORD },
+        TEST_IP,
+      );
+      expect('mfaEnrolmentRequired' in result).toBe(false);
+      expect('accessToken' in result).toBe(true);
+    }
+  });
+
+  it('still asks an enrolled admin for a code rather than re-enrolment', async () => {
+    const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    const admin = user({
+      role: 'platform_admin',
+      mfaEnabled: true,
+      mfaSecret: generateSecret(),
+      passwordHash,
+    });
+    const { service } = buildService(new Map([[admin.id, admin]]));
+
+    const result = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+    expect('mfaRequired' in result && result.mfaRequired).toBe(true);
+    expect('mfaEnrolmentRequired' in result).toBe(false);
+  });
+
+  it('does not issue an enrolment challenge on a wrong password', async () => {
+    // The challenge is post-authentication. Handing one out on a failed password would make it
+    // an oracle for which accounts are privileged.
+    const admin = await privileged('platform_admin');
+    const { service } = buildService(new Map([[admin.id, admin]]));
+
+    await expect(
+      service.login({ email: admin.email, password: 'wrong' }, TEST_IP),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+  });
+
+  it('completes enrolment and finishes the login in one step', async () => {
+    const admin = await privileged('platform_admin');
+    const users = new Map([[admin.id, admin]]);
+    const { service } = buildService(users);
+
+    const login = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+    const challengeId =
+      'enrolmentChallengeId' in login ? login.enrolmentChallengeId : '';
+
+    const setup = await service.mfaEnrolSetup(challengeId);
+    expect(setup.secret).toBeTruthy();
+
+    const code = await generateTotp({
+      secret: users.get(admin.id)!.mfaSecret!,
+    });
+    const done = await service.mfaEnrolComplete(challengeId, code, TEST_IP);
+
+    // Tokens AND recovery codes: the login completes, and they leave with the only thing that
+    // can recover this account later.
+    expect(done.accessToken).toBeTruthy();
+    expect(done.recoveryCodes.length).toBeGreaterThan(0);
+    expect(users.get(admin.id)!.mfaEnabled).toBe(true);
+  });
+
+  it('keeps the challenge alive after a wrong code, so a retry is possible', async () => {
+    // Codes rotate every 30s and get mistyped. Consuming the challenge on a bad attempt would
+    // send the admin back to the login screen mid-enrolment, which is how people give up.
+    const admin = await privileged('platform_admin');
+    const users = new Map([[admin.id, admin]]);
+    const { service } = buildService(users);
+
+    const login = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+    const challengeId =
+      'enrolmentChallengeId' in login ? login.enrolmentChallengeId : '';
+    await service.mfaEnrolSetup(challengeId);
+
+    await expect(
+      service.mfaEnrolComplete(challengeId, '000000', TEST_IP),
+    ).rejects.toMatchObject({ code: 'INVALID_MFA_CODE' });
+
+    const code = await generateTotp({
+      secret: users.get(admin.id)!.mfaSecret!,
+    });
+    const done = await service.mfaEnrolComplete(challengeId, code, TEST_IP);
+    expect(done.accessToken).toBeTruthy();
+  });
+
+  it('rejects an unknown or expired enrolment challenge', async () => {
+    const { service } = buildService(new Map());
+    await expect(service.mfaEnrolSetup(randomUUID())).rejects.toMatchObject({
+      code: 'INVALID_MFA_CHALLENGE',
+    });
+  });
+
+  it('consumes the challenge once enrolment succeeds, so it cannot be replayed', async () => {
+    const admin = await privileged('platform_admin');
+    const users = new Map([[admin.id, admin]]);
+    const { service } = buildService(users);
+
+    const login = await service.login(
+      { email: admin.email, password: PASSWORD },
+      TEST_IP,
+    );
+    const challengeId =
+      'enrolmentChallengeId' in login ? login.enrolmentChallengeId : '';
+    await service.mfaEnrolSetup(challengeId);
+    const code = await generateTotp({
+      secret: users.get(admin.id)!.mfaSecret!,
+    });
+    await service.mfaEnrolComplete(challengeId, code, TEST_IP);
+
+    await expect(service.mfaEnrolSetup(challengeId)).rejects.toMatchObject({
+      code: 'INVALID_MFA_CHALLENGE',
+    });
   });
 });

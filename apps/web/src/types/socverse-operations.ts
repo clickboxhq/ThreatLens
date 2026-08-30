@@ -144,6 +144,9 @@ export interface EmailUrlDto {
 }
 
 export interface EmailMessageDto {
+  /** When the sending domain was registered. Null where no record is available — an honest
+   * unknown, which is itself a legitimate answer a real resolver also gives. */
+  senderDomainRegisteredAt: string | null;
   id: string;
   occurredAt: string;
   messageId: string;

@@ -1,4 +1,4 @@
-import type { InvestigationTaskListDto, InstructorFeedbackDto } from "@/types/socverse-instructor";
+import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { InvestigationsService } from "./investigations-service";
 import type {
@@ -13,6 +13,7 @@ import type {
   SessionDto,
   TimelineItemDto,
 } from "@/types/socverse-investigation";
+import type { InvestigationTaskListDto } from "@/types/socverse-investigation";
 
 export const apiInvestigationsService: InvestigationsService = {
   createSession: (scenarioId) => apiClient.post<SessionDto>("/sessions", { scenarioId }),
