@@ -13,7 +13,7 @@ describe('activity log summaries', () => {
     );
     expect(
       summariseAction('pin_evidence', 'email_message', 'URGENT: Wire Transfer'),
-    ).toBe('Pinned as evidence email URGENT: Wire Transfer');
+    ).toBe('Pinned email URGENT: Wire Transfer');
   });
 
   it('still reads as a sentence when the label could not be resolved', () => {
@@ -95,5 +95,23 @@ describe('activity log summaries', () => {
     for (const a of ALL) {
       expect(summariseAction(a, 'identity', 'X')).not.toContain('Acted on');
     }
+  });
+
+  // Evidence and timeline record the event *table* they are keyed by, which is plural, while
+  // view_entity records a singular entity name. A missed plural rendered as "Pinned as
+  // evidence email messages URGENT: ..." in production before this was caught.
+  it('maps the plural event-table names evidence and timeline actually record', () => {
+    expect(
+      summariseAction('pin_evidence', 'email_messages', 'URGENT: Wire'),
+    ).toBe('Pinned email URGENT: Wire');
+    expect(summariseAction('pin_evidence', 'sign_in_events', null)).toBe(
+      'Pinned the sign-in',
+    );
+  });
+
+  it('says where a timelined item went', () => {
+    expect(
+      summariseAction('add_to_timeline', 'email_messages', 'URGENT: Wire'),
+    ).toBe('Added email URGENT: Wire to the timeline');
   });
 });

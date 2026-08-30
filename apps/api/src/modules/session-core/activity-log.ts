@@ -27,8 +27,8 @@ export interface ActivityEntry {
 const ACTION_VERBS: Record<InvestigationActionType, string> = {
   view_entity: 'Opened',
   search: 'Searched telemetry',
-  add_to_timeline: 'Added to the timeline',
-  pin_evidence: 'Pinned as evidence',
+  add_to_timeline: 'Added',
+  pin_evidence: 'Pinned',
   isolate_device: 'Isolated',
   disable_account: 'Disabled',
   block_sender: 'Blocked sender',
@@ -42,8 +42,13 @@ const ACTION_VERBS: Record<InvestigationActionType, string> = {
   view_threat_intel: 'Looked up an indicator',
 };
 
+// Two naming conventions reach this map. view_entity records a singular entity name
+// ('email_message'); evidence and timeline record the event *table* they are keyed by
+// ('email_messages'), because that is what those endpoints store. Both are mapped, since a
+// missed plural silently renders as "email messages" in the middle of a sentence.
 const TARGET_NOUNS: Record<string, string> = {
   email_message: 'email',
+  email_messages: 'email',
   identity: 'identity',
   device: 'device',
   alert: 'alert',
@@ -51,6 +56,13 @@ const TARGET_NOUNS: Record<string, string> = {
   session: 'session',
   hint: 'hint',
   threat_intel_indicator: 'indicator',
+  sign_in_events: 'sign-in',
+  process_events: 'process event',
+  file_events: 'file event',
+  network_events: 'network connection',
+  http_requests: 'web request',
+  cloud_events: 'cloud action',
+  directory_audit_events: 'directory change',
 };
 
 export function summariseAction(
@@ -69,6 +81,13 @@ export function summariseAction(
     actionType === 'request_hint'
   ) {
     return verb;
+  }
+
+  // "Added" needs its destination, or the line does not say where the thing went.
+  if (actionType === 'add_to_timeline') {
+    return targetLabel
+      ? `Added ${noun} ${targetLabel} to the timeline`
+      : `Added the ${noun} to the timeline`;
   }
 
   return targetLabel ? `${verb} ${noun} ${targetLabel}` : `${verb} the ${noun}`;
