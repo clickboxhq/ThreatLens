@@ -68,6 +68,7 @@ function Dashboard() {
     assignedScenarios,
     mitreMastery,
     leaderboard,
+    leaderboardScope,
     summary,
   } = useDashboardPerformance();
   const { recommendation } = useLearningRecommendation();
@@ -433,11 +434,29 @@ function Dashboard() {
 
       {/* Cohort + skills */}
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Panel title="Cohort leaderboard" padded={false}>
+        <Panel
+          title={
+            leaderboardScope.cohortName
+              ? `${leaderboardScope.cohortName} leaderboard`
+              : "Global standing"
+          }
+          padded={false}
+          actions={
+            leaderboardScope.anonymised ? (
+              <span className="text-[10.5px] text-muted-foreground">Names hidden</span>
+            ) : undefined
+          }
+        >
           {leaderboard.length > 0 ? (
             <div className="divide-y divide-border">
               {leaderboard.map((l, i) => (
-                <div key={l.name} className="flex items-center gap-3 px-4 py-3">
+                <div
+                  key={`${l.name}-${i}`}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3",
+                    l.isYou && "bg-[color:var(--info)]/5",
+                  )}
+                >
                   <IconTile
                     size="sm"
                     className={cn(
@@ -447,7 +466,9 @@ function Dashboard() {
                   >
                     {i === 0 ? <Trophy className="size-3.5" /> : i + 1}
                   </IconTile>
-                  <div className="flex-1 text-[13px] font-medium">{l.name}</div>
+                  <div className="flex-1 text-[13px] font-medium">
+                    {l.isYou ? `${l.name} (you)` : l.name}
+                  </div>
                   <div className="text-right">
                     <div className="text-[12px] tabular-nums">{l.score.toLocaleString()}</div>
                     <div className="text-[10px] text-muted-foreground">

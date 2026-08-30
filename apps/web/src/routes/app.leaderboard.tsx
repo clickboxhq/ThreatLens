@@ -29,14 +29,18 @@ const PERIODS: { value: LeaderboardPeriod; label: string }[] = [
 ];
 
 function Leaderboard() {
-  const { period, setPeriod, leaderboard, isPending, isError } = useLeaderboard();
+  const { period, setPeriod, leaderboard, cohortName, isPending, isError } = useLeaderboard();
   const entries = leaderboard?.entries ?? [];
   const myEntry = leaderboard?.myEntry ?? null;
 
   return (
     <WorkspacePage
-      title="Leaderboard"
-      description="Points are weighted by scenario difficulty, not just raw score — see the breakdown below."
+      title={cohortName ? `${cohortName} leaderboard` : "Leaderboard"}
+      description={
+        cohortName
+          ? "Ranked within your cohort. Points are weighted by scenario difficulty, not just raw score — see the breakdown below."
+          : "Your standing across everyone on the platform. Other learners are not named, since they may be at another organisation. Points are weighted by scenario difficulty — see the breakdown below."
+      }
       state={isPending ? "loading" : isError ? "error" : entries.length === 0 ? "empty" : "ready"}
       emptyState={{
         title: "No ranked analysts yet",
@@ -83,7 +87,10 @@ function Leaderboard() {
           ) : (
             <span className="tabular-nums text-muted-foreground">{e.rank}</span>
           ),
-          <span className="font-medium">{e.displayName}</span>,
+          <span className={e.displayName ? "font-medium" : "font-medium text-muted-foreground"}>
+            {e.displayName ??
+              (e.userId === leaderboard?.myEntry?.userId ? "You" : `Rank ${e.rank}`)}
+          </span>,
           <span className="tabular-nums">{e.points.toLocaleString()}</span>,
           <span className="tabular-nums">{e.completions}</span>,
           <span className="tabular-nums text-[color:var(--success)]">{e.averagePercent}%</span>,

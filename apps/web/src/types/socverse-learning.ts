@@ -63,8 +63,9 @@ export type LeaderboardPeriod = "weekly" | "monthly" | "all_time";
 export type LeaderboardScope = "global" | "cohort";
 
 export interface LeaderboardEntryDto {
-  userId: string;
-  displayName: string;
+  /** Null for everyone but the viewer on the global board — see LeaderboardDto.anonymised. */
+  userId: string | null;
+  displayName: string | null;
   points: number;
   completions: number;
   averagePercent: number;
@@ -74,6 +75,10 @@ export interface LeaderboardEntryDto {
 export interface LeaderboardDto {
   period: LeaderboardPeriod;
   scope: LeaderboardScope;
+  /** True on the global board, which spans every organisation: other learners' names and ids
+   * are withheld server-side, leaving rank and score. False inside a cohort, whose members
+   * already know each other. */
+  anonymised: boolean;
   entries: LeaderboardEntryDto[];
   myEntry: LeaderboardEntryDto | null;
 }

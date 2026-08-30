@@ -58,9 +58,21 @@ export function useDashboardPerformance() {
     queryKey: [...queryKeys.dashboardPerformance, "scenarios"],
     queryFn: () => listRealScenarios(),
   });
+  // Cohort board when they are in one, anonymised platform-wide standing otherwise. The
+  // global board carries no other names — the API withholds them, because it spans every
+  // organisation on the platform.
+  const cohortsQuery = useQuery({
+    queryKey: ["cohorts", "mine"],
+    queryFn: () => cohortsService.listMine(),
+  });
+  const cohort = cohortsQuery.data?.[0];
   const leaderboardQuery = useQuery({
-    queryKey: queryKeys.leaderboard,
-    queryFn: () => leaderboardService.get("all_time", "global"),
+    queryKey: [...queryKeys.leaderboard, cohort?.id ?? "global"],
+    queryFn: () =>
+      cohort
+        ? leaderboardService.get("all_time", "cohort", cohort.id)
+        : leaderboardService.get("all_time", "global"),
+    enabled: !cohortsQuery.isPending,
   });
 
   const sessions = sessionsQuery.data ?? [];
@@ -159,12 +171,18 @@ export function useDashboardPerformance() {
     assignedScenarios,
     mitreMastery,
     // Real leaderboard entries, reshaped to the field names this dashboard panel already
-    // renders (see use-leaderboard.ts for the direct, unmapped version).
+    // renders (see use-leaderboard.ts for the direct, unmapped version). displayName is null
+    // for other people on the anonymised global board, so the row falls back to its rank.
     leaderboard: (leaderboardQuery.data?.entries ?? []).map((e) => ({
-      name: e.displayName,
+      name: e.displayName ?? `Rank ${e.rank}`,
+      isYou: e.userId !== null && e.userId === leaderboardQuery.data?.myEntry?.userId,
       score: e.points,
       solved: e.completions,
     })),
+    leaderboardScope: {
+      cohortName: cohort?.name ?? null,
+      anonymised: leaderboardQuery.data?.anonymised ?? true,
+    },
     summary: {
       started: sessions.length,
       completed: scoredSessions.length,
