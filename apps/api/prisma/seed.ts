@@ -2148,10 +2148,309 @@ async function main() {
     techniqueBySlug,
   );
 
+  // ---- Verdict variety (§12.1) ----------------------------------------------------------
+  // Every scenario above requires a true_positive. A library where "it is a real attack" is
+  // always the right answer teaches escalation, not judgement — a Student can take full
+  // verdict marks without once weighing the alternative. The two below are the counterweight:
+  // the alerts are real and correctly raised, and the right call is still not "incident".
+  // Both are only fair because each identity now carries a month of baseline to compare
+  // against; without that history, "is this normal for this account?" is unanswerable.
+
+  await seedScenario(
+    {
+      slug: 'monitoring-agent-flagged-as-webshell',
+      title: 'Web — Uptime Monitor Flagged as a Web Shell',
+      summary:
+        'A detection fired for a non-browser client repeatedly requesting a script endpoint on a public web server. Determine whether this is a web shell or something the organisation runs itself.',
+      category: 'web',
+      difficulty: 'beginner',
+      estimatedMinutes: 15,
+      requiredTechniques: [],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'beginner',
+          estimated_minutes: 15,
+          narrative_summary:
+            'An internal uptime-monitoring agent polls a health-check endpoint on a fixed schedule using a scripted HTTP client. The detection cannot distinguish that from web shell interaction, and fires. Nothing malicious occurred: the requests come from an internal address, arrive on a regular cadence, touch only a health endpoint, and have run unchanged across the whole history window.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'ops_identity_1', attributes: { department: 'IT', job_title: 'Platform Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [
+            { ref: 'web_server_1', attributes: { hostname: 'WEB-PROD-04', os_platform: 'linux' } },
+          ],
+          decoy_population_size: { identities: 8, devices: 5 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1505.003',
+            entity_ref: 'ops_identity_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'web_legitimate_monitoring_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'monitoring-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.05,
+          false_positive_bait: [],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          // No attack, so no technique to attribute. The scorer treats an empty required set
+          // with nothing tagged as full marks, which is the correct outcome: an analyst who
+          // clears this should not also be asked to name an adversary technique.
+          required_techniques: [],
+          required_verdict: 'false_positive',
+          min_evidence_items: 1,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Look at where the requests originate. Is that address inside or outside the network?' },
+          { unlock_cost_percent: 10, text: 'Check the spacing between requests. Interactive command-and-control is irregular; scheduled polling is not.' },
+          { unlock_cost_percent: 15, text: 'A web shell is used to run varied commands. Ask whether these requests ever touch anything beyond one health endpoint.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'vendor-mail-spf-failure-after-migration',
+      title: 'Email — SPF Failure on a Genuine Vendor Notification',
+      summary:
+        'An inbound message failed SPF authentication and was flagged as possible spoofing. Determine whether someone is impersonating the vendor, or whether the vendor broke their own mail configuration.',
+      category: 'email',
+      difficulty: 'beginner',
+      estimatedMinutes: 20,
+      requiredTechniques: [],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'email',
+          difficulty: 'beginner',
+          estimated_minutes: 20,
+          narrative_summary:
+            'A real supplier moved mail providers without updating their SPF record, so genuine notifications now fail authentication. The alert is correct — authentication really did fail — but the message is authentic: no payload, no credential harvesting, no lookalike domain, and the sending domain is one the organisation already corresponds with. The right call is benign_positive: real, authorised activity that a control legitimately flagged.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'recipient_identity_1', attributes: { department: 'Operations', job_title: 'Facilities Coordinator', home_country: 'GB' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 9, devices: 5 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'recipient_identity_1',
+            event_template_id: 'benign_it_admin_email_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'vendor-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.05,
+          false_positive_bait: [],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: [],
+          required_verdict: 'benign_positive',
+          min_evidence_items: 1,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Read the message headers. Does the sending domain resemble one the organisation deals with, or is it a lookalike?' },
+          { unlock_cost_percent: 10, text: 'A phishing message wants something. Check whether this one carries a link, an attachment, or any request for action at all.' },
+          { unlock_cost_percent: 15, text: 'benign_positive and false_positive differ: was the detection wrong about the fact, or right about the fact and wrong about the intent?' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  // ---- Category depth ---------------------------------------------------------------------
+
+  await seedScenario(
+    {
+      slug: 'departing-engineer-bulk-cloud-download',
+      title: 'Insider Threat — Departing Engineer Bulk-Downloads Cloud Storage',
+      summary:
+        'An engineer working out their notice period enumerated and read the contents of a production storage bucket, then cleared the local copies. No credentials were stolen, the access was entirely legitimate, and no detection fired — start from the account activity itself.',
+      category: 'insider_threat',
+      // Advanced, not intermediate: with no alert to start from, this has to be hunted from
+      // the identity cloud activity outward.
+      difficulty: 'advanced',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1530', 'T1070.004'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'insider_threat',
+          difficulty: 'advanced',
+          estimated_minutes: 25,
+          narrative_summary:
+            'The distinguishing feature here is that nothing is compromised. The identity is real, the credentials belong to the account holder, the access rights were granted deliberately, and each action is unremarkable in isolation. What makes it an incident is volume, timing relative to the resignation, and the deletion that follows.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'insider_identity_1', attributes: { department: 'Engineering', job_title: 'Senior Platform Engineer', home_country: 'US' } },
+          ],
+          narrative_devices: [
+            { ref: 'insider_device_1', attributes: { hostname: 'ENG-WKS-31', os_platform: 'windows' } },
+          ],
+          decoy_population_size: { identities: 10, devices: 7 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1530',
+            entity_ref: 'insider_identity_1',
+            event_template_id: 'cloud_bucket_enumeration_v1',
+            relative_timestamp: '+6h',
+            correlation_group: 'insider-cloud-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1070.004',
+            entity_ref: 'insider_identity_1',
+            device_ref: 'insider_device_1',
+            event_template_id: 'insider_source_file_cleanup_v1',
+            relative_timestamp: '+9h',
+            correlation_group: 'insider-cloud-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          // No bait. No detection rule covers bulk reads of storage a user is entitled to
+          // read, so nothing here raises an alert — which is true to life for insider cases
+          // and is the point of the exercise. Adding unrelated bait would be actively unfair:
+          // the only alerts in the session would point somewhere other than the incident.
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1530', 'T1070.004'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Nothing alerted here. Open the identity and read its cloud activity directly — how much was read, and over what period?' },
+          { unlock_cost_percent: 10, text: 'Compare that volume against the month of prior activity on the same account. Is it a normal working pattern for them?' },
+          { unlock_cost_percent: 15, text: 'Look at what happened on their workstation afterwards. Retrieval and removal together tell a different story than retrieval alone.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'sql-injection-to-webshell-chain',
+      title: 'Web — SQL Injection Escalated to a Web Shell',
+      summary:
+        'A public application was probed with injection payloads, and a script file later appeared in a writable directory on the same server. Establish whether the two are connected.',
+      category: 'web',
+      difficulty: 'advanced',
+      estimatedMinutes: 35,
+      requiredTechniques: ['T1190', 'T1505.003'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'web',
+          difficulty: 'advanced',
+          estimated_minutes: 35,
+          narrative_summary:
+            'Two techniques chained on one host: injection used to obtain write access, then a web shell dropped through it for durable interactive access. The existing web scenarios cover each half separately; the analytical work here is establishing that the second followed from the first, rather than treating them as unrelated findings on a busy server.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'web_owner_1', attributes: { department: 'IT', job_title: 'Application Owner', home_country: 'DE' } },
+          ],
+          narrative_devices: [
+            { ref: 'web_server_1', attributes: { hostname: 'WEB-PROD-02', os_platform: 'linux' } },
+          ],
+          decoy_population_size: { identities: 9, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1190',
+            entity_ref: 'web_owner_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'web_sqli_probe_burst_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'web-chain-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1505.003',
+            entity_ref: 'web_owner_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'web_webshell_initial_access_v1',
+            relative_timestamp: '+3h20m',
+            correlation_group: 'web-chain-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1505.003',
+            entity_ref: 'web_owner_1',
+            device_ref: 'web_server_1',
+            event_template_id: 'web_webshell_command_burst_v1',
+            relative_timestamp: '+3h45m',
+            correlation_group: 'web-chain-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.12,
+          false_positive_bait: [
+            { event_template_id: 'web_legitimate_monitoring_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1190', 'T1505.003'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Order the requests to this server by time. What changed between the early traffic and the later traffic?' },
+          { unlock_cost_percent: 10, text: 'One of the request bursts is a legitimate monitoring agent. Separate it out before drawing conclusions about the rest.' },
+          { unlock_cost_percent: 15, text: 'Ask how the script file came to exist on a server nobody deployed it to. The earlier traffic is the answer.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   await seedLearningPlatform();
 
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 21 scenarios, learning platform content.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 25 scenarios, learning platform content.`,
   );
 }
 

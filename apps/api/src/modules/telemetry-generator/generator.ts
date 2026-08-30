@@ -585,7 +585,7 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
         spfResult: 'fail',
         dkimResult: 'none',
         dmarcResult: 'fail',
-        isGroundTruthEvidence: false,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
       });
       break;
     }
@@ -1323,18 +1323,24 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       // non-browser client posting to a script path — the same observable shape as the real
       // webshell access, so the Student has to look at the target path, not just the client.
       if (!ctx.device) break;
+      // Usually noise, but a scenario can also make this the *subject* of the investigation
+      // (a false positive the Student has to clear), so the kill-chain step decides whether it
+      // counts as evidence rather than the template asserting it never does.
       ctx.httpRequests.push({
         id: randomUUID(),
         sessionId: ctx.sessionId,
         occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
         raw: { source: 'noise', pattern: 'legitimate_monitoring' },
-        isGroundTruthEvidence: false,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
         deviceId: ctx.device.id,
         method: 'GET',
         url: LEGITIMATE_SCRIPT_PATH,
         userAgent: MONITORING_USER_AGENT,
         statusCode: 200,
-        sourceIp: syntheticIp(ctx.rng),
+        // An internal monitoring agent runs inside the network. That is the tell separating it
+        // from a web shell operated from outside, so it must not use an external address.
+        sourceIp: `10.20.${ctx.rng.intBetween(1, 40)}.${ctx.rng.intBetween(2, 250)}`,
       });
       break;
     }
