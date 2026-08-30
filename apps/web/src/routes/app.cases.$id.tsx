@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
@@ -18,6 +18,8 @@ import {
 } from "@/hooks/use-investigations";
 import { ApiError } from "@/lib/api-client";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
+import { useIdentities } from "@/hooks/use-identities";
+import { useEndpoints } from "@/hooks/use-endpoints";
 import {
   RESPONSE_ACTION_TYPES,
   type IncidentVerdict,
@@ -224,6 +226,17 @@ function IncidentResolver({ sessionId }: { sessionId: string }) {
 }
 
 function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; incidentId: string }) {
+  // Names for the telemetry feed. Both lists are small and per-session, and the case workspace
+  // is going to need them for the drawers anyway — so this is a client-side join rather than
+  // widening every search result server-side.
+  const { data: sessionIdentities } = useIdentities(sessionId);
+  const { data: sessionDevices } = useEndpoints(sessionId);
+  const nameFor = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const i of sessionIdentities ?? []) byId.set(i.id, i.displayName);
+    for (const d of sessionDevices ?? []) byId.set(d.id, d.hostname);
+    return (id: string) => byId.get(id);
+  }, [sessionIdentities, sessionDevices]);
   const {
     incident,
     incidentLoading,
@@ -476,7 +489,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                           )}
                         </div>
                         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
-                          {detailForResult(r.entityType, r.data)}
+                          {detailForResult(r.entityType, r.data, nameFor)}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[10.5px] text-muted-foreground">
                           <span>{new Date(r.occurredAt).toUTCString().slice(5, 22)} UTC</span>
