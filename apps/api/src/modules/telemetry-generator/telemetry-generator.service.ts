@@ -63,6 +63,11 @@ export class TelemetryGeneratorService {
       this.prisma.cloudEvent.createMany({ data: telemetry.cloudEvents }),
       this.prisma.httpRequest.createMany({ data: telemetry.httpRequests }),
       this.prisma.emailMessage.createMany({ data: telemetry.emailMessages }),
+      // Directory audit events reference identities as both target and actor, so they belong
+      // in this second transaction alongside the other identity-referencing tables.
+      this.prisma.directoryAuditEvent.createMany({
+        data: telemetry.directoryAuditEvents,
+      }),
     ]);
 
     if (
@@ -82,7 +87,8 @@ export class TelemetryGeneratorService {
         `${telemetry.devices.length} devices, ${telemetry.signInEvents.length} sign-ins, ` +
         `${telemetry.processEvents.length} process events, ${telemetry.fileEvents.length} file events, ` +
         `${telemetry.networkEvents.length} network events, ${telemetry.cloudEvents.length} cloud events, ` +
-        `${telemetry.httpRequests.length} http requests, ${telemetry.emailMessages.length} emails.`,
+        `${telemetry.httpRequests.length} http requests, ${telemetry.emailMessages.length} emails, ` +
+        `${telemetry.directoryAuditEvents.length} directory audit events.`,
     );
   }
 }

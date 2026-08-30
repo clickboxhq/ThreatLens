@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 /** Shared chrome for the case workspace's entity pivots (email / identity / device) so all
@@ -110,4 +110,59 @@ export function formatEventTime(iso: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+/**
+ * An EventRow that opens to reveal the full record. A month of history is only useful if you
+ * can interrogate a single line of it — "this one, at 03:14, from which address?" — so every
+ * log row in the identity drawer expands rather than forcing a pivot elsewhere.
+ */
+export function ExpandableEventRow({
+  title,
+  meta,
+  detail,
+  tone,
+  fields,
+}: {
+  title: ReactNode;
+  meta?: ReactNode;
+  detail?: ReactNode;
+  tone?: "critical" | "warning" | "normal";
+  fields: [string, ReactNode][];
+}) {
+  const [open, setOpen] = useState(false);
+  const toneClass =
+    tone === "critical"
+      ? "text-[color:var(--critical)]"
+      : tone === "warning"
+        ? "text-[color:var(--warning)]"
+        : "";
+
+  return (
+    <li className="text-[12px]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2.5 text-left hover:bg-background/40"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className={`truncate font-medium ${toneClass}`}>{title}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {open ? "Hide" : "Details"}
+          </span>
+        </div>
+        {detail && <div className="mt-0.5 text-[11px] text-secondary">{detail}</div>}
+        {meta && <div className="mt-0.5 text-[10.5px] text-muted-foreground">{meta}</div>}
+      </button>
+      {open && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-border bg-background/40 px-3 py-2 text-[11px]">
+          {fields.map(([label, value]) => (
+            <Fragment key={label}>
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="break-all">{value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
+    </li>
+  );
 }

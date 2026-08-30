@@ -3,22 +3,39 @@ import {
   useIdentityProfile,
   useIdentitySignIns,
   useIdentityCloudEvents,
+  useIdentityAuditEvents,
 } from "@/hooks/use-identities";
 import {
   EntityDrawerShell,
   DrawerEmpty,
   EventRow,
+  ExpandableEventRow,
   formatEventTime,
 } from "@/components/soc/entity-drawer-shell";
 import { Loader2 } from "lucide-react";
 
-type Tab = "profile" | "signins" | "cloud";
+type Tab = "profile" | "signins" | "audit" | "cloud";
 
 const TABS = [
   ["profile", "Profile"],
   ["signins", "Sign-in history"],
+  ["audit", "Audit log"],
   ["cloud", "Cloud activity"],
 ] as const;
+
+// Which control-plane changes deserve a second look. Nothing here is a verdict — a password
+// reset is routine on a Tuesday and the whole story on the day an account is taken over — but
+// an investigator scanning a month of entries should not have to read every line to find them.
+const NOTABLE_AUDIT_CATEGORIES = new Set(["mfa", "role_assignment", "mailbox_rule"]);
+
+const AUDIT_CATEGORY_LABEL: Record<string, string> = {
+  credential: "Credential",
+  mfa: "MFA",
+  group_membership: "Group",
+  role_assignment: "Role",
+  account_lifecycle: "Account",
+  mailbox_rule: "Mailbox rule",
+};
 
 const RISK_TONE: Record<string, string> = {
   high: "text-[color:var(--critical)]",
@@ -120,6 +137,7 @@ export function IdentityDetailDrawer({
           )}
 
           {tab === "signins" && <SignInsTab sessionId={sessionId} identityId={identityId} />}
+          {tab === "audit" && <AuditTab sessionId={sessionId} identityId={identityId} />}
           {tab === "cloud" && <CloudTab sessionId={sessionId} identityId={identityId} />}
         </>
       )}
@@ -170,12 +188,23 @@ function SignInsTab({ sessionId, identityId }: { sessionId: string; identityId: 
 
       <ul className="divide-y divide-border rounded-md border border-border">
         {signIns.map((s) => (
-          <EventRow
+          <ExpandableEventRow
             key={s.id}
             tone={s.result === "success" ? "normal" : "warning"}
             title={`${s.result === "success" ? "Successful" : "Failed"} sign-in — ${s.sourceCity}, ${s.sourceCountry}`}
             detail={`${s.sourceIp} · ${s.application}${s.isLegacyAuth ? " · legacy auth" : ""}`}
             meta={`${formatEventTime(s.occurredAt)}${s.failureReason ? ` · ${s.failureReason}` : ""}`}
+            fields={[
+              ["When", new Date(s.occurredAt).toUTCString()],
+              ["Result", s.result],
+              ["Location", `${s.sourceCity}, ${s.sourceCountry}`],
+              ["Source IP", s.sourceIp],
+              ["Application", s.application],
+              ["Client app", s.clientApp],
+              ["Legacy auth", s.isLegacyAuth ? "Yes — bypasses modern auth policy" : "No"],
+              ["Failure reason", s.failureReason ?? "—"],
+              ["Event ID", s.id],
+            ]}
           />
         ))}
       </ul>
@@ -208,5 +237,80 @@ function CloudTab({ sessionId, identityId }: { sessionId: string; identityId: st
         />
       ))}
     </ul>
+  );
+}
+
+/**
+ * The directory audit trail: what was done *to* this account over the history window, and by
+ * whom. Distinct from sign-ins because the actions that matter most in an account takeover —
+ * a new MFA method, a role grant, a silent forwarding rule — leave no unusual sign-in at all.
+ */
+function AuditTab({ sessionId, identityId }: { sessionId: string; identityId: string }) {
+  const { data: events, isPending } = useIdentityAuditEvents(sessionId, identityId);
+
+  if (isPending) {
+    return (
+      <div className="flex items-center gap-2 py-6 text-[12.5px] text-secondary">
+        <Loader2 className="size-4 animate-spin" /> Loading audit log…
+      </div>
+    );
+  }
+  if (!events || events.length === 0) {
+    return <DrawerEmpty>No directory changes recorded for this identity.</DrawerEmpty>;
+  }
+
+  const notable = events.filter((e) => NOTABLE_AUDIT_CATEGORIES.has(e.category)).length;
+  const selfService = events.filter((e) => e.actorIdentityId === identityId).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-3 rounded-md border border-border bg-background/40 px-3 py-2 text-[11.5px]">
+        <span>
+          <span className="text-muted-foreground">Entries:</span> {events.length}
+        </span>
+        <span className={notable > 0 ? "text-[color:var(--warning)]" : ""}>
+          <span className="text-muted-foreground">Security-relevant:</span> {notable}
+        </span>
+        <span>
+          <span className="text-muted-foreground">Self-service:</span> {selfService}
+        </span>
+      </div>
+
+      <ul className="divide-y divide-border rounded-md border border-border">
+        {events.map((e) => (
+          <ExpandableEventRow
+            key={e.id}
+            tone={
+              e.result === "failure"
+                ? "warning"
+                : NOTABLE_AUDIT_CATEGORIES.has(e.category)
+                  ? "warning"
+                  : "normal"
+            }
+            title={e.action}
+            detail={`${AUDIT_CATEGORY_LABEL[e.category] ?? e.category} · by ${e.actorDisplayName}${
+              e.actorIdentityId === identityId ? " (self-service)" : ""
+            }`}
+            meta={`${formatEventTime(e.occurredAt)} · ${e.sourceIp}${
+              e.result === "failure" ? " · failed" : ""
+            }`}
+            fields={[
+              ["When", new Date(e.occurredAt).toUTCString()],
+              ["Action", e.action],
+              ["Category", AUDIT_CATEGORY_LABEL[e.category] ?? e.category],
+              ["Performed by", e.actorDisplayName],
+              [
+                "Actor is the account holder",
+                e.actorIdentityId === identityId ? "Yes — self-service" : "No",
+              ],
+              ["Result", e.result],
+              ["Source IP", e.sourceIp],
+              ["Detail", e.detail ? JSON.stringify(e.detail) : "—"],
+              ["Event ID", e.id],
+            ]}
+          />
+        ))}
+      </ul>
+    </div>
   );
 }

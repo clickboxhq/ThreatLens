@@ -7,6 +7,8 @@ const keys = {
     ["session", sessionId, "identities", identityId] as const,
   signIns: (sessionId: string, identityId: string) =>
     ["session", sessionId, "identities", identityId, "signins"] as const,
+  audit: (sessionId: string, identityId: string) =>
+    ["session", sessionId, "identities", identityId, "audit-events"] as const,
   cloudEvents: (sessionId: string, identityId: string) =>
     ["session", sessionId, "identities", identityId, "cloud-events"] as const,
 };
@@ -40,5 +42,18 @@ export function useIdentityCloudEvents(sessionId: string, identityId: string | n
     queryKey: identityId ? keys.cloudEvents(sessionId, identityId) : ["cloud-events", "none"],
     queryFn: () => identitiesService.getCloudEvents(sessionId, identityId!),
     enabled: Boolean(identityId),
+  });
+}
+
+/** Directory audit trail for one identity — the control-plane counterpart to its sign-ins. */
+export function useIdentityAuditEvents(
+  sessionId: string | undefined,
+  identityId: string | undefined,
+) {
+  return useQuery({
+    queryKey:
+      sessionId && identityId ? keys.audit(sessionId, identityId) : ["audit-events", "none"],
+    queryFn: () => identitiesService.getAuditEvents(sessionId!, identityId!),
+    enabled: Boolean(sessionId && identityId),
   });
 }

@@ -60,6 +60,15 @@ export class IdentityPortalController {
     });
   }
 
+  @Get(':id/audit-events')
+  async getAuditEvents(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getAuditEvents(sessionId, id, user);
+  }
+
   @Get(':id/cloud-events')
   async getCloudEvents(
     @CurrentUser() user: AuthenticatedUser,

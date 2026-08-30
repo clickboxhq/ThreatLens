@@ -265,3 +265,28 @@ export interface AlertEvidenceDto {
   alertId: string;
   evidence: AlertEvidenceItemDto[];
 }
+
+/** GET /sessions/:id/identities/:id/audit-events — the directory control-plane trail for an
+ * account: what was *done to* it, as opposed to SignInEventDto's when it authenticated.
+ * Account takeover shows up here first (attacker registers their own MFA method, adds a
+ * forwarding rule) without ever producing an unusual sign-in. */
+export type DirectoryAuditCategory =
+  | "credential"
+  | "mfa"
+  | "group_membership"
+  | "role_assignment"
+  | "account_lifecycle"
+  | "mailbox_rule";
+
+export interface DirectoryAuditEventDto {
+  id: string;
+  occurredAt: string;
+  targetIdentityId: string;
+  actorIdentityId: string | null;
+  actorDisplayName: string;
+  category: DirectoryAuditCategory;
+  action: string;
+  result: "success" | "failure";
+  detail: unknown;
+  sourceIp: string;
+}

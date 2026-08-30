@@ -6,6 +6,7 @@ import { AppException } from '../../common/exceptions/app-exception';
 import { toStudentIdentityDto } from '../../common/dto/identity.dto';
 import { toStudentSignInDto } from '../../common/dto/sign-in.dto';
 import { toStudentCloudEventDto } from '../../common/dto/cloud.dto';
+import { toStudentDirectoryAuditDto } from '../../common/dto/directory-audit.dto';
 import {
   distanceBetweenCitiesKm,
   impliedTravelSpeedKmh,
@@ -204,5 +205,27 @@ export class IdentityPortalService {
       orderBy: { occurredAt: 'asc' },
     });
     return events.map(toStudentCloudEventDto);
+  }
+
+  // §2.15: "what was done *to* this account", as distinct from getSignIns' "when did it
+  // authenticate". Account takeover surfaces here first — an attacker who lands a session
+  // registers their own MFA method or adds a forwarding rule, neither of which is a sign-in.
+  async getAuditEvents(
+    sessionId: string,
+    identityId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const identity = await this.prisma.identity.findFirst({
+      where: { id: identityId, sessionId },
+    });
+    if (!identity)
+      throw new AppException(404, 'NOT_FOUND', 'Identity not found.');
+
+    const events = await this.prisma.directoryAuditEvent.findMany({
+      where: { sessionId, targetIdentityId: identityId },
+      orderBy: { occurredAt: 'desc' },
+    });
+    return events.map(toStudentDirectoryAuditDto);
   }
 }

@@ -3,6 +3,7 @@ import type {
   IdentityProfileDto,
   SignInEventDto,
   CloudEventDto,
+  DirectoryAuditEventDto,
 } from "@/types/socverse-operations";
 
 /** Identities are generated per session — each scenario invents its own small "org" of users,
@@ -13,4 +14,6 @@ export interface IdentitiesService {
   getProfile(sessionId: string, identityId: string): Promise<IdentityProfileDto>;
   /** Cloud-plane activity for this identity — the pivot cloud scenarios turn on. */
   getCloudEvents(sessionId: string, identityId: string): Promise<CloudEventDto[]>;
+  /** The directory audit trail for this account — what was done to it, and by whom. */
+  getAuditEvents(sessionId: string, identityId: string): Promise<DirectoryAuditEventDto[]>;
 }

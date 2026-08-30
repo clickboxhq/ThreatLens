@@ -373,6 +373,7 @@ model InvestigationSession {
   networkEvents        NetworkEvent[]
   cloudEvents          CloudEvent[]
   httpRequests         HttpRequest[]
+  directoryAuditEvents DirectoryAuditEvent[]
   emailMessages        EmailMessage[]
   alerts               Alert[]
   incidents            Incident[]
@@ -429,6 +430,8 @@ model Identity {
   signInEvents           SignInEvent[]
   processEvents          ProcessEvent[]
   conditionalAccessEvals ConditionalAccessEvaluation[]
+  directoryAuditEvents   DirectoryAuditEvent[]        @relation("AuditTarget")
+  performedAuditEvents   DirectoryAuditEvent[]        @relation("AuditActor")
   cloudEvents            CloudEvent[]
 
   @@index([sessionId])
@@ -447,6 +450,55 @@ model ConditionalAccessEvaluation {
   signInEvent SignInEvent? @relation(fields: [signInEventId], references: [id])
 
   @@map("conditional_access_evaluations")
+}
+
+enum DirectoryAuditCategory {
+  credential
+  mfa
+  group_membership
+  role_assignment
+  account_lifecycle
+  mailbox_rule
+}
+
+enum DirectoryAuditResult {
+  success
+  failure
+}
+
+// The directory/control-plane audit trail for a simulated identity — "what was *done to* this
+// account", as distinct from SignInEvent's "when did this account authenticate". Account
+// takeover shows up here first: an attacker who lands a session registers their own MFA method,
+// grants themselves a role, or creates a silent forwarding rule, none of which is a sign-in.
+//
+// Deliberately NOT the AuditLog model above: that one records real actions by real ThreatLens
+// users on the real platform (§6.22). This is generated per session as part of the scenario's
+// telemetry, and is torn down with it.
+model DirectoryAuditEvent {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  sessionId             String                 @map("session_id") @db.Uuid
+  occurredAt            DateTime               @map("occurred_at")
+  correlationId         String?                @map("correlation_id") @db.Uuid
+  // The account the action was performed against.
+  targetIdentityId      String                 @map("target_identity_id") @db.Uuid
+  // Who performed it. Null when the directory itself acted (self-service, sync, automation),
+  // which is exactly how an attacker using the victim's own session appears.
+  actorIdentityId       String?                @map("actor_identity_id") @db.Uuid
+  actorDisplayName      String                 @map("actor_display_name")
+  category              DirectoryAuditCategory
+  action                String
+  result                DirectoryAuditResult   @default(success)
+  detail                Json?
+  sourceIp              String                 @map("source_ip")
+  isGroundTruthEvidence Boolean                @default(false) @map("is_ground_truth_evidence")
+  mitreTechniqueId      String?                @map("mitre_technique_id") @db.Uuid
+
+  session        InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  targetIdentity Identity             @relation("AuditTarget", fields: [targetIdentityId], references: [id])
+  actorIdentity  Identity?            @relation("AuditActor", fields: [actorIdentityId], references: [id])
+
+  @@index([sessionId, targetIdentityId])
+  @@map("directory_audit_events")
 }
 
 enum DeviceRiskLevel {

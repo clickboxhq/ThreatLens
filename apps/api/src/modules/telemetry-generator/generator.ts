@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { SeededRng } from './rng';
+import { generateBaselineAuditEvents } from './directory-audit';
 import {
   APPLICATIONS,
   CLOUD_STORAGE_BUCKET,
@@ -108,7 +109,20 @@ export interface GeneratedTelemetry {
   emailMessages: Prisma.EmailMessageCreateManyInput[];
   emailAttachments: Prisma.EmailAttachmentCreateManyInput[];
   emailUrls: Prisma.EmailUrlCreateManyInput[];
+  directoryAuditEvents: Prisma.DirectoryAuditEventCreateManyInput[];
 }
+
+/** How much ordinary history precedes the incident. A month is the smallest window in which
+ * "this account normally signs in from Chicago on weekdays" is a claim an investigator can
+ * actually make from the data rather than take on faith. */
+const BASELINE_HISTORY_DAYS = 30;
+
+/** Sign-ins per identity per day of history — enough to establish a pattern without burying
+ * the kill chain. Kept low-single-digit so density around the incident stays comparable to
+ * before, which matters: the impossible-travel rule compares *consecutive* sign-ins, so a
+ * denser baseline would manufacture extra adjacent pairs around the attack. */
+const BASELINE_SIGNINS_PER_DAY_MIN = 1;
+const BASELINE_SIGNINS_PER_DAY_MAX = 3;
 
 function parseRelativeTimestamp(base: Date, relative: string): Date {
   const match = /^\+(\d+)h(?:(\d+)m)?$/.exec(relative.trim());
@@ -138,6 +152,15 @@ export function generateTelemetry(
   const worldStart = new Date();
   worldStart.setMinutes(0, 0, 0);
 
+  // Every scenario's kill chain is written as an offset from worldStart, so the attack has to
+  // stay anchored there. The organisation's ordinary life is generated *backwards* from that
+  // point instead: a month of routine sign-ins and directory churn leading up to the incident.
+  // Doing it this way means no scenario's ground-truth definition changes, and an investigator
+  // gets a real baseline to compare against rather than a day of thin, obviously-staged noise.
+  const historyStart = new Date(
+    worldStart.getTime() - BASELINE_HISTORY_DAYS * 24 * 60 * 60 * 1000,
+  );
+
   const identities: Prisma.IdentityCreateManyInput[] = [];
   const devices: Prisma.DeviceCreateManyInput[] = [];
   const signInEvents: Prisma.SignInEventCreateManyInput[] = [];
@@ -149,6 +172,7 @@ export function generateTelemetry(
   const emailMessages: Prisma.EmailMessageCreateManyInput[] = [];
   const emailAttachments: Prisma.EmailAttachmentCreateManyInput[] = [];
   const emailUrls: Prisma.EmailUrlCreateManyInput[] = [];
+  const directoryAuditEvents: Prisma.DirectoryAuditEventCreateManyInput[] = [];
 
   // ---- Stage 1: world seeding ----
   const identityByRef = new Map<
@@ -255,13 +279,20 @@ export function generateTelemetry(
     const home =
       HOME_COUNTRIES.find((c) => c.country === identity.homeCountry) ??
       HOME_COUNTRIES[0];
-    const baselineCount = rng.intBetween(2, 4);
+    // Spread across the history window *and* the scenario's own window, so the account has a
+    // month of routine activity behind it and continues to look alive during the incident.
+    const historyMinutes = BASELINE_HISTORY_DAYS * 24 * 60;
+    const scenarioMinutes = def.population.world_time_window_hours * 60;
+    const baselineCount =
+      rng.intBetween(
+        BASELINE_SIGNINS_PER_DAY_MIN,
+        BASELINE_SIGNINS_PER_DAY_MAX,
+      ) * BASELINE_HISTORY_DAYS;
+
     for (let i = 0; i < baselineCount; i++) {
+      const offsetMinutes = rng.intBetween(0, historyMinutes + scenarioMinutes);
       const occurredAt = new Date(
-        worldStart.getTime() +
-          rng.intBetween(0, def.population.world_time_window_hours * 60) *
-            60 *
-            1000,
+        historyStart.getTime() + offsetMinutes * 60 * 1000,
       );
       signInEvents.push({
         id: randomUUID(),
@@ -279,6 +310,16 @@ export function generateTelemetry(
         clientApp: 'Modern Auth Client',
       });
     }
+
+    directoryAuditEvents.push(
+      ...generateBaselineAuditEvents(
+        sessionId,
+        { id: identity.id, displayName: identity.displayName },
+        rng,
+        historyStart,
+        worldStart,
+      ),
+    );
   }
 
   // ---- Correlation groups (stage 4, resolved up front so injected events can reference them) ----
@@ -374,6 +415,7 @@ export function generateTelemetry(
     emailMessages,
     emailAttachments,
     emailUrls,
+    directoryAuditEvents,
   };
 }
 
