@@ -7,6 +7,7 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useIdentities, useIdentitySignIns } from "@/hooks/use-identities";
+import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { MapPin, ShieldCheck, ShieldOff } from "lucide-react";
 import type { IdentityRiskLevel } from "@/types/socverse-operations";
@@ -40,6 +41,10 @@ function IdentityCenter() {
   } = useActiveSession();
   const identitiesQuery = useIdentities(selectedSessionId);
   const [selectedIdentityId, setSelectedIdentityId] = useState<string>();
+  // The side panel is a preview capped at a dozen sign-ins; with a month of history behind
+  // each account that hides most of it, and it has never shown the directory audit trail at
+  // all. Selecting a row opens the full record instead.
+  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const signInsQuery = useIdentitySignIns(selectedSessionId, selectedIdentityId);
 
   if (sessionsLoading) {
@@ -136,7 +141,10 @@ function IdentityCenter() {
                   {identities.map((u) => (
                     <tr
                       key={u.id}
-                      onClick={() => setSelectedIdentityId(u.id)}
+                      onClick={() => {
+                        setSelectedIdentityId(u.id);
+                        setOpenIdentityId(u.id);
+                      }}
                       className={`cursor-pointer hover:bg-background/40 ${u.id === selectedIdentityId ? "bg-background/60" : ""}`}
                     >
                       <td className="px-4 py-3">
@@ -181,10 +189,23 @@ function IdentityCenter() {
           )}
         </Panel>
 
-        <Panel title={selected ? selected.displayName : "Sign-in history"}>
+        <Panel
+          title={selected ? selected.displayName : "Sign-in history"}
+          actions={
+            selected ? (
+              <button
+                onClick={() => setOpenIdentityId(selected.id)}
+                className="text-[11.5px] text-[color:var(--info)] hover:underline"
+              >
+                Full record
+              </button>
+            ) : undefined
+          }
+        >
           {!selected ? (
             <p className="text-[12px] text-secondary">
-              Select a user to see their recent sign-ins.
+              Select a user to open their full record — sign-in history, directory audit trail and
+              cloud activity.
             </p>
           ) : signInsQuery.isPending ? (
             <Skeleton className="h-40" />
@@ -216,6 +237,13 @@ function IdentityCenter() {
           )}
         </Panel>
       </div>
+      {openIdentityId && selectedSessionId && (
+        <IdentityDetailDrawer
+          sessionId={selectedSessionId}
+          identityId={openIdentityId}
+          onClose={() => setOpenIdentityId(null)}
+        />
+      )}
     </div>
   );
 }
