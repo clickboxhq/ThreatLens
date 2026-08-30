@@ -1,4 +1,5 @@
 import type {
+  ActivityLogDto,
   SessionListItemDto,
   SkillRadarEntryDto,
   TechniqueMasteryEntryDto,
@@ -13,4 +14,6 @@ export interface SessionsService {
   getSkillRadar(): Promise<SkillRadarEntryDto[]>;
   /** Same rollup, per individual technique — backs the MITRE ATT&CK Explorer's technique table. */
   getTechniqueMastery(): Promise<TechniqueMasteryEntryDto[]>;
+  /** The learner's own activity in one session — what they opened, pinned and acted on. */
+  getActivity(sessionId: string): Promise<ActivityLogDto>;
 }

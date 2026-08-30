@@ -195,6 +195,14 @@ export class SessionsService {
     return { outcomes, allTechniques };
   }
 
+  // The learner's own record of how they worked the case (recommendation 05). Scoped to the
+  // requesting user by getOwnedSession plus the userId filter, so it is never a window onto
+  // another learner's investigation.
+  async getMyActivity(sessionId: string, user: AuthenticatedUser) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    return this.investigationActions.listForUser(sessionId, user.id);
+  }
+
   async submitSession(
     sessionId: string,
     user: AuthenticatedUser,

@@ -306,3 +306,26 @@ export interface EntityInsightDto {
   detail?: string;
   tone: "neutral" | "notable";
 }
+
+/** The learner's own record of how they worked a case (GET /sessions/:id/activity). */
+export interface ActivityEntryDto {
+  id: string;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  targetLabel: string | null;
+  occurredAt: string;
+  summary: string;
+}
+
+export interface ActivityLogDto {
+  entries: ActivityEntryDto[];
+  summary: {
+    totalActions: number;
+    entitiesOpened: number;
+    evidencePinned: number;
+    searchesRun: number;
+    hintsUnlocked: number;
+    responseActionsTaken: number;
+  };
+}

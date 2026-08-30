@@ -1,6 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 import type { SessionsService } from "./sessions-service";
 import type {
+  ActivityLogDto,
   SessionListItemDto,
   SkillRadarEntryDto,
   TechniqueMasteryEntryDto,
@@ -11,4 +12,5 @@ export const apiSessionsService: SessionsService = {
   getSkillRadar: () => apiClient.get<SkillRadarEntryDto[]>("/sessions/skill-radar"),
   getTechniqueMastery: () =>
     apiClient.get<TechniqueMasteryEntryDto[]>("/sessions/technique-mastery"),
+  getActivity: (sessionId) => apiClient.get<ActivityLogDto>(`/sessions/${sessionId}/activity`),
 };

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
+import { ActivityLogPanel } from "@/components/soc/activity-log-panel";
 import { InvestigationChecklist } from "@/components/soc/investigation-checklist";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
@@ -758,6 +759,8 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           </Panel>
 
           {/* Hints */}
+          <ActivityLogPanel sessionId={sessionId} />
+
           <InvestigationChecklist sessionId={sessionId} incidentId={incident?.id} locked={locked} />
 
           <Panel title="Hints">

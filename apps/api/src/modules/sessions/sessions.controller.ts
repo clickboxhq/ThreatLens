@@ -78,6 +78,14 @@ export class SessionsController {
     return this.sessionsService.getSession(id, user);
   }
 
+  @Get(':id/activity')
+  async getMyActivity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sessionsService.getMyActivity(id, user);
+  }
+
   @Post(':id/submit')
   async submit(
     @CurrentUser() user: AuthenticatedUser,
