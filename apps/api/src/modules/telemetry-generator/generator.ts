@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { SeededRng } from './rng';
 import { generateBaselineAuditEvents } from './directory-audit';
+import { senderDomainRegisteredAt } from './domain-age';
 import {
   APPLICATIONS,
   CLOUD_STORAGE_BUCKET,
@@ -412,7 +413,16 @@ export function generateTelemetry(
     networkEvents,
     cloudEvents,
     httpRequests,
-    emailMessages,
+    // Domain age is stamped here rather than inside each template so every email carries it —
+    // including any a future template author adds, who would otherwise have to remember. It is
+    // derived purely from the sender address, so there is one place to look when it is wrong.
+    emailMessages: emailMessages.map((email) => ({
+      ...email,
+      senderDomainRegisteredAt: senderDomainRegisteredAt(
+        email.senderAddress,
+        worldStart,
+      ),
+    })),
     emailAttachments,
     emailUrls,
     directoryAuditEvents,

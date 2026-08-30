@@ -231,6 +231,8 @@ describe('computeEmailInsights', () => {
     attachmentCount: 0,
     sameDomainCount: 1,
     linkClickCount: 0,
+    senderDomainRegisteredAt: null as Date | null,
+    now: new Date('2026-08-30T00:00:00Z'),
   };
 
   it('separates authentication failure from hostility', () => {
@@ -282,5 +284,58 @@ describe('computeEmailInsights', () => {
   it('treats a message with no payload as a live question, not a dismissal', () => {
     const payload = byId(computeEmailInsights(base), 'email.payload')!;
     expect(payload.detail).toContain('Both are live possibilities');
+  });
+});
+
+describe('computeEmailInsights — sending domain age', () => {
+  const base = {
+    senderAddress: 'billing@contoso-finance-exec.example.net',
+    recipientAddresses: ['priya.kim@contoso-finance.example.com'],
+    spfResult: 'fail',
+    dkimResult: 'none',
+    dmarcResult: 'fail',
+    headers: {} as Record<string, unknown>,
+    urlCount: 0,
+    attachmentCount: 0,
+    sameDomainCount: 1,
+    linkClickCount: 0,
+    senderDomainRegisteredAt: null as Date | null,
+    now: new Date('2026-08-30T00:00:00Z'),
+  };
+
+  it('flags a domain registered days ago as worth noticing', () => {
+    const insight = byId(
+      computeEmailInsights({
+        ...base,
+        senderDomainRegisteredAt: new Date('2026-08-19T00:00:00Z'),
+      }),
+      'email.domain-age',
+    )!;
+    expect(insight.answer).toContain('11 days ago');
+    expect(insight.tone).toBe('notable');
+  });
+
+  it('does not flag a long-established domain, but declines to vouch for it either', () => {
+    const insight = byId(
+      computeEmailInsights({
+        ...base,
+        senderDomainRegisteredAt: new Date('2012-08-30T00:00:00Z'),
+      }),
+      'email.domain-age',
+    )!;
+    expect(insight.answer).toMatch(/\d+ years ago/);
+    expect(insight.tone).toBe('neutral');
+    // Age is not a clean bill of health — established domains get compromised and resold.
+    expect(insight.detail).toContain('does not vouch');
+  });
+
+  it('says plainly when no registration date is known, rather than implying safety', () => {
+    const insight = byId(
+      computeEmailInsights({ ...base, senderDomainRegisteredAt: null }),
+      'email.domain-age',
+    )!;
+    expect(insight.answer).toContain('No registration date');
+    expect(insight.detail).toContain('not evidence either way');
+    expect(insight.tone).toBe('neutral');
   });
 });

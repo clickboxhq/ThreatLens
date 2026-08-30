@@ -765,6 +765,12 @@ model EmailMessage {
   isGroundTruthEvidence Boolean        @default(false) @map("is_ground_truth_evidence")
   mitreTechniqueId      String?        @map("mitre_technique_id") @db.Uuid
 
+  // When the sending domain was first registered. Domain age is one of the strongest and most
+  // objective phishing signals available — infrastructure for a campaign is typically stood up
+  // days beforehand, while a real corporate domain has years of history. Nullable because a
+  // resolver does not always return one, and "unknown" is itself an honest answer.
+  senderDomainRegisteredAt DateTime? @map("sender_domain_registered_at")
+
   session     InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   attachments EmailAttachment[]
   urls        EmailUrl[]

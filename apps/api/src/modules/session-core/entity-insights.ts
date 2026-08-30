@@ -342,6 +342,10 @@ export interface EmailInsightInput {
   sameDomainCount: number;
   /** Recorded clicks on this message's links, from the session's own web telemetry. */
   linkClickCount: number;
+  /** When the sending domain was registered, and the world clock to measure it against.
+   * Null where no registration date is known — an honest unknown, not a zero. */
+  senderDomainRegisteredAt: Date | null;
+  now: Date;
 }
 
 function domainOf(address: string): string {
@@ -406,6 +410,41 @@ export function computeEmailInsights(
         : 'Back to the address shown in the From header.',
       detail: returnPath ? `Return-Path: ${returnPath}` : undefined,
       tone: replyDiverges ? 'notable' : 'neutral',
+    });
+  }
+
+  // Domain age. Among the few phishing signals that is both objective and awkward to fake:
+  // campaign infrastructure is stood up days before it is used, whereas a genuine corporate
+  // domain has years of history behind it.
+  if (input.senderDomainRegisteredAt) {
+    const ageDays = Math.floor(
+      (input.now.getTime() - input.senderDomainRegisteredAt.getTime()) /
+        86_400_000,
+    );
+    const isYoung = ageDays < 90;
+    const ageText =
+      ageDays < 30
+        ? plural(ageDays, 'day')
+        : ageDays < 365
+          ? plural(Math.floor(ageDays / 30), 'month')
+          : plural(Math.floor(ageDays / 365), 'year');
+    insights.push({
+      id: 'email.domain-age',
+      question: 'How long has the sending domain existed?',
+      answer: `Registered ${ageText} ago.`,
+      detail: isYoung
+        ? 'Infrastructure for a campaign is usually registered shortly before it is used. A long-established domain can still be abused, but a very new one has no history to appeal to.'
+        : 'A domain with years of history behind it. Age alone does not vouch for a message — established domains are compromised and resold — but it removes one common signal.',
+      tone: isYoung ? 'notable' : 'neutral',
+    });
+  } else {
+    insights.push({
+      id: 'email.domain-age',
+      question: 'How long has the sending domain existed?',
+      answer: 'No registration date is available for this domain.',
+      detail:
+        'Not every domain resolves to a registration record. The absence of an answer is not evidence either way — weigh the signals you do have.',
+      tone: 'neutral',
     });
   }
 

@@ -33,6 +33,7 @@ export interface StudentEmailDto {
   spfResult: string;
   dkimResult: string;
   dmarcResult: string;
+  senderDomainRegisteredAt: Date | null;
   attachments: StudentEmailAttachmentDto[];
   urls: StudentEmailUrlDto[];
 }
@@ -54,6 +55,7 @@ export function toStudentEmailDto(
     spfResult: email.spfResult,
     dkimResult: email.dkimResult,
     dmarcResult: email.dmarcResult,
+    senderDomainRegisteredAt: email.senderDomainRegisteredAt,
     attachments: (email.attachments ?? []).map((a) => ({
       id: a.id,
       filename: a.filename,

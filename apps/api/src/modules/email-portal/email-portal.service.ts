@@ -210,6 +210,8 @@ export class EmailPortalService {
       attachmentCount: email.attachments.length,
       sameDomainCount,
       linkClickCount,
+      senderDomainRegisteredAt: email.senderDomainRegisteredAt,
+      now: new Date(),
     });
   }
 }

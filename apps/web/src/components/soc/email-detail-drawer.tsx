@@ -214,6 +214,32 @@ function MessageTab({
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-[11.5px]">
+        <span className="text-muted-foreground">Sending domain:</span>
+        <span className="font-mono">{email.senderAddress.split("@")[1]}</span>
+        <span className="text-muted-foreground">·</span>
+        {(() => {
+          if (!email.senderDomainRegisteredAt) {
+            return <span className="text-muted-foreground">registration date unknown</span>;
+          }
+          const days = Math.floor(
+            (Date.now() - new Date(email.senderDomainRegisteredAt).getTime()) / 86_400_000,
+          );
+          const young = days < 90;
+          const text =
+            days < 30
+              ? `${days} day${days === 1 ? "" : "s"}`
+              : days < 365
+                ? `${Math.floor(days / 30)} month${Math.floor(days / 30) === 1 ? "" : "s"}`
+                : `${Math.floor(days / 365)} year${Math.floor(days / 365) === 1 ? "" : "s"}`;
+          return (
+            <span className={young ? "text-[color:var(--warning)]" : "text-secondary"}>
+              registered {text} ago
+            </span>
+          );
+        })()}
+      </div>
+
       <div>
         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Body
