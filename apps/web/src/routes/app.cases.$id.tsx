@@ -236,9 +236,23 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   } = useInvestigation(sessionId, incidentId);
 
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<SearchEntityType | "all">("all");
   const [results, setResults] = useState<
     { entityType: SearchEntityType; occurredAt: string; data: Record<string, unknown> }[]
   >([]);
+
+  // Counts come from the unfiltered set so the chips stay stable as you switch between them —
+  // a filter whose own label changes the moment you apply it is disorienting.
+  const typeCounts = Object.entries(
+    results.reduce<Record<string, number>>((acc, r) => {
+      acc[r.entityType] = (acc[r.entityType] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]) as [SearchEntityType, number][];
+
+  const visibleResults =
+    typeFilter === "all" ? results : results.filter((r) => r.entityType === typeFilter);
+
   const [note, setNote] = useState("");
   const [verdict, setVerdict] = useState<IncidentVerdict | undefined>(undefined);
   const [summary, setSummary] = useState("");
@@ -261,6 +275,10 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const { data: session } = useSessionReadiness(sessionId);
 
   // Debounced — every keystroke would otherwise fire a real network call, unlike the old
+  // Identities now carry a month of routine sign-ins, which is what makes "unusual for this
+  // account" a judgement an investigator can actually make — but it also means the raw feed is
+  // mostly baseline. Filtering by type is how you get from that to the handful of events a
+  // scenario turns on, without having to guess a freetext term first.
   // mock's instant client-side filter over a static array.
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -369,7 +387,11 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
             title="Session telemetry"
             actions={
               <span className="text-[11px] text-muted-foreground">
-                {searching ? "Searching…" : `${results.length} events`}
+                {searching
+                  ? "Searching…"
+                  : typeFilter === "all"
+                    ? `${results.length} events`
+                    : `${visibleResults.length} of ${results.length} events`}
               </span>
             }
             padded={false}
@@ -384,9 +406,29 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                   placeholder="Freetext search across identity, endpoint, email, and cloud telemetry…"
                 />
               </div>
+
+              {typeCounts.length > 1 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {([["all", `All ${results.length}`]] as [SearchEntityType | "all", string][])
+                    .concat(typeCounts.map(([t, n]) => [t, `${ENTITY_TYPE_LABEL[t] ?? t} ${n}`]))
+                    .map(([value, label]) => (
+                      <button
+                        key={value}
+                        onClick={() => setTypeFilter(value)}
+                        className={`rounded-full border px-2.5 py-1 text-[10.5px] transition-colors ${
+                          typeFilter === value
+                            ? "border-[color:var(--info)] bg-[color:var(--info)]/12 text-[color:var(--info)]"
+                            : "border-border text-secondary hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
             <ul className="max-h-[520px] divide-y divide-border overflow-y-auto">
-              {results.map((r) => {
+              {visibleResults.map((r) => {
                 const eventTable = EVENT_TABLE_BY_ENTITY_TYPE[r.entityType];
                 const eventId = String(r.data.id);
                 const key = `${eventTable}:${eventId}`;
