@@ -122,6 +122,10 @@ export interface StudentHttpRequestDto {
   id: string;
   occurredAt: Date;
   deviceId: string | null;
+  // Who made the request. Withholding this made the IDOR scenario unanswerable — its entire
+  // finding is that a *named, authenticated* user read records belonging to other people, and
+  // without attribution the traffic is indistinguishable from a scheduled job.
+  identityId: string | null;
   method: string;
   url: string;
   userAgent: string;
@@ -136,6 +140,7 @@ export function toStudentHttpRequestDto(
     id: event.id,
     occurredAt: event.occurredAt,
     deviceId: event.deviceId,
+    identityId: event.identityId,
     method: event.method,
     url: event.url,
     userAgent: event.userAgent,

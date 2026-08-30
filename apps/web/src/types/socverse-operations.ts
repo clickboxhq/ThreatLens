@@ -239,6 +239,8 @@ export interface HttpRequestDto {
   id: string;
   occurredAt: string;
   deviceId: string | null;
+  /** Who made the request, where the server attributed it to a signed-in user. */
+  identityId: string | null;
   method: string;
   url: string;
   userAgent: string;

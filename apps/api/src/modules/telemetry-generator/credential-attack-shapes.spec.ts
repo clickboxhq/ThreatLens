@@ -196,3 +196,59 @@ describe('IDOR is distinguishable from the benign batch export', () => {
     ).toBe(true);
   });
 });
+
+/**
+ * The IDOR scenario ships its control case as false-positive bait rather than a kill-chain
+ * step. Bait only receives a device when the entry declares device_ref, and both web templates
+ * short-circuit without one — so a missing device_ref silently produced a scenario with no
+ * contrast at all, which is the entire point of that scenario. Nothing failed; the benign
+ * traffic simply was not there.
+ */
+describe('device-scoped bait actually generates', () => {
+  function withBait(deviceRef: string | undefined) {
+    const def = definitionWith('web_idor_enumeration_v1', 'T1078');
+    const d = def as unknown as {
+      population: { narrative_devices: unknown[] };
+      kill_chain: { device_ref?: string }[];
+      noise_profile: {
+        false_positive_bait: {
+          event_template_id: string;
+          count: number;
+          device_ref?: string;
+        }[];
+      };
+    };
+    d.population.narrative_devices = [
+      {
+        ref: 'web_server_1',
+        attributes: { hostname: 'WEB-PROD-03', os_platform: 'linux' },
+      },
+    ];
+    d.kill_chain[0].device_ref = 'web_server_1';
+    d.noise_profile.false_positive_bait = [
+      {
+        event_template_id: 'legitimate_batch_export_v1',
+        count: 1,
+        ...(deviceRef ? { device_ref: deviceRef } : {}),
+      },
+    ];
+    return generateTelemetry(randomUUID(), 11n, def, TECHNIQUES).httpRequests;
+  }
+
+  it('produces both the attack run and the benign run when bait names a device', () => {
+    const reqs = withBait('web_server_1');
+    expect(reqs.filter((r) => r.isGroundTruthEvidence).length).toBeGreaterThan(
+      20,
+    );
+    // The contrast the scenario exists to teach.
+    expect(reqs.filter((r) => !r.isGroundTruthEvidence).length).toBeGreaterThan(
+      10,
+    );
+  });
+
+  it('produces no benign run at all when bait omits the device — the original bug', () => {
+    expect(
+      withBait(undefined).filter((r) => !r.isGroundTruthEvidence).length,
+    ).toBe(0);
+  });
+});

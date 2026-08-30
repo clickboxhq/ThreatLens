@@ -2522,7 +2522,7 @@ async function main() {
         noise_profile: {
           signal_to_noise_ratio: 0.1,
           false_positive_bait: [
-            { event_template_id: 'legitimate_batch_export_v1', count: 1 },
+            { event_template_id: 'legitimate_batch_export_v1', count: 1, device_ref: 'web_server_1' },
             { event_template_id: 'web_legitimate_monitoring_v1', count: 1 },
           ],
         },
