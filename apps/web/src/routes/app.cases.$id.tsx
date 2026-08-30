@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
+import { EventTypeIcon, eventTypeLabel } from "@/components/soc/ui/event-icon";
 import { ActivityLogPanel } from "@/components/soc/activity-log-panel";
 import { InvestigationChecklist } from "@/components/soc/investigation-checklist";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
@@ -34,7 +35,6 @@ import {
   Loader2,
   Mail,
   MonitorSmartphone,
-  Paperclip,
   Pin,
   PinOff,
   Radar,
@@ -565,9 +565,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <Paperclip className="size-3.5 text-[color:var(--info)]" />
+                          <EventTypeIcon eventTable={item.eventTable} />
                           <span className="text-[12.5px] font-medium">
                             {item.display?.title ?? "(details not loaded — found via search)"}
+                          </span>
+                          <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {eventTypeLabel(item.eventTable)}
                           </span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-[11.5px] text-secondary">
@@ -600,8 +603,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                   <li key={t.id} className="relative py-2 pl-5">
                     <span className="absolute -left-[5px] top-4 size-2 rounded-full bg-[color:var(--info)]" />
                     <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                      <EventTypeIcon eventTable={t.eventTable} />
                       <span className="font-mono text-[10.5px] text-muted-foreground">
                         {new Date(t.occurredAt).toISOString().slice(11, 16)} UTC
+                      </span>
+                      <span className="text-[10.5px] text-muted-foreground">
+                        {eventTypeLabel(t.eventTable)}
                       </span>
                       <span className="font-medium">{t.entityLabel}</span>
                     </div>
