@@ -290,3 +290,19 @@ export interface DirectoryAuditEventDto {
   detail: unknown;
   sourceIp: string;
 }
+
+/** GET /sessions/:id/{identities|devices|emails}/:id/insights — the questions a competent
+ * analyst asks of this entity, answered from telemetry the Student can already reach.
+ *
+ * Deliberately inverted from how production consoles use this: Sentinel pre-answers expert
+ * questions to save an analyst time, but our learner does not yet know which questions matter,
+ * so the UI shows the question and folds the answer away until they ask for it. `notable` means
+ * the observation is unusual, never that it is malicious — a business trip and a stolen
+ * credential look identical here on purpose. */
+export interface EntityInsightDto {
+  id: string;
+  question: string;
+  answer: string;
+  detail?: string;
+  tone: "neutral" | "notable";
+}

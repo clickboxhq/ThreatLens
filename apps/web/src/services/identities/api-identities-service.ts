@@ -6,6 +6,7 @@ import type {
   SignInEventDto,
   CloudEventDto,
   DirectoryAuditEventDto,
+  EntityInsightDto,
 } from "@/types/socverse-operations";
 
 export const apiIdentitiesService: IdentitiesService = {
@@ -24,4 +25,7 @@ export const apiIdentitiesService: IdentitiesService = {
     apiClient.get<DirectoryAuditEventDto[]>(
       `/sessions/${sessionId}/identities/${identityId}/audit-events`,
     ),
+
+  getInsights: (sessionId, identityId) =>
+    apiClient.get<EntityInsightDto[]>(`/sessions/${sessionId}/identities/${identityId}/insights`),
 };

@@ -12,6 +12,7 @@ import {
   impliedTravelSpeedKmh,
 } from '../../common/geo';
 import { deriveRiskByEntityId } from '../session-core/entity-risk';
+import { computeIdentityInsights } from '../session-core/entity-insights';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   IdentityRiskLevel,
@@ -227,5 +228,54 @@ export class IdentityPortalService {
       orderBy: { occurredAt: 'desc' },
     });
     return events.map(toStudentDirectoryAuditDto);
+  }
+
+  // The questions a competent analyst would ask of this account, answered from the same
+  // telemetry the Student can already reach (see entity-insights.ts on why the answers travel
+  // with the questions rather than being withheld server-side).
+  async getInsights(
+    sessionId: string,
+    identityId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const identity = await this.prisma.identity.findFirst({
+      where: { id: identityId, sessionId },
+    });
+    if (!identity)
+      throw new AppException(404, 'NOT_FOUND', 'Identity not found.');
+
+    const [signIns, auditEvents, cloudEventCount] = await Promise.all([
+      this.prisma.signInEvent.findMany({
+        where: { sessionId, identityId },
+        orderBy: { occurredAt: 'asc' },
+      }),
+      this.prisma.directoryAuditEvent.findMany({
+        where: { sessionId, targetIdentityId: identityId },
+        orderBy: { occurredAt: 'asc' },
+      }),
+      this.prisma.cloudEvent.count({ where: { sessionId, identityId } }),
+    ]);
+
+    return computeIdentityInsights({
+      identityId,
+      homeCountry: identity.homeCountry,
+      mfaStatus: identity.mfaStatus,
+      isPrivileged: identity.isPrivileged,
+      signIns: signIns.map((s) => ({
+        occurredAt: s.occurredAt,
+        sourceCountry: s.sourceCountry,
+        sourceCity: s.sourceCity,
+        result: s.result,
+        isLegacyAuth: s.isLegacyAuth,
+      })),
+      auditEvents: auditEvents.map((e) => ({
+        occurredAt: e.occurredAt,
+        category: e.category,
+        action: e.action,
+        actorIdentityId: e.actorIdentityId,
+      })),
+      cloudEventCount,
+    });
   }
 }

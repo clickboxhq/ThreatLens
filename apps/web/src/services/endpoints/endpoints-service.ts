@@ -4,6 +4,7 @@ import type {
   FileEventDto,
   NetworkEventDto,
   HttpRequestDto,
+  EntityInsightDto,
 } from "@/types/socverse-operations";
 
 /** Devices are generated per session, same as identities — see socverse-operations.ts.
@@ -17,5 +18,6 @@ export interface EndpointsService {
   getFiles(sessionId: string, deviceId: string): Promise<FileEventDto[]>;
   getNetwork(sessionId: string, deviceId: string): Promise<NetworkEventDto[]>;
   getHttpRequests(sessionId: string, deviceId: string): Promise<HttpRequestDto[]>;
+  getInsights(sessionId: string, deviceId: string): Promise<EntityInsightDto[]>;
   isolate(sessionId: string, deviceId: string): Promise<DeviceDto>;
 }

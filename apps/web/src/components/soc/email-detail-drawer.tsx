@@ -3,6 +3,7 @@ import {
   useEmailMessage,
   useSimilarEmails,
   useEmailLinkActivity,
+  useEmailInsights,
 } from "@/hooks/use-email-investigations";
 import {
   Loader2,
@@ -15,6 +16,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
+import { InsightPrompts } from "@/components/soc/insight-prompts";
 import type { EmailMessageDto } from "@/types/socverse-operations";
 
 type Tab = "message" | "headers" | "recipients" | "links";
@@ -114,7 +116,9 @@ export function EmailDetailDrawer({
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              {tab === "message" && <MessageTab email={email} />}
+              {tab === "message" && (
+                <MessageTab email={email} sessionId={sessionId} emailId={emailId} />
+              )}
               {tab === "headers" && <EmailHeaderAnalysis email={email} />}
               {tab === "recipients" && <RecipientsTab sessionId={sessionId} emailId={emailId} />}
               {tab === "links" && <LinksTab sessionId={sessionId} emailId={emailId} />}
@@ -161,9 +165,19 @@ export function EmailDetailDrawer({
   );
 }
 
-function MessageTab({ email }: { email: EmailMessageDto }) {
+function MessageTab({
+  email,
+  sessionId,
+  emailId,
+}: {
+  email: EmailMessageDto;
+  sessionId: string;
+  emailId: string;
+}) {
+  const insightsQuery = useEmailInsights(sessionId, emailId);
   return (
     <div className="space-y-4">
+      <InsightPrompts insights={insightsQuery.data} isPending={insightsQuery.isPending} />
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
         <dt className="text-muted-foreground">From</dt>
         <dd className="min-w-0">

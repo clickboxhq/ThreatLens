@@ -9,6 +9,8 @@ const keys = {
     ["session", sessionId, "emails", messageId, "similar"] as const,
   linkActivity: (sessionId: string, messageId: string) =>
     ["session", sessionId, "emails", messageId, "link-activity"] as const,
+  insights: (sessionId: string, messageId: string) =>
+    ["session", sessionId, "emails", messageId, "insights"] as const,
 };
 
 export function useEmailInvestigations(sessionId: string | undefined) {
@@ -42,6 +44,15 @@ export function useEmailLinkActivity(sessionId: string, messageId: string | null
   return useQuery({
     queryKey: messageId ? keys.linkActivity(sessionId, messageId) : ["email-links", "none"],
     queryFn: () => emailInvestigationsService.getLinkActivity(sessionId, messageId!),
+    enabled: Boolean(messageId),
+  });
+}
+
+/** Analyst questions for this message — see components/soc/insight-prompts.tsx. */
+export function useEmailInsights(sessionId: string, messageId: string | null) {
+  return useQuery({
+    queryKey: messageId ? keys.insights(sessionId, messageId) : ["insights", "none"],
+    queryFn: () => emailInvestigationsService.getInsights(sessionId, messageId!),
     enabled: Boolean(messageId),
   });
 }

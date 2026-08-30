@@ -4,6 +4,7 @@ import type {
   SignInEventDto,
   CloudEventDto,
   DirectoryAuditEventDto,
+  EntityInsightDto,
 } from "@/types/socverse-operations";
 
 /** Identities are generated per session — each scenario invents its own small "org" of users,
@@ -16,4 +17,6 @@ export interface IdentitiesService {
   getCloudEvents(sessionId: string, identityId: string): Promise<CloudEventDto[]>;
   /** The directory audit trail for this account — what was done to it, and by whom. */
   getAuditEvents(sessionId: string, identityId: string): Promise<DirectoryAuditEventDto[]>;
+  /** Analyst questions with computed answers — see EntityInsightDto. */
+  getInsights(sessionId: string, identityId: string): Promise<EntityInsightDto[]>;
 }

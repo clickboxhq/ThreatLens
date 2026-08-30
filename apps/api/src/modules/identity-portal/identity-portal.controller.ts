@@ -60,6 +60,15 @@ export class IdentityPortalController {
     });
   }
 
+  @Get(':id/insights')
+  async getInsights(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getInsights(sessionId, id, user);
+  }
+
   @Get(':id/audit-events')
   async getAuditEvents(
     @CurrentUser() user: AuthenticatedUser,

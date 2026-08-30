@@ -12,6 +12,7 @@ import {
   toStudentProcessEventDto,
 } from '../../common/dto/device.dto';
 import { deriveRiskByEntityId } from '../session-core/entity-risk';
+import { computeDeviceInsights } from '../session-core/entity-insights';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { DeviceRiskLevel } from '@prisma/client';
 
@@ -230,5 +231,41 @@ export class DevicePortalService {
     });
     if (!device) throw new AppException(404, 'NOT_FOUND', 'Device not found.');
     return device;
+  }
+
+  // See entity-insights.ts — the analyst's questions, answered from portal-visible telemetry.
+  async getInsights(
+    sessionId: string,
+    deviceId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const device = await this.getDeviceOrThrow(sessionId, deviceId);
+
+    const [processes, files, network, httpRequests] = await Promise.all([
+      this.prisma.processEvent.findMany({ where: { sessionId, deviceId } }),
+      this.prisma.fileEvent.findMany({ where: { sessionId, deviceId } }),
+      this.prisma.networkEvent.findMany({ where: { sessionId, deviceId } }),
+      this.prisma.httpRequest.findMany({ where: { sessionId, deviceId } }),
+    ]);
+
+    return computeDeviceInsights({
+      isolationStatus: device.isolationStatus,
+      processes: processes.map((p) => ({
+        imagePath: p.imagePath,
+        parentImagePath: p.parentImagePath,
+        commandLine: p.commandLine,
+        integrityLevel: p.integrityLevel,
+      })),
+      files: files.map((f) => ({ action: f.action, filePath: f.filePath })),
+      network: network.map((n) => ({
+        remoteIp: n.remoteIp,
+        bytesSent: n.bytesSent,
+      })),
+      httpRequests: httpRequests.map((h) => ({
+        url: h.url,
+        userAgent: h.userAgent,
+      })),
+    });
   }
 }

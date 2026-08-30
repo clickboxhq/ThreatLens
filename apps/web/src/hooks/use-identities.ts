@@ -9,6 +9,8 @@ const keys = {
     ["session", sessionId, "identities", identityId, "signins"] as const,
   audit: (sessionId: string, identityId: string) =>
     ["session", sessionId, "identities", identityId, "audit-events"] as const,
+  insights: (sessionId: string, identityId: string) =>
+    ["session", sessionId, "identities", identityId, "insights"] as const,
   cloudEvents: (sessionId: string, identityId: string) =>
     ["session", sessionId, "identities", identityId, "cloud-events"] as const,
 };
@@ -54,6 +56,15 @@ export function useIdentityAuditEvents(
     queryKey:
       sessionId && identityId ? keys.audit(sessionId, identityId) : ["audit-events", "none"],
     queryFn: () => identitiesService.getAuditEvents(sessionId!, identityId!),
+    enabled: Boolean(sessionId && identityId),
+  });
+}
+
+/** Analyst questions for this identity — see components/soc/insight-prompts.tsx. */
+export function useIdentityInsights(sessionId: string | undefined, identityId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId && identityId ? keys.insights(sessionId, identityId) : ["insights", "none"],
+    queryFn: () => identitiesService.getInsights(sessionId!, identityId!),
     enabled: Boolean(sessionId && identityId),
   });
 }

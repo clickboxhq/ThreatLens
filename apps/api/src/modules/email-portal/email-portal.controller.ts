@@ -44,6 +44,15 @@ export class EmailPortalController {
     return this.service.getMessage(sessionId, id, user);
   }
 
+  @Get(':id/insights')
+  async getInsights(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getInsights(sessionId, id, user);
+  }
+
   @Get(':id/similar')
   async getSimilar(
     @CurrentUser() user: AuthenticatedUser,

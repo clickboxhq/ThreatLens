@@ -37,6 +37,15 @@ export class DevicePortalController {
     return this.service.getProfile(sessionId, id, user);
   }
 
+  @Get(':id/insights')
+  async getInsights(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getInsights(sessionId, id, user);
+  }
+
   @Get(':id/process-tree')
   async getProcessTree(
     @CurrentUser() user: AuthenticatedUser,

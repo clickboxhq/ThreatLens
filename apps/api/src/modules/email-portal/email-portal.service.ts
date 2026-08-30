@@ -4,6 +4,7 @@ import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { toStudentEmailDto } from '../../common/dto/email.dto';
+import { computeEmailInsights } from '../session-core/entity-insights';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { EmailDirection, Prisma, SpfResult } from '@prisma/client';
 
@@ -164,6 +165,51 @@ export class EmailPortalService {
           };
         }),
       };
+    });
+  }
+
+  // See entity-insights.ts. sameDomainCount and linkClickCount reuse exactly what the
+  // "similar messages" and "link activity" pivots already expose, so an insight never points
+  // somewhere the Student cannot go and verify for themselves.
+  async getInsights(
+    sessionId: string,
+    emailId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const email = await this.prisma.emailMessage.findFirst({
+      where: { id: emailId, sessionId },
+      include: { attachments: true, urls: true },
+    });
+    if (!email) throw new AppException(404, 'NOT_FOUND', 'Email not found.');
+
+    const senderDomain = email.senderAddress.split('@')[1] ?? '';
+    const [sameDomainCount, linkClickCount] = await Promise.all([
+      this.prisma.emailMessage.count({
+        where: {
+          sessionId,
+          id: { not: emailId },
+          senderAddress: { endsWith: `@${senderDomain}` },
+        },
+      }),
+      email.urls.length
+        ? this.prisma.httpRequest.count({
+            where: { sessionId, url: { in: email.urls.map((u) => u.url) } },
+          })
+        : Promise.resolve(0),
+    ]);
+
+    return computeEmailInsights({
+      senderAddress: email.senderAddress,
+      recipientAddresses: email.recipientAddresses,
+      spfResult: email.spfResult,
+      dkimResult: email.dkimResult,
+      dmarcResult: email.dmarcResult,
+      headers: (email.headersRaw ?? {}) as Record<string, unknown>,
+      urlCount: email.urls.length,
+      attachmentCount: email.attachments.length,
+      sameDomainCount,
+      linkClickCount,
     });
   }
 }

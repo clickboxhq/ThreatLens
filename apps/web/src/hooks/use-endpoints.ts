@@ -72,3 +72,12 @@ export function useIsolateDevice(sessionId: string | undefined) {
     },
   });
 }
+
+/** Analyst questions for this device — see components/soc/insight-prompts.tsx. */
+export function useDeviceInsights(sessionId: string | undefined, deviceId: string | undefined) {
+  return useQuery({
+    queryKey: sessionId && deviceId ? keys.insights(sessionId, deviceId) : ["insights", "none"],
+    queryFn: () => endpointsService.getInsights(sessionId!, deviceId!),
+    enabled: Boolean(sessionId && deviceId),
+  });
+}

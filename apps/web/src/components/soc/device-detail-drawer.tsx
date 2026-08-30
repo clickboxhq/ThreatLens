@@ -6,6 +6,7 @@ import {
   useDeviceNetwork,
   useDeviceHttpRequests,
   useIsolateDevice,
+  useDeviceInsights,
 } from "@/hooks/use-endpoints";
 import {
   EntityDrawerShell,
@@ -14,6 +15,7 @@ import {
   formatEventTime,
 } from "@/components/soc/entity-drawer-shell";
 import { ChevronRight, Loader2, ShieldOff } from "lucide-react";
+import { InsightPrompts } from "@/components/soc/insight-prompts";
 import type { ProcessTreeNodeDto } from "@/types/socverse-operations";
 
 type Tab = "profile" | "processes" | "files" | "network" | "web";
@@ -52,6 +54,7 @@ export function DeviceDetailDrawer({
 }) {
   const [tab, setTab] = useState<Tab>("processes");
   const { data: device, isPending } = useDeviceProfile(sessionId, deviceId);
+  const insightsQuery = useDeviceInsights(sessionId, deviceId);
   const isolate = useIsolateDevice(sessionId);
 
   const isolated = device?.isolationStatus === "isolated";
@@ -95,22 +98,25 @@ export function DeviceDetailDrawer({
       ) : (
         <>
           {tab === "profile" && (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
-              <dt className="text-muted-foreground">Hostname</dt>
-              <dd className="font-mono">{device.hostname}</dd>
-              <dt className="text-muted-foreground">OS</dt>
-              <dd>
-                {device.osPlatform} {device.osVersion}
-              </dd>
-              <dt className="text-muted-foreground">Risk level</dt>
-              <dd className={RISK_TONE[device.riskLevel] ?? ""}>{device.riskLevel}</dd>
-              <dt className="text-muted-foreground">Isolation</dt>
-              <dd className={isolated ? "text-[color:var(--warning)]" : ""}>
-                {isolated ? "Isolated from the network" : "Not isolated"}
-              </dd>
-              <dt className="text-muted-foreground">Last seen</dt>
-              <dd>{formatEventTime(device.lastSeenAt)}</dd>
-            </dl>
+            <div className="space-y-4">
+              <InsightPrompts insights={insightsQuery.data} isPending={insightsQuery.isPending} />
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
+                <dt className="text-muted-foreground">Hostname</dt>
+                <dd className="font-mono">{device.hostname}</dd>
+                <dt className="text-muted-foreground">OS</dt>
+                <dd>
+                  {device.osPlatform} {device.osVersion}
+                </dd>
+                <dt className="text-muted-foreground">Risk level</dt>
+                <dd className={RISK_TONE[device.riskLevel] ?? ""}>{device.riskLevel}</dd>
+                <dt className="text-muted-foreground">Isolation</dt>
+                <dd className={isolated ? "text-[color:var(--warning)]" : ""}>
+                  {isolated ? "Isolated from the network" : "Not isolated"}
+                </dd>
+                <dt className="text-muted-foreground">Last seen</dt>
+                <dd>{formatEventTime(device.lastSeenAt)}</dd>
+              </dl>
+            </div>
           )}
           {tab === "processes" && <ProcessTreeTab sessionId={sessionId} deviceId={deviceId} />}
           {tab === "files" && <FilesTab sessionId={sessionId} deviceId={deviceId} />}

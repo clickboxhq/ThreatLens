@@ -6,6 +6,7 @@ import type {
   FileEventDto,
   NetworkEventDto,
   HttpRequestDto,
+  EntityInsightDto,
 } from "@/types/socverse-operations";
 
 export const apiEndpointsService: EndpointsService = {
@@ -25,6 +26,9 @@ export const apiEndpointsService: EndpointsService = {
 
   getHttpRequests: (sessionId, deviceId) =>
     apiClient.get<HttpRequestDto[]>(`/sessions/${sessionId}/devices/${deviceId}/http-requests`),
+
+  getInsights: (sessionId, deviceId) =>
+    apiClient.get<EntityInsightDto[]>(`/sessions/${sessionId}/devices/${deviceId}/insights`),
 
   isolate: (sessionId, deviceId) =>
     apiClient.post<DeviceDto>(`/sessions/${sessionId}/devices/${deviceId}/isolate`),

@@ -4,6 +4,7 @@ import {
   useIdentitySignIns,
   useIdentityCloudEvents,
   useIdentityAuditEvents,
+  useIdentityInsights,
 } from "@/hooks/use-identities";
 import {
   EntityDrawerShell,
@@ -13,6 +14,7 @@ import {
   formatEventTime,
 } from "@/components/soc/entity-drawer-shell";
 import { Loader2 } from "lucide-react";
+import { InsightPrompts } from "@/components/soc/insight-prompts";
 
 type Tab = "profile" | "signins" | "audit" | "cloud";
 
@@ -67,6 +69,7 @@ export function IdentityDetailDrawer({
 }) {
   const [tab, setTab] = useState<Tab>("profile");
   const { data: identity, isPending } = useIdentityProfile(sessionId, identityId);
+  const insightsQuery = useIdentityInsights(sessionId, identityId);
 
   return (
     <EntityDrawerShell
@@ -86,6 +89,7 @@ export function IdentityDetailDrawer({
         <>
           {tab === "profile" && (
             <div className="space-y-4">
+              <InsightPrompts insights={insightsQuery.data} isPending={insightsQuery.isPending} />
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
                 <dt className="text-muted-foreground">Department</dt>
                 <dd>{identity.department}</dd>
