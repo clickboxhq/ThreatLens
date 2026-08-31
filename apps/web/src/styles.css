@@ -410,3 +410,114 @@
   }
 }
 
+/* ============================================================================
+   Enterprise upgrade — Aug 2026: elevation ladder, in-app button system,
+   motion, and interaction-state helpers. Additive only — no existing token
+   above is renamed, so every current component keeps working unmodified.
+   ========================================================================= */
+
+/* Formalizes the "nav < workspace < card < elevated" ladder the ClickBox
+   comment at the top of this file already describes but never named. Use
+   these instead of reaching for --card/--popover directly in new UI so the
+   ladder stays intentional as more surfaces get added. */
+@utility surface-0 { background: var(--background); }
+@utility surface-1 { background: var(--card); }
+@utility surface-2 { background: var(--popover); }
+@utility surface-3 { background: var(--surface-2); }
+
+/* In-app button system — distinct from the marketing-only btn-primary/
+   btn-ghost above (see their own comment). These are for the authenticated
+   /app shell: sized for dense toolbars, use --primary blue, and carry the
+   full default/hover/active/focus-visible/disabled state set the brief
+   calls for, so nothing in the dashboard has to hand-roll button styles. */
+@utility btn-app-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  padding: 0 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  &:hover { background: var(--primary-hover); }
+  &:active { transform: translateY(0.5px); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  &:disabled { opacity: 0.45; pointer-events: none; }
+}
+
+@utility btn-app-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  padding: 0 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--foreground);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: background 150ms ease, border-color 150ms ease;
+  &:hover { background: var(--popover); border-color: color-mix(in oklab, var(--foreground) 20%, var(--border)); }
+  &:active { transform: translateY(0.5px); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  &:disabled { opacity: 0.45; pointer-events: none; }
+}
+
+@utility btn-app-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--secondary-foreground);
+  background: transparent;
+  transition: background 150ms ease, color 150ms ease;
+  &:hover { background: var(--popover); color: var(--foreground); }
+  &:active { transform: translateY(0.5px); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  &:disabled { opacity: 0.45; pointer-events: none; }
+}
+
+@utility btn-app-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  padding: 0 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--destructive-foreground);
+  background: var(--destructive);
+  transition: background 150ms ease, transform 150ms ease;
+  &:hover { background: color-mix(in oklab, var(--destructive) 85%, white 15%); }
+  &:active { transform: translateY(0.5px); }
+  &:focus-visible { outline: 2px solid var(--destructive); outline-offset: 2px; }
+  &:disabled { opacity: 0.45; pointer-events: none; }
+}
+
+/* Motion — fast, precise, intentional. One shared curve for sidebar
+   collapse, dropdown/panel open, and workspace transitions, so nothing in
+   the app moves on its own timing. Reduced-motion users get an instant cut. */
+@utility transition-app {
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .transition-app,
+  .card-hover-lift,
+  .row-hover {
+    transition-duration: 0.01ms !important;
+  }
+}
+

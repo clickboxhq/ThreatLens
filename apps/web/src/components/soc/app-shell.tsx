@@ -39,6 +39,9 @@ import {
   Menu,
   X,
   ArrowLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Archive,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -58,32 +61,46 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LogOut } from "lucide-react";
 
 type NavItem = {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  badge?: string;
 };
 
-const primary: NavItem[] = [
+const SIDEBAR_COLLAPSED_KEY = "threatlens:sidebar-collapsed";
+
+// WORKSPACE — day-to-day triage/case work. "Closed Alerts & Cases" and any
+// count badges are intentionally absent: this is a per-session training
+// platform, not a live SOC with a real global queue, so a hardcoded "48"
+// badge would be exactly the fake-functionality the product is not supposed
+// to ship. Closed Alerts & Cases is added to this group once its route
+// exists (see the archive/learning-review pass).
+const workspace: NavItem[] = [
   { to: "/app", label: "Dashboard", icon: LayoutGrid },
-  { to: "/app/alerts", label: "Alert Center", icon: Bell, badge: "48" },
-  { to: "/app/incidents", label: "Incident Queue", icon: ShieldAlert, badge: "12" },
-  { to: "/app/cases", label: "Case Management", icon: Inbox, badge: "8" },
+  { to: "/app/alerts", label: "Alert Center", icon: Bell },
+  { to: "/app/incidents", label: "Incident Queue", icon: ShieldAlert },
+  { to: "/app/cases", label: "Case Management", icon: Inbox },
   { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
-  { to: "/app/evidence", label: "Evidence Locker", icon: HardDrive },
+  { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
 ];
 
-const portals: NavItem[] = [
+// INVESTIGATION CENTERS — the per-domain investigation surfaces. Network
+// Center, Log Explorer, and Vulnerability Management are added here as each
+// ships, rather than linking to a route that doesn't exist yet.
+const investigationCenters: NavItem[] = [
   { to: "/app/identity", label: "Identity Center", icon: UserRound },
-  { to: "/app/endpoints", label: "Device Center", icon: MonitorSmartphone },
+  { to: "/app/endpoints", label: "Endpoint Center", icon: MonitorSmartphone },
   { to: "/app/email", label: "Email Investigation", icon: Mail },
   { to: "/app/threat-intel", label: "Threat Intelligence", icon: Radar },
   { to: "/app/search", label: "Global Search", icon: Search },
 ];
 
+// LEARNING & PRACTICE — content, mastery, and (once built) career
+// progression. My Progress / SOC Career Progression are added once their
+// routes exist.
 const learning: NavItem[] = [
   { to: "/app/scenarios", label: "Scenario Library", icon: Library },
   { to: "/app/learning", label: "Learning Center", icon: GraduationCap },
@@ -121,58 +138,76 @@ const platformAdminTools: NavItem[] = [
   { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 
-function NavGroup({ label, items }: { label?: string; items: NavItem[] }) {
+function NavGroup({
+  label,
+  items,
+  collapsed,
+}: {
+  label?: string;
+  items: NavItem[];
+  collapsed?: boolean;
+}) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
     <div className="px-2">
-      {label && (
+      {label && !collapsed && (
         <div className="mb-1 px-2 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </div>
       )}
+      {label && collapsed && <div className="pt-4" aria-hidden />}
       <ul className="flex flex-col gap-0.5">
         {items.map((it) => {
           const active = it.to === "/app" ? path === "/app" : path.startsWith(it.to);
           const Icon = it.icon;
-          return (
-            <li key={it.to}>
-              <Link
-                to={it.to}
+          const link = (
+            <Link
+              to={it.to}
+              className={cn(
+                "transition-app group relative flex items-center gap-2.5 rounded-md py-1.5 text-[13px]",
+                collapsed ? "justify-center px-0" : "pl-3.5 pr-2",
+                active
+                  ? "bg-sidebar-accent text-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+              )}
+            >
+              {active && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[color:var(--info)]",
+                    collapsed ? "-left-0.5" : "-left-2",
+                  )}
+                />
+              )}
+              <span
                 className={cn(
-                  "group relative flex items-center gap-2.5 rounded-md py-1.5 pl-3.5 pr-2 text-[13px] transition-all duration-150",
-                  active
-                    ? "bg-sidebar-accent text-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                  "flex size-6 shrink-0 items-center justify-center rounded-[5px] transition-colors",
+                  active ? "bg-[color:var(--info)]/15" : "",
                 )}
               >
-                {active && (
-                  <span
-                    aria-hidden
-                    className="absolute -left-2 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[color:var(--info)]"
-                  />
-                )}
-                <span
+                <Icon
                   className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-[5px] transition-colors",
-                    active ? "bg-[color:var(--info)]/15" : "",
+                    "size-4 shrink-0",
+                    active
+                      ? "text-[color:var(--info)]"
+                      : "text-muted-foreground group-hover:text-secondary",
                   )}
-                >
-                  <Icon
-                    className={cn(
-                      "size-4 shrink-0",
-                      active
-                        ? "text-[color:var(--info)]"
-                        : "text-muted-foreground group-hover:text-secondary",
-                    )}
-                  />
-                </span>
-                <span className="flex-1 truncate">{it.label}</span>
-                {it.badge && (
-                  <span className="rounded border border-[color:var(--card-border-tint)] bg-background/60 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-secondary">
-                    {it.badge}
-                  </span>
-                )}
-              </Link>
+                />
+              </span>
+              {!collapsed && <span className="flex-1 truncate">{it.label}</span>}
+            </Link>
+          );
+          return (
+            <li key={it.to}>
+              {collapsed ? (
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{it.label}</TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              )}
             </li>
           );
         })}
@@ -181,7 +216,13 @@ function NavGroup({ label, items }: { label?: string; items: NavItem[] }) {
   );
 }
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({
+  onNavigate,
+  collapsed,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const user = useAuthUser();
   // "Organization" nav (instructor tools, org settings) now gates on the real role SOCVerse
   // issued at signup/login, not the old accountType mock flag — org_admin included for when a
@@ -191,101 +232,141 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const accountName = user?.displayName ?? "Account";
 
   return (
-    <>
+    <TooltipProvider delayDuration={200}>
       {/* Workspace switcher */}
       <div className="p-3">
-        <button className="flex w-full items-center gap-2.5 rounded-md border border-[color:var(--card-border-tint)] bg-background/40 px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/50">
+        <button
+          className={cn(
+            "transition-app flex w-full items-center gap-2.5 rounded-md border border-[color:var(--card-border-tint)] bg-background/40 py-2 text-left hover:bg-sidebar-accent/50",
+            collapsed ? "justify-center px-0" : "px-2.5",
+          )}
+        >
           <IconTile tone="info" size="sm">
             {isOrg ? <Building2 className="size-4" /> : <CircleUserRound className="size-4" />}
           </IconTile>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium">{accountName}</div>
-            <div className="truncate text-[10px] text-muted-foreground">
-              {isOrg ? "Organization workspace" : "Individual"}
-            </div>
-          </div>
-          <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium">{accountName}</div>
+                <div className="truncate text-[10px] text-muted-foreground">
+                  {isOrg ? "Organization workspace" : "Individual"}
+                </div>
+              </div>
+              <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+            </>
+          )}
         </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto pb-4" onClick={onNavigate}>
-        <NavGroup label="Investigations" items={primary} />
-        <NavGroup label="Investigation Portals" items={portals} />
-        <NavGroup label="Learning" items={learning} />
-        {isOrg && <NavGroup label="Instructor Tools" items={instructorTools} />}
-        {isOrg && <NavGroup label="Organization" items={organization} />}
-        {isPlatformAdmin && <NavGroup label="Platform Admin" items={platformAdminTools} />}
+        <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+        <NavGroup label="Investigation Centers" items={investigationCenters} collapsed={collapsed} />
+        <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+        {isOrg && <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />}
+        {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
+        {isPlatformAdmin && (
+          <NavGroup label="Platform Admin" items={platformAdminTools} collapsed={collapsed} />
+        )}
       </nav>
 
-      {/* Footer: subscription + storage */}
-      <div className="border-t border-sidebar-border p-3">
-        <div className="rounded-lg border border-[color:var(--card-border-tint)] bg-background/40 p-3">
-          <div className="flex items-center gap-2 text-[11px] text-secondary">
-            <Sparkles className="size-3.5 text-[color:var(--info)]" />
-            <span className="font-medium text-foreground">
-              {isOrg ? "Cohort Plan" : "Individual Plan"}
-            </span>
-          </div>
-          <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>Storage</span>
-            <span className="tabular-nums">{isOrg ? "184 / 500 GB" : "1.2 / 5 GB"}</span>
-          </div>
-          <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
-            <div
-              className="h-full rounded-full bg-[color:var(--info)]"
-              style={{ width: isOrg ? "36%" : "24%" }}
-            />
-          </div>
-          <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
-            <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
-              <BookOpen className="size-3.5" /> Docs
-            </a>
-            <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
-              <LifeBuoy className="size-3.5" /> Support
-            </a>
-            {isOrg ? (
-              <Link
-                to="/app/billing"
-                className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
-              >
-                <CreditCard className="size-3.5" /> Billing
-              </Link>
-            ) : (
-              <Link
-                to="/"
-                hash="pricing"
-                className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
-              >
-                <CreditCard className="size-3.5" /> Upgrade
-              </Link>
-            )}
+      {/* Footer: subscription + storage — hidden in collapsed mode, not worth
+          the icon-only treatment */}
+      {!collapsed && (
+        <div className="border-t border-sidebar-border p-3">
+          <div className="rounded-lg border border-[color:var(--card-border-tint)] bg-background/40 p-3">
+            <div className="flex items-center gap-2 text-[11px] text-secondary">
+              <Sparkles className="size-3.5 text-[color:var(--info)]" />
+              <span className="font-medium text-foreground">
+                {isOrg ? "Cohort Plan" : "Individual Plan"}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Storage</span>
+              <span className="tabular-nums">{isOrg ? "184 / 500 GB" : "1.2 / 5 GB"}</span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
+              <div
+                className="h-full rounded-full bg-[color:var(--info)]"
+                style={{ width: isOrg ? "36%" : "24%" }}
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+              <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
+                <BookOpen className="size-3.5" /> Docs
+              </a>
+              <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
+                <LifeBuoy className="size-3.5" /> Support
+              </a>
+              {isOrg ? (
+                <Link
+                  to="/app/billing"
+                  className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  <CreditCard className="size-3.5" /> Billing
+                </Link>
+              ) : (
+                <Link
+                  to="/"
+                  hash="pricing"
+                  className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  <CreditCard className="size-3.5" /> Upgrade
+                </Link>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </>
+      )}
+    </TooltipProvider>
   );
 }
 
-function Sidebar() {
+function Sidebar({
+  collapsed,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   return (
-    <aside className="hidden w-[248px] shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
-      <div className="flex items-center justify-between border-b border-sidebar-border p-3">
-        <Link to="/" className="flex items-center gap-2">
-          <Mark className="size-6" />
-          <span className="text-foreground">
-            <BrandLockup size="footer" />
-          </span>
-        </Link>
-        <Link
-          to="/"
-          aria-label="Back to platform"
-          title="Back to platform"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-        </Link>
+    <aside
+      className={cn(
+        "transition-app hidden shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col",
+        collapsed ? "w-[68px]" : "w-[248px]",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center border-b border-sidebar-border p-3",
+          collapsed ? "justify-center" : "justify-between",
+        )}
+      >
+        {!collapsed && (
+          <Link to="/" className="flex items-center gap-2">
+            <Mark className="size-6" />
+            <span className="text-foreground">
+              <BrandLockup size="footer" />
+            </span>
+          </Link>
+        )}
+        {collapsed && (
+          <Link to="/" aria-label="ThreatLens" title="ThreatLens">
+            <Mark className="size-6" />
+          </Link>
+        )}
       </div>
-      <SidebarBody />
+      <SidebarBody collapsed={collapsed} />
+      <div className="border-t border-sidebar-border p-2">
+        <button
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="transition-app flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {!collapsed && <span className="text-[12px]">Collapse</span>}
+        </button>
+      </div>
     </aside>
   );
 }
@@ -466,14 +547,41 @@ export function AppShell({ children }: { children?: ReactNode }) {
     crumbMap[path] ?? (path.startsWith("/app/cases/") ? "Case Management" : "Dashboard");
   const { open, setOpen } = useCommandPalette();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Collapsed sidebar preference persists per-browser (not per-user server
+  // state — this is a UI density preference, not account data). Starts
+  // `false` to match the server-rendered markup exactly, then reads
+  // localStorage in an effect (client-only, post-hydration) — reading it in
+  // the useState initializer instead would make the client's first render
+  // diverge from the server's and trigger a hydration mismatch.
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+    } catch {
+      // localStorage unavailable — stay expanded.
+    }
+  }, []);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [path]);
 
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // localStorage unavailable (private browsing, etc.) — preference just won't persist.
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <MobileNavDrawer open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar

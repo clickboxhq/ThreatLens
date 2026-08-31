@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CookieConsent } from "@/components/soc/marketing/cookie-consent";
+import { Toaster } from "@/components/ui/sonner";
 import { useAuthHydration } from "@/lib/auth-store";
 
 function NotFoundComponent() {
@@ -178,6 +179,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Outlet />
       <CookieConsent />
+      <Toaster position="bottom-right" theme="dark" richColors closeButton />
     </QueryClientProvider>
   );
 }
