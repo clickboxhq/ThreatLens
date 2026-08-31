@@ -12,7 +12,7 @@ function buildUser(
   } as AuthenticatedUser;
 }
 
-function buildService() {
+function buildService(accessOverride?: unknown) {
   const cohort = {
     id: 'cohort-1',
     ownerId: 'instructor-1',
@@ -26,7 +26,10 @@ function buildService() {
   const instructor = { id: 'instructor-1', displayName: 'Jonas Weber' };
 
   const prisma = {
-    cohort: { findUnique: jest.fn(async () => cohort) },
+    cohort: {
+      findUnique: jest.fn(async () => cohort),
+      findUniqueOrThrow: jest.fn(async () => cohort),
+    },
     attackScenario: { findUnique: jest.fn(async () => scenario) },
     cohortScenarioAssignment: {
       create: jest.fn(async () => ({ id: 'assignment-1' })),
@@ -72,6 +75,18 @@ function buildService() {
     prisma as never,
     realtimeEvents as never,
     auditLog as never,
+    (accessOverride ?? {
+      requireAccess: jest.fn().mockResolvedValue({
+        cohortId: 'c1',
+        role: 'lead',
+        groupScoped: false,
+        groupIds: [],
+        canWrite: true,
+        canManageStaff: true,
+      }),
+      enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
+      listAccessibleCohortIds: jest.fn().mockResolvedValue([]),
+    }) as never,
     notificationsService as never,
   );
   return { service, prisma, realtimeEvents, notificationsService };
@@ -129,7 +144,27 @@ describe('InstructorService.submitFeedback', () => {
     );
   });
 
-  it('rejects an instructor who does not own the cohort', async () => {
+  // The rule changed with multi-tutor cohorts: it is no longer "did you create this cohort"
+  // but "are you staffed on it". An instructor with no staff row must still be refused, and a
+  // co-tutor who never created it must now be allowed — the whole point of the change.
+  it('rejects an instructor who is not staffed on the cohort', async () => {
+    const { service } = buildService({
+      requireAccess: jest.fn().mockRejectedValue(
+        Object.assign(new Error('Cohort not found.'), {
+          status: 404,
+          code: 'NOT_FOUND',
+        }),
+      ),
+    });
+
+    await expect(
+      service.submitFeedback(buildUser(), 'incident-1', {
+        comment: 'x',
+      } as never),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('allows a co-tutor who did not create the cohort', async () => {
     const { service, prisma } = buildService();
     prisma.incident.findUnique.mockResolvedValueOnce({
       id: 'incident-1',
@@ -140,17 +175,17 @@ describe('InstructorService.submitFeedback', () => {
           cohort: {
             id: 'cohort-1',
             name: 'Autumn 2026 · Tier 1',
+            // Created by somebody else entirely; the caller is staffed as a tutor.
             ownerId: 'someone-else',
           },
         },
       },
     });
-    const user = buildUser();
 
     await expect(
-      service.submitFeedback(user, 'incident-1', {
-        comment: 'x',
+      service.submitFeedback(buildUser(), 'incident-1', {
+        comment: 'Solid write-up, but the containment call needed justifying.',
       } as never),
-    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    ).resolves.toBeDefined();
   });
 });

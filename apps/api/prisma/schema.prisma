@@ -46,6 +46,7 @@ model Organization {
 
   users   User[]
   invites OrganizationInvite[]
+  cohorts Cohort[]
 
   @@map("organizations")
 }
@@ -115,6 +116,8 @@ model User {
   investigationActions  InvestigationAction[]
   ownedCohorts          Cohort[]                   @relation("CohortOwner")
   cohortEnrollments     CohortEnrollment[]         @relation("CohortEnrollments")
+  cohortStaffRoles      CohortStaff[]              @relation("CohortStaffMember")
+  cohortGroupTutorships CohortGroupTutor[]         @relation("CohortGroupTutor")
   createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
   instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
   certificates          Certificate[]
@@ -160,9 +163,22 @@ enum EnrollmentStatus {
   dropped
 }
 
+// A cohort is a teaching space, not one instructor's private list. Staffing, grouping and
+// assignment scope all hang off it:
+//
+//   Cohort ─┬─ CohortStaff        who can teach it, and with what authority
+//           ├─ CohortGroup ─┬─ CohortGroupTutor   which staff run which group
+//           │               └─ CohortEnrollment.groupId   which students are in it
+//           └─ CohortScenarioAssignment.groupId   null = whole cohort, set = that group
+//
+// ownerId is retained as "who created it" and is no longer the authorization key — every
+// owner is backfilled as a `lead` staff member, and permission checks read CohortStaff.
 model Cohort {
   id        String    @id @default(uuid()) @db.Uuid
   ownerId   String    @map("owner_id") @db.Uuid
+  // Backfilled from the owner's own org. Lets an org_admin see what is running under their
+  // organisation without being staffed on each cohort individually.
+  orgId     String?   @map("org_id") @db.Uuid
   name      String
   joinCode  String?   @unique @map("join_code")
   startsAt  DateTime? @map("starts_at")
@@ -171,29 +187,92 @@ model Cohort {
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   owner       User                       @relation("CohortOwner", fields: [ownerId], references: [id])
+  org         Organization?              @relation(fields: [orgId], references: [id])
+  staff       CohortStaff[]
+  groups      CohortGroup[]
   enrollments CohortEnrollment[]
   assignments CohortScenarioAssignment[]
 
+  @@index([orgId])
   @@map("cohorts")
+}
+
+enum CohortStaffRole {
+  // Full control, including staffing and deleting the cohort.
+  lead
+  // Teaches the whole cohort: assignments, review queue, feedback.
+  tutor
+  // Same powers, but only over the groups they are assigned to. A large cohort split into
+  // seminar groups can give each tutor their own students without exposing the rest.
+  group_tutor
+}
+
+model CohortStaff {
+  cohortId  String          @map("cohort_id") @db.Uuid
+  userId    String          @map("user_id") @db.Uuid
+  role      CohortStaffRole
+  addedAt   DateTime        @default(now()) @map("added_at")
+  addedBy   String?         @map("added_by") @db.Uuid
+
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  user   User   @relation("CohortStaffMember", fields: [userId], references: [id])
+
+  @@id([cohortId, userId])
+  @@index([userId])
+  @@map("cohort_staff")
+}
+
+model CohortGroup {
+  id        String   @id @default(uuid()) @db.Uuid
+  cohortId  String   @map("cohort_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cohort      Cohort                     @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  tutors      CohortGroupTutor[]
+  enrollments CohortEnrollment[]
+  assignments CohortScenarioAssignment[]
+
+  @@unique([cohortId, name])
+  @@map("cohort_groups")
+}
+
+model CohortGroupTutor {
+  groupId String @map("group_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+
+  group CohortGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User        @relation("CohortGroupTutor", fields: [userId], references: [id])
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("cohort_group_tutors")
 }
 
 model CohortEnrollment {
   id         String           @id @default(uuid()) @db.Uuid
   cohortId   String           @map("cohort_id") @db.Uuid
   userId     String           @map("user_id") @db.Uuid
+  // Null means enrolled in the cohort but not placed in a group yet.
+  groupId    String?          @map("group_id") @db.Uuid
   enrolledAt DateTime         @default(now()) @map("enrolled_at")
   status     EnrollmentStatus @default(active)
 
-  cohort Cohort @relation(fields: [cohortId], references: [id])
-  user   User   @relation("CohortEnrollments", fields: [userId], references: [id])
+  cohort Cohort       @relation(fields: [cohortId], references: [id])
+  group  CohortGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  user   User         @relation("CohortEnrollments", fields: [userId], references: [id])
 
   @@unique([cohortId, userId])
+  @@index([groupId])
   @@map("cohort_enrollments")
 }
 
 model CohortScenarioAssignment {
   id           String    @id @default(uuid()) @db.Uuid
   cohortId     String    @map("cohort_id") @db.Uuid
+  // Null means the whole cohort. Set means only that group — so one tutor can run a harder
+  // track for an advanced group without it appearing for everyone else.
+  groupId      String?   @map("group_id") @db.Uuid
   scenarioId   String    @map("scenario_id") @db.Uuid
   dueAt        DateTime? @map("due_at")
   attemptLimit Int?      @map("attempt_limit")
@@ -201,11 +280,13 @@ model CohortScenarioAssignment {
   createdAt    DateTime  @default(now()) @map("created_at")
 
   cohort   Cohort                 @relation(fields: [cohortId], references: [id])
+  group    CohortGroup?           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   scenario AttackScenario         @relation(fields: [scenarioId], references: [id])
   creator  User                   @relation("AssignmentCreator", fields: [createdBy], references: [id])
   sessions InvestigationSession[]
 
   @@index([cohortId])
+  @@index([groupId])
   @@map("cohort_scenario_assignments")
 }
 

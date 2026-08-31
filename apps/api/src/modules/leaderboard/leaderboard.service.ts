@@ -118,7 +118,12 @@ export class LeaderboardService {
       where: { id: cohortId },
     });
     if (!cohort) throw new AppException(404, 'NOT_FOUND', 'Cohort not found.');
-    if (cohort.ownerId === user.id) return;
+
+    // Any staff member on the cohort can see its leaderboard, not only its creator.
+    const staff = await this.prisma.cohortStaff.findUnique({
+      where: { cohortId_userId: { cohortId, userId: user.id } },
+    });
+    if (staff) return;
 
     const enrollment = await this.prisma.cohortEnrollment.findUnique({
       where: { cohortId_userId: { cohortId, userId: user.id } },

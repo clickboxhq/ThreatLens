@@ -32,7 +32,19 @@ export class SessionAccessService {
         where: { id: session.cohortAssignmentId },
         include: { cohort: true },
       });
-      if (assignment && assignment.cohort.ownerId === user.id) return session;
+      if (assignment) {
+        // Any staff member on the cohort, not only its creator — a co-tutor reviewing work
+        // needs the same read access as whoever happened to create the cohort.
+        const staff = await this.prisma.cohortStaff.findUnique({
+          where: {
+            cohortId_userId: {
+              cohortId: assignment.cohortId,
+              userId: user.id,
+            },
+          },
+        });
+        if (staff) return session;
+      }
     }
 
     throw new AppException(

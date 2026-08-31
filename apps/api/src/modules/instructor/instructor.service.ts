@@ -4,6 +4,8 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RealtimeEventsService } from '../../common/realtime/realtime-events.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { CohortAccessService } from './cohort-access.service';
+import type { CohortStaffRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -21,6 +23,7 @@ export class InstructorService {
     private readonly prisma: PrismaService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly auditLog: AuditLogService,
+    private readonly cohortAccess: CohortAccessService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -28,6 +31,12 @@ export class InstructorService {
     const cohort = await this.prisma.cohort.create({
       data: {
         ownerId: user.id,
+        // Inherited so an org_admin can see what runs under their organisation. Null for an
+        // instructor with no org, which is a legitimate individual account.
+        orgId: user.orgId,
+        // The creator is staffed as lead immediately — owner_id is only a record of who made
+        // it, and every permission check reads cohort_staff.
+        staff: { create: { userId: user.id, role: 'lead' } },
         name: dto.name,
         joinCode: generateJoinCode(),
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
@@ -46,8 +55,10 @@ export class InstructorService {
   }
 
   async listCohorts(user: AuthenticatedUser) {
+    // Everything they are staffed on, plus — for an org_admin — everything in their org.
+    const ids = await this.cohortAccess.listAccessibleCohortIds(user);
     const cohorts = await this.prisma.cohort.findMany({
-      where: { ownerId: user.id },
+      where: { id: { in: ids } },
       include: { _count: { select: { enrollments: true, assignments: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -64,10 +75,11 @@ export class InstructorService {
   }
 
   async getRoster(user: AuthenticatedUser, cohortId: string) {
-    await this.getOwnedCohort(cohortId, user);
+    const access = await this.cohortAccess.requireAccess(cohortId, user);
     const enrollments = await this.prisma.cohortEnrollment.findMany({
-      where: { cohortId },
-      include: { user: true },
+      // A group_tutor sees only their own groups' students.
+      where: this.cohortAccess.enrollmentScope(access),
+      include: { user: true, group: true },
       orderBy: { enrolledAt: 'asc' },
     });
     return enrollments.map((e) => ({
@@ -75,6 +87,8 @@ export class InstructorService {
       displayName: e.user.displayName,
       email: e.user.email,
       status: e.status,
+      groupId: e.groupId,
+      groupName: e.group?.name ?? null,
       enrolledAt: e.enrolledAt,
     }));
   }
@@ -84,7 +98,7 @@ export class InstructorService {
     cohortId: string,
     dto: CreateAssignmentDto,
   ) {
-    const cohort = await this.getOwnedCohort(cohortId, user);
+    const cohort = await this.requireCohort(cohortId, user, 'tutor');
     const scenario = await this.prisma.attackScenario.findUnique({
       where: { id: dto.scenarioId },
     });
@@ -125,7 +139,7 @@ export class InstructorService {
   }
 
   async listAssignments(user: AuthenticatedUser, cohortId: string) {
-    await this.getOwnedCohort(cohortId, user);
+    await this.cohortAccess.requireAccess(cohortId, user);
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
       where: { cohortId },
       include: { scenario: true },
@@ -135,7 +149,7 @@ export class InstructorService {
   }
 
   async reviewQueue(user: AuthenticatedUser, cohortId: string) {
-    await this.getOwnedCohort(cohortId, user);
+    await this.cohortAccess.requireAccess(cohortId, user);
     const assignmentIds = (
       await this.prisma.cohortScenarioAssignment.findMany({
         where: { cohortId },
@@ -182,12 +196,36 @@ export class InstructorService {
       throw new AppException(404, 'NOT_FOUND', 'Incident not found.');
 
     const cohort = incident.session.cohortAssignment?.cohort;
-    if (!cohort || cohort.ownerId !== user.id) {
+    if (!cohort) {
       throw new AppException(
         403,
         'FORBIDDEN',
         'You do not have access to this incident.',
       );
+    }
+    // Any staff member on the cohort may give feedback, not only whoever created it. A
+    // group_tutor is additionally limited to students in their own groups.
+    const access = await this.cohortAccess.requireAccess(cohort.id, user);
+    if (access.groupScoped) {
+      const enrollment = await this.prisma.cohortEnrollment.findUnique({
+        where: {
+          cohortId_userId: {
+            cohortId: cohort.id,
+            userId: incident.session.userId,
+          },
+        },
+        select: { groupId: true },
+      });
+      if (
+        !enrollment?.groupId ||
+        !access.groupIds.includes(enrollment.groupId)
+      ) {
+        throw new AppException(
+          403,
+          'FORBIDDEN',
+          'That student is not in one of your groups.',
+        );
+      }
     }
 
     const reopenSession = dto.reopenSession ?? false;
@@ -262,7 +300,7 @@ export class InstructorService {
     user: AuthenticatedUser,
     cohortId: string,
   ): Promise<string> {
-    const cohort = await this.getOwnedCohort(cohortId, user);
+    const cohort = await this.requireCohort(cohortId, user, 'tutor');
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
       where: { cohortId },
       include: { scenario: true },
@@ -304,14 +342,18 @@ export class InstructorService {
     return lines.join('\n');
   }
 
-  private async getOwnedCohort(cohortId: string, user: AuthenticatedUser) {
-    const cohort = await this.prisma.cohort.findUnique({
-      where: { id: cohortId },
-    });
-    if (!cohort) throw new AppException(404, 'NOT_FOUND', 'Cohort not found.');
-    if (cohort.ownerId !== user.id)
-      throw new AppException(403, 'FORBIDDEN', 'You do not own this cohort.');
-    return cohort;
+  /**
+   * Confirms the caller may act on this cohort at the given authority, and returns it.
+   * Replaces the old owner-equality check — a cohort now has many staff, and an org_admin can
+   * read one without being staffed on it.
+   */
+  private async requireCohort(
+    cohortId: string,
+    user: AuthenticatedUser,
+    minRole: CohortStaffRole = 'group_tutor',
+  ) {
+    await this.cohortAccess.requireAccess(cohortId, user, minRole);
+    return this.prisma.cohort.findUniqueOrThrow({ where: { id: cohortId } });
   }
 
   private async toCohortDto(cohortId: string) {
