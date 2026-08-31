@@ -1,11 +1,26 @@
-# SOCVerse — Platform Architecture
+# ThreatLens — Platform Architecture (historical planning document)
 
-**Product:** SOCVerse (shipping name: ClickBox Console)
-**Repository:** `clickboxhq/clickbox-soc-product`
-**Status:** Living document — describes the target production architecture and the state of the existing prototype it formalizes.
-**Audience:** Engineering, security content design, and founders evaluating build cost.
+> **Superseded. Kept for provenance, not as a description of the system.**
+>
+> This was the pre-build planning document written against the frontend-only prototype, when
+> ThreatLens had no server, no database and no multi-user state. All of that now exists: the
+> NestJS API, Postgres/Prisma data model, server-side scoring engine and BullMQ pipeline
+> described here as *future work* are built and deployed.
+>
+> **For the current architecture, read [`docs/ThreatLens-Architecture.md`](../../../docs/ThreatLens-Architecture.md).**
+>
+> This file is deliberately not find-and-replaced up to date. Its body describes a client-side
+> prototype in the present tense, and rewording it to sound current would make stale claims
+> harder to spot rather than easier. Read it as a record of what was planned, and check any
+> statement against the canonical document before relying on it.
 
-> **Note on the existing codebase.** This is not a greenfield spec. The repo already contains a working TanStack Start (React 19) frontend with ~30 console routes (`src/routes/app.*.tsx`), a Zustand store (`src/lib/store.ts`) that implements a real evidence-pinning, MITRE-tagging, and rubric-based **scoring engine** against per-incident "ground truth" (`src/lib/case-data.ts`), and a seeded dataset of alerts, incidents, identities, and endpoints (`src/lib/soc-data.ts`). Today all of this runs **entirely client-side** — there is no server, no database, no multi-user state, and "persistence" is `localStorage`. This document's job is to describe the backend, data model, and services needed to turn that client-side prototype into a real multi-tenant product, while keeping the frontend's existing investigation UX and scoring logic largely intact (ported server-side, not rebuilt).
+**Product:** ThreatLens — a ClickBox product
+**Repository:** `clickboxhq/ThreatLens`
+**Status:** Historical. Superseded by `docs/ThreatLens-Architecture.md`.
+**Audience:** Anyone tracing why the system is shaped the way it is.
+
+*The naming below is left as originally written. "SOCVerse" was the working name for what
+shipped as ThreatLens; "ClickBox Console" was a candidate shipping name that was not adopted.*
 
 ---
 
