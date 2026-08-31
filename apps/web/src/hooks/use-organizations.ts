@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { organizationsService } from "@/services/organizations";
 import { useAuthStore } from "@/lib/auth-store";
-import type { InviteRole } from "@/types/socverse-organizations";
+import type { InviteRole } from "@/types/threatlens-organizations";
 
 const keys = {
   mine: ["organizations", "mine"] as const,

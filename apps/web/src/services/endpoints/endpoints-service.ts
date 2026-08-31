@@ -5,9 +5,9 @@ import type {
   NetworkEventDto,
   HttpRequestDto,
   EntityInsightDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
-/** Devices are generated per session, same as identities — see socverse-operations.ts.
+/** Devices are generated per session, same as identities — see threatlens-operations.ts.
  * The forensics reads below are what endpoint/malware/ransomware/web scenarios actually turn
  * on: what ran, what it touched, and where it talked to. */
 export interface EndpointsService {

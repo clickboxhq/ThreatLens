@@ -1,4 +1,4 @@
-import type { AuditLogEntryDto } from "@/types/socverse-learning";
+import type { AuditLogEntryDto } from "@/types/threatlens-learning";
 
 /** platform_admin-only on the backend (RolesGuard) — see app-shell.tsx's nav gating. */
 export interface AuditLogsService {

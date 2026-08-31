@@ -3,7 +3,7 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { useAchievements } from "@/hooks/use-achievements";
-import type { AchievementKey } from "@/types/socverse-achievements";
+import type { AchievementKey } from "@/types/threatlens-achievements";
 import { Award, Crosshair, Flame, Radar, ShieldCheck, Target } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 

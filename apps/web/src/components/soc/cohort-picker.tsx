@@ -1,4 +1,4 @@
-import type { OwnedCohortDto } from "@/types/socverse-instructor";
+import type { OwnedCohortDto } from "@/types/threatlens-instructor";
 import { ChevronDown } from "lucide-react";
 
 /** Same pattern as SessionPicker — a no-op when there's only one cohort to choose from. */

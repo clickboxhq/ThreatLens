@@ -6,7 +6,7 @@ import type {
   OrganizationDto,
   OrganizationInviteDto,
   OrganizationMemberDto,
-} from "@/types/socverse-organizations";
+} from "@/types/threatlens-organizations";
 
 export const apiOrganizationsService: OrganizationsService = {
   create: (name) => apiClient.post<OrganizationDto>("/organizations", { name }),

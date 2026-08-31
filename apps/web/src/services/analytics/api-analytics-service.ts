@@ -1,6 +1,6 @@
 import { sessionsService } from "@/services/sessions";
 import type { AnalyticsService } from "./analytics-service";
-import type { SessionListItemDto } from "@/types/socverse-operations";
+import type { SessionListItemDto } from "@/types/threatlens-operations";
 
 function monthKey(iso: string): string {
   const d = new Date(iso);

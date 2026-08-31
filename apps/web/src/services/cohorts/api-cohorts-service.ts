@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { CohortsService } from "./cohorts-service";
-import type { MyAssignmentDto, MyCohortDto } from "@/types/socverse-instructor";
+import type { MyAssignmentDto, MyCohortDto } from "@/types/threatlens-instructor";
 
 export const apiCohortsService: CohortsService = {
   join: (joinCode) =>

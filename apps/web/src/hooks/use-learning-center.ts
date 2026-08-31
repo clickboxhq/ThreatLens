@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { learningCenterService } from "@/services/learning-center";
-import type { CourseDto, LearningPathDto } from "@/types/socverse-learning";
+import type { CourseDto, LearningPathDto } from "@/types/threatlens-learning";
 
 const keys = {
   courses: ["learning", "courses"] as const,

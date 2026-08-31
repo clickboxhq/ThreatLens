@@ -2,7 +2,7 @@
 
 ## 11.1 Purpose
 
-The Email Portal is SOCVerse's proprietary analog to an Outlook/Defender for Office 365-style message investigation surface (§1.6) — the primary surface for phishing and Business Email Compromise (BEC) scenario categories (§1.8). Backed by `email_messages`, `email_attachments`, and `email_urls` (§6.12.9), scoped to the active `session_id`.
+The Email Portal is ThreatLens's proprietary analog to an Outlook/Defender for Office 365-style message investigation surface (§1.6) — the primary surface for phishing and Business Email Compromise (BEC) scenario categories (§1.8). Backed by `email_messages`, `email_attachments`, and `email_urls` (§6.12.9), scoped to the active `session_id`.
 
 ## 11.2 Mailbox/Message Search
 
@@ -38,4 +38,4 @@ Every hash (`email_attachments.hash_sha256`) and URL/domain (`email_urls.url`) i
 
 ## 11.10 What Is Never Exposed to the Student
 
-Identical policy to §9.9/§10.12: `email_messages.is_ground_truth_evidence` and `mitre_technique_id` are stripped at the serialization layer (§18.3). Additionally, because `body_html` is rendered client-side, it is sanitized server-side (strip `<script>`, event handlers, and any active content, §15.6) before ever leaving the API — defending against the theoretical case of a maliciously-authored scenario template accidentally including unsafe markup, not because any real inbound content is untrusted (all content is authored by SOCVerse's own content team, §12.1).
+Identical policy to §9.9/§10.12: `email_messages.is_ground_truth_evidence` and `mitre_technique_id` are stripped at the serialization layer (§18.3). Additionally, because `body_html` is rendered client-side, it is sanitized server-side (strip `<script>`, event handlers, and any active content, §15.6) before ever leaving the API — defending against the theoretical case of a maliciously-authored scenario template accidentally including unsafe markup, not because any real inbound content is untrusted (all content is authored by ThreatLens's own content team, §12.1).

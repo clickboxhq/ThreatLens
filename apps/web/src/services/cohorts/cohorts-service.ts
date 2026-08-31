@@ -1,4 +1,4 @@
-import type { MyAssignmentDto, MyCohortDto } from "@/types/socverse-instructor";
+import type { MyAssignmentDto, MyCohortDto } from "@/types/threatlens-instructor";
 
 /** Student-facing side of instructor mode — joining a cohort by code and seeing what's been
  * assigned. Any authenticated student can reach this; managing a cohort is instructor-only

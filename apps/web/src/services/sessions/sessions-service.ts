@@ -3,7 +3,7 @@ import type {
   SessionListItemDto,
   SkillRadarEntryDto,
   TechniqueMasteryEntryDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
 /** The student's own session history — backs Case Management, Incident Queue, and resolving
  * which session the Alert Center / investigation portals should currently show. */

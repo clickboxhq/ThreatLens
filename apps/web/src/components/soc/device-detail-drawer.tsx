@@ -16,7 +16,7 @@ import {
 } from "@/components/soc/entity-drawer-shell";
 import { ChevronRight, Loader2, ShieldOff } from "lucide-react";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
-import type { ProcessTreeNodeDto } from "@/types/socverse-operations";
+import type { ProcessTreeNodeDto } from "@/types/threatlens-operations";
 
 type Tab = "profile" | "processes" | "files" | "network" | "web";
 

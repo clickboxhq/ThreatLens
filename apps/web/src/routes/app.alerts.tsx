@@ -9,7 +9,7 @@ import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useAlerts, useUpdateAlertStatus, useAlertEvidence } from "@/hooks/use-alerts";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import type { AlertSeverity, AlertStatus } from "@/types/socverse-operations";
+import type { AlertSeverity, AlertStatus } from "@/types/threatlens-operations";
 import type { Severity, Status } from "@/components/soc/primitives";
 
 export const Route = createFileRoute("/app/alerts")({

@@ -2,7 +2,7 @@ import type {
   EventTemplateDto,
   ScenarioDraft,
   CreatedScenarioDto,
-} from "@/types/socverse-scenario-builder";
+} from "@/types/threatlens-scenario-builder";
 
 export interface ScenarioBuilderService {
   listTemplates(): Promise<EventTemplateDto[]>;

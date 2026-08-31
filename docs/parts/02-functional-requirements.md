@@ -6,7 +6,7 @@ Actors used throughout this document:
 - **Student** — a learner working scenarios, either self-enrolled or assigned by an instructor.
 - **Instructor** — creates/assigns scenarios, reviews student work, issues feedback and overrides.
 - **Org Admin** — manages an institutional/enterprise tenant: seats, SSO, billing, reporting.
-- **Platform Admin** — SOCVerse operator staff; manages scenario library, global config, support.
+- **Platform Admin** — ThreatLens operator staff; manages scenario library, global config, support.
 - **System** — automated actors: Telemetry Generator, Alert Engine, Scoring Engine.
 
 ## 2.1 Alert Dashboard
@@ -69,7 +69,7 @@ Full detail in §11. Functional summary: mailbox/message search; message reader 
 
 ## 2.8 Search
 
-**Purpose:** Cross-entity keyword and structured search scoped to the active session's synthetic dataset — the SOCVerse analog of a SIEM search bar, deliberately simplified (§1.6).
+**Purpose:** Cross-entity keyword and structured search scoped to the active session's synthetic dataset — the ThreatLens analog of a SIEM search bar, deliberately simplified (§1.6).
 
 **Requirements:**
 - Structured filter builder (field = value, with AND) covering the common investigable fields (source IP, user, device, process name, file hash, URL, sender) across `security_events`.

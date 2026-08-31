@@ -5,7 +5,7 @@ import type {
   SessionListItemDto,
   SkillRadarEntryDto,
   TechniqueMasteryEntryDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
 export const apiSessionsService: SessionsService = {
   listMine: () => apiClient.get<SessionListItemDto[]>("/sessions"),

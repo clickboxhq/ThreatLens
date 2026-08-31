@@ -7,7 +7,7 @@ import type {
   NetworkEventDto,
   HttpRequestDto,
   EntityInsightDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
 export const apiEndpointsService: EndpointsService = {
   list: (sessionId) => apiClient.get<DeviceDto[]>(`/sessions/${sessionId}/devices`),

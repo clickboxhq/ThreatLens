@@ -5,7 +5,7 @@ import { leaderboardService } from "@/services/leaderboard";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
 import { queryKeys } from "./query-keys";
 import { deriveViewState } from "./use-query-state";
-import type { SessionListItemDto } from "@/types/socverse-operations";
+import type { SessionListItemDto } from "@/types/threatlens-operations";
 import type {
   TrainingKpi,
   InvestigationPerformancePoint,

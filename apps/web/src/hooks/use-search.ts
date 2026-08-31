@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Cpu, FileText, Globe, Link as LinkIcon, Mail, Network, UserRound } from "lucide-react";
 import { searchService } from "@/services/search";
 import { queryKeys } from "./query-keys";
-import type { SearchEntityType } from "@/types/socverse-investigation";
+import type { SearchEntityType } from "@/types/threatlens-investigation";
 import type { SearchCategory } from "@/types/search";
 
 const ENTITY_TYPE_META: Record<SearchEntityType, { label: string; icon: SearchCategory["icon"] }> =

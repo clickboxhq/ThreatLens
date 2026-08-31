@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
-import type { EmailMessageDto } from "@/types/socverse-operations";
+import type { EmailMessageDto } from "@/types/threatlens-operations";
 
 type Tab = "message" | "headers" | "recipients" | "links";
 

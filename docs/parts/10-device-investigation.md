@@ -2,7 +2,7 @@
 
 ## 10.1 Purpose
 
-The Device Portal is SOCVerse's proprietary analog to a Defender for Endpoint-style investigation surface (§1.6) — where a Student investigates *what happened on a machine*: process execution, persistence, network activity, and file activity. Backed by `devices` (§6.11) and the device-scoped event tables in §6.12 (`process_events`, `file_events`, `network_events`, `dns_events`, `registry_events`, plus `installed_software`, `device_services`, `startup_entries`, `usb_events`).
+The Device Portal is ThreatLens's proprietary analog to a Defender for Endpoint-style investigation surface (§1.6) — where a Student investigates *what happened on a machine*: process execution, persistence, network activity, and file activity. Backed by `devices` (§6.11) and the device-scoped event tables in §6.12 (`process_events`, `file_events`, `network_events`, `dns_events`, `registry_events`, plus `installed_software`, `device_services`, `startup_entries`, `usb_events`).
 
 ## 10.2 Device Overview
 

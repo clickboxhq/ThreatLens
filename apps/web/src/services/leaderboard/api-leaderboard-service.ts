@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { LeaderboardService } from "./leaderboard-service";
-import type { LeaderboardDto } from "@/types/socverse-learning";
+import type { LeaderboardDto } from "@/types/threatlens-learning";
 
 export const apiLeaderboardService: LeaderboardService = {
   get: (period, scope, cohortId) => {

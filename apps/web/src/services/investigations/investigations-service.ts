@@ -1,4 +1,4 @@
-import type { InstructorFeedbackDto } from "@/types/socverse-instructor";
+import type { InstructorFeedbackDto } from "@/types/threatlens-instructor";
 import type {
   EvidenceItemDto,
   HintDto,
@@ -12,8 +12,8 @@ import type {
   SearchResultItem,
   SessionDto,
   TimelineItemDto,
-} from "@/types/socverse-investigation";
-import type { InvestigationTaskListDto } from "@/types/socverse-investigation";
+} from "@/types/threatlens-investigation";
+import type { InvestigationTaskListDto } from "@/types/threatlens-investigation";
 
 /**
  * The real investigation lifecycle against SOCVerse's backend: session creation/polling,

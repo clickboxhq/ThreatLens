@@ -4,7 +4,7 @@ import type {
   OwnedCohortDto,
   ReviewQueueItemDto,
   RosterEntryDto,
-} from "@/types/socverse-instructor";
+} from "@/types/threatlens-instructor";
 
 /** Instructor-only management surface (RolesGuard-gated on the backend) — creating and running
  * cohorts, assigning scenarios, and grading what students submit. */

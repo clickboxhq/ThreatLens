@@ -2,7 +2,7 @@ import { apiClient } from "@/lib/api-client";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
 import type { SearchService } from "./search-service";
 import type { GlobalSearchResult } from "@/types/search";
-import type { SearchEntityType } from "@/types/socverse-investigation";
+import type { SearchEntityType } from "@/types/threatlens-investigation";
 
 interface RawGlobalSearchResult {
   entityType: SearchEntityType;

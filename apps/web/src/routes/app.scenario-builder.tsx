@@ -18,7 +18,7 @@ import {
   NARRATIVE_HOME_COUNTRIES,
   NARRATIVE_OS_PLATFORMS,
   REQUIRED_VERDICTS,
-} from "@/types/socverse-scenario-builder";
+} from "@/types/threatlens-scenario-builder";
 import type {
   EventTemplateDto,
   NarrativeIdentityDraft,
@@ -26,8 +26,8 @@ import type {
   KillChainStepDraft,
   FalsePositiveBaitDraft,
   HintDraft,
-} from "@/types/socverse-scenario-builder";
-import type { MitreTechniqueDto } from "@/types/socverse-investigation";
+} from "@/types/threatlens-scenario-builder";
+import type { MitreTechniqueDto } from "@/types/threatlens-investigation";
 import { AlertTriangle, CheckCircle2, Plus, Save, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 
 export const Route = createFileRoute("/app/scenario-builder")({

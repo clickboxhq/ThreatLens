@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Loader2, HelpCircle } from "lucide-react";
-import type { EntityInsightDto } from "@/types/socverse-operations";
+import type { EntityInsightDto } from "@/types/threatlens-operations";
 
 /**
  * The questions a competent analyst asks of an entity — shown as questions, with the answer

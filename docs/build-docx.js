@@ -5,8 +5,8 @@ const {
   ShadingType, PageOrientation, Header, Footer, PageNumber, NumberFormat
 } = require("docx");
 
-const SRC = "SOCVerse-Architecture.md";
-const OUT = "SOCVerse-Architecture.docx";
+const SRC = "ThreatLens-Architecture.md";
+const OUT = "ThreatLens-Architecture.docx";
 
 const raw = fs.readFileSync(SRC, "utf8");
 const lines = raw.split(/\r?\n/);

@@ -4,7 +4,7 @@ import type {
   EventTemplateDto,
   ScenarioDraft,
   CreatedScenarioDto,
-} from "@/types/socverse-scenario-builder";
+} from "@/types/threatlens-scenario-builder";
 
 /** Renders "+Nh" or "+NhMm" — the exact shape the Telemetry Generator's
  * parseRelativeTimestamp() requires; anything else silently generates at time zero. */

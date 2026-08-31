@@ -36,7 +36,7 @@ function correlationIdOf(req: Request): string | undefined {
   return (req as Request & { correlationId?: string }).correlationId;
 }
 
-// Matches docs/SOCVerse-Architecture.md §16.2.
+// Matches docs/ThreatLens-Architecture.md §16.2.
 @Controller('auth')
 export class AuthController {
   constructor(

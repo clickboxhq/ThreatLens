@@ -25,7 +25,7 @@ import {
   type IncidentVerdict,
   type ResponseActionType,
   type SearchEntityType,
-} from "@/types/socverse-investigation";
+} from "@/types/threatlens-investigation";
 import { REPUTATION_SEVERITY } from "@/types/threat-intel-page";
 import {
   ArrowLeft,

@@ -1,4 +1,4 @@
-import type { CourseDto, LearningPathDto } from "@/types/socverse-learning";
+import type { CourseDto, LearningPathDto } from "@/types/threatlens-learning";
 
 export interface LearningCenterService {
   listCourses(): Promise<CourseDto[]>;

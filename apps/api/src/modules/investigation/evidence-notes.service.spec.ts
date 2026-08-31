@@ -33,6 +33,7 @@ function buildService(incidentStatus: string) {
     prisma as never,
     sessionAccess as never,
     investigationActions as never,
+    { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
   );
   return { service, investigationActions };
 }
@@ -188,6 +189,7 @@ describe('EvidenceNotesService.listEvidence display enrichment', () => {
       prisma as never,
       sessionAccess as never,
       investigationActions as never,
+      { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
     );
     return { service };
   }
@@ -220,6 +222,7 @@ describe('EvidenceNotesService.listMine', () => {
       prisma as never,
       {} as never,
       {} as never,
+      { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
     );
     await expect(service.listMine(USER)).resolves.toEqual([]);
   });
@@ -266,6 +269,7 @@ describe('EvidenceNotesService.listMine', () => {
       prisma as never,
       {} as never,
       {} as never,
+      { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
     );
 
     const result = await service.listMine(USER);

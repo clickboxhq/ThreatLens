@@ -29,6 +29,7 @@ function buildService(incidentStatus: string) {
     prisma as never,
     sessionAccess as never,
     investigationActions as never,
+    { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
   );
   return { service };
 }
@@ -89,6 +90,7 @@ describe('TimelineService.listMine', () => {
       prisma as never,
       sessionAccess as never,
       investigationActions as never,
+      { assertEventInSession: jest.fn().mockResolvedValue(undefined) } as never,
     );
     return { service, prisma };
   }

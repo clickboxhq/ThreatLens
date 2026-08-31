@@ -1,8 +1,8 @@
-# SOCVerse
+# ThreatLens
 ## Software Architecture & Technical Design Specification
 
 **Document status:** Draft v1.0 — Architecture Baseline
-**Prepared for:** SOCVerse Engineering Team
+**Prepared for:** ThreatLens Engineering Team
 **Classification:** Internal / Confidential
 **Date:** 2026-07-28
 
@@ -10,9 +10,9 @@
 
 ### Purpose of This Document
 
-This document is the complete software architecture and technical design specification for SOCVerse, a proprietary, cloud-based cybersecurity training platform that simulates realistic Security Operations Center (SOC) investigations. It is written to be sufficiently detailed and unambiguous that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural assumptions. Every service boundary, data model, API contract, and infrastructure decision is intended to be treated as authoritative for implementation purposes unless a subsequent, explicitly versioned decision supersedes it.
+This document is the complete software architecture and technical design specification for ThreatLens, a proprietary, cloud-based cybersecurity training platform that simulates realistic Security Operations Center (SOC) investigations. It is written to be sufficiently detailed and unambiguous that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural assumptions. Every service boundary, data model, API contract, and infrastructure decision is intended to be treated as authoritative for implementation purposes unless a subsequent, explicitly versioned decision supersedes it.
 
-SOCVerse is **not** a SIEM and depends on **no** existing SIEM, EDR, or identity platform (Wazuh, Splunk, Elastic, Sentinel, Chronicle, QRadar, or otherwise). All telemetry, detection logic, investigation surfaces, and scoring are proprietary, generated and owned entirely by this platform. See §1.6 for the explicit non-goals this implies.
+ThreatLens is **not** a SIEM and depends on **no** existing SIEM, EDR, or identity platform (Wazuh, Splunk, Elastic, Sentinel, Chronicle, QRadar, or otherwise). All telemetry, detection logic, investigation surfaces, and scoring are proprietary, generated and owned entirely by this platform. See §1.6 for the explicit non-goals this implies.
 
 ---
 
@@ -49,13 +49,13 @@ SOCVerse is **not** a SIEM and depends on **no** existing SIEM, EDR, or identity
 
 ## 1.1 Product Vision
 
-SOCVerse is a cloud-native, proprietary cybersecurity training platform that reproduces the day-to-day experience of working inside a modern Security Operations Center (SOC). Where existing training products rely on video lectures, multiple-choice quizzes, or static "capture the flag" challenges, SOCVerse instead places the learner inside a fully interactive, purpose-built investigation environment that looks, feels, and behaves like the enterprise security tooling professionals use in production: an alert queue, an incident workbench, an identity investigation console modeled conceptually on Microsoft Entra ID, an endpoint console modeled conceptually on Microsoft Defender for Endpoint, and an email investigation console modeled conceptually on Microsoft Defender for Office 365 / Outlook.
+ThreatLens is a cloud-native, proprietary cybersecurity training platform that reproduces the day-to-day experience of working inside a modern Security Operations Center (SOC). Where existing training products rely on video lectures, multiple-choice quizzes, or static "capture the flag" challenges, ThreatLens instead places the learner inside a fully interactive, purpose-built investigation environment that looks, feels, and behaves like the enterprise security tooling professionals use in production: an alert queue, an incident workbench, an identity investigation console modeled conceptually on Microsoft Entra ID, an endpoint console modeled conceptually on Microsoft Defender for Endpoint, and an email investigation console modeled conceptually on Microsoft Defender for Office 365 / Outlook.
 
-Critically, SOCVerse is **not** a SIEM, and it does not ingest, store, or process any real customer telemetry. It is a closed-loop educational simulator: the platform itself generates synthetic but statistically and behaviorally realistic telemetry (sign-in logs, process trees, DNS queries, email headers, firewall events, etc.), embeds a hidden "ground truth" attack narrative inside that telemetry, and then challenges the learner to reconstruct that narrative through investigation — exactly as a real analyst would reconstruct an attacker's actions from log data. The backend already knows the answer. The learner's job is to find it, document it, and defend their conclusion. This is the same operating model as a flight simulator: the aircraft never actually leaves the ground, but the controls, the failure conditions, and the consequences of a wrong decision are real enough to build genuine muscle memory and judgment.
+Critically, ThreatLens is **not** a SIEM, and it does not ingest, store, or process any real customer telemetry. It is a closed-loop educational simulator: the platform itself generates synthetic but statistically and behaviorally realistic telemetry (sign-in logs, process trees, DNS queries, email headers, firewall events, etc.), embeds a hidden "ground truth" attack narrative inside that telemetry, and then challenges the learner to reconstruct that narrative through investigation — exactly as a real analyst would reconstruct an attacker's actions from log data. The backend already knows the answer. The learner's job is to find it, document it, and defend their conclusion. This is the same operating model as a flight simulator: the aircraft never actually leaves the ground, but the controls, the failure conditions, and the consequences of a wrong decision are real enough to build genuine muscle memory and judgment.
 
-This document is the full software architecture and technical design specification for SOCVerse. It is written so that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural guesses. Every service, data model, API contract, and infrastructure decision described here is intended to be treated as authoritative unless a future decision explicitly supersedes it.
+This document is the full software architecture and technical design specification for ThreatLens. It is written so that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural guesses. Every service, data model, API contract, and infrastructure decision described here is intended to be treated as authoritative unless a future decision explicitly supersedes it.
 
-## 1.2 Why SOCVerse Exists
+## 1.2 Why ThreatLens Exists
 
 The cybersecurity industry has a well-documented and persistent workforce gap: industry estimates have placed the global shortage of security professionals at several million unfilled roles for multiple consecutive years, and the entry-level SOC analyst (Tier 1) role is simultaneously the highest-turnover and highest-demand position in the field. The core problem is not a lack of course material — there is no shortage of certifications, video courses, or written material explaining what phishing, lateral movement, or impossible travel are in the abstract. The problem is that almost none of that material gives a learner hands-on repetitions of the actual *investigative workflow*: opening an alert, pivoting from a sign-in event to a device, from a device to a process tree, from a process tree to a file hash, correlating that hash against threat intelligence, and writing up a defensible incident conclusion under time pressure and incomplete information.
 
@@ -66,7 +66,7 @@ Existing hands-on options fall short in specific, addressable ways:
 - **Video-based certification prep** builds vocabulary and conceptual knowledge but produces no evidence that the learner can actually perform an investigation, because there is no interactive investigation to perform.
 - **Static screenshot-based walkthroughs** cannot adapt, cannot be graded programmatically, and cannot vary between attempts, so they are trivially memorized rather than learned.
 
-SOCVerse is designed to fill exactly this gap: a scenario-driven, professionally faithful, infinitely repeatable investigation simulator, delivered as a subscription SaaS product, that can plausibly replace (or meaningfully supplement) the hands-on-labs component of SOC analyst training programs, university cybersecurity programs, corporate blue-team upskilling programs, and individual certification study plans.
+ThreatLens is designed to fill exactly this gap: a scenario-driven, professionally faithful, infinitely repeatable investigation simulator, delivered as a subscription SaaS product, that can plausibly replace (or meaningfully supplement) the hands-on-labs component of SOC analyst training programs, university cybersecurity programs, corporate blue-team upskilling programs, and individual certification study plans.
 
 ## 1.3 Market Opportunity
 
@@ -79,11 +79,11 @@ The addressable market spans several buyer segments, each with a distinct purcha
 | Corporate security teams | SOC managers, L&D budgets | Team seats, SSO, usage reporting for compliance training credit | Requires SSO, audit logs, admin reporting |
 | MSSPs training new analysts | Ops managers | Bulk seats tied to onboarding pipelines | Requires fast onboarding, scenario assignment automation |
 
-Direct competitors and adjacent products (LetsDefend, TryHackMe's SOC-Level content, CyberDefenders, RangeForce, Immersive Labs) validate demand for this category but each has gaps SOCVerse is designed to exploit: most are narrowly focused on a single investigation surface (usually just a log search interface), few offer a multi-console experience spanning identity, endpoint, and email simultaneously the way a real Tier 1/Tier 2 analyst's day actually spans those surfaces, and few are built with a scenario engine flexible enough to support instructor-authored custom content — which is the feature that unlocks the B2B education and enterprise segments, not just the B2C segment.
+Direct competitors and adjacent products (LetsDefend, TryHackMe's SOC-Level content, CyberDefenders, RangeForce, Immersive Labs) validate demand for this category but each has gaps ThreatLens is designed to exploit: most are narrowly focused on a single investigation surface (usually just a log search interface), few offer a multi-console experience spanning identity, endpoint, and email simultaneously the way a real Tier 1/Tier 2 analyst's day actually spans those surfaces, and few are built with a scenario engine flexible enough to support instructor-authored custom content — which is the feature that unlocks the B2B education and enterprise segments, not just the B2C segment.
 
 ## 1.4 Target Users
 
-- **Aspiring SOC analysts** with little to no professional experience, using SOCVerse to build a portfolio of demonstrable investigation reps before applying for Tier 1 roles.
+- **Aspiring SOC analysts** with little to no professional experience, using ThreatLens to build a portfolio of demonstrable investigation reps before applying for Tier 1 roles.
 - **Junior analysts (0–2 years)** looking to accelerate past Tier 1 pattern-matching into genuine investigative reasoning, and to practice attack types their current employer hasn't yet exposed them to (e.g., BEC, ransomware precursors).
 - **Career changers** (IT support, sysadmins, military/veterans transitioning to cyber) who have adjacent technical literacy but no security-specific investigative experience.
 - **University and bootcamp instructors** who need a gradable, reusable lab environment instead of building one-off labs by hand each term.
@@ -101,9 +101,9 @@ Direct competitors and adjacent products (LetsDefend, TryHackMe's SOC-Level cont
 
 This distinction is architecturally load-bearing and is repeated here because it shapes almost every downstream decision in this document:
 
-- SOCVerse does not accept customer-supplied log data of any kind. There is no "connect your data source" feature. All telemetry is synthetic, generated by the platform itself (§7).
-- SOCVerse does not implement a general-purpose query language, a rules-as-code detection authoring surface for end users, or a data-ingestion pipeline sized for real enterprise log volume. The "Search" and "Global Timeline" features (§2) are investigation conveniences scoped to a single scenario's dataset (typically thousands, not billions, of events), not a big-data analytics product.
-- SOCVerse's "Identity Portal," "Device Portal," and "Email Portal" are **inspired by** the information architecture of Entra ID, Defender for Endpoint, and Outlook/Defender for Office 365 so that the investigative *muscle memory* transfers to real tools — but every field, screen, and API in this document is an original design, backed by SOCVerse's own database schema (§6), not a clone of any vendor's UI, code, or protected trade dress.
+- ThreatLens does not accept customer-supplied log data of any kind. There is no "connect your data source" feature. All telemetry is synthetic, generated by the platform itself (§7).
+- ThreatLens does not implement a general-purpose query language, a rules-as-code detection authoring surface for end users, or a data-ingestion pipeline sized for real enterprise log volume. The "Search" and "Global Timeline" features (§2) are investigation conveniences scoped to a single scenario's dataset (typically thousands, not billions, of events), not a big-data analytics product.
+- ThreatLens's "Identity Portal," "Device Portal," and "Email Portal" are **inspired by** the information architecture of Entra ID, Defender for Endpoint, and Outlook/Defender for Office 365 so that the investigative *muscle memory* transfers to real tools — but every field, screen, and API in this document is an original design, backed by ThreatLens's own database schema (§6), not a clone of any vendor's UI, code, or protected trade dress.
 
 ## 1.7 Commercial Vision
 
@@ -152,7 +152,7 @@ Actors used throughout this document:
 - **Student** — a learner working scenarios, either self-enrolled or assigned by an instructor.
 - **Instructor** — creates/assigns scenarios, reviews student work, issues feedback and overrides.
 - **Org Admin** — manages an institutional/enterprise tenant: seats, SSO, billing, reporting.
-- **Platform Admin** — SOCVerse operator staff; manages scenario library, global config, support.
+- **Platform Admin** — ThreatLens operator staff; manages scenario library, global config, support.
 - **System** — automated actors: Telemetry Generator, Alert Engine, Scoring Engine.
 
 ## 2.1 Alert Dashboard
@@ -215,7 +215,7 @@ Full detail in §11. Functional summary: mailbox/message search; message reader 
 
 ## 2.8 Search
 
-**Purpose:** Cross-entity keyword and structured search scoped to the active session's synthetic dataset — the SOCVerse analog of a SIEM search bar, deliberately simplified (§1.6).
+**Purpose:** Cross-entity keyword and structured search scoped to the active session's synthetic dataset — the ThreatLens analog of a SIEM search bar, deliberately simplified (§1.6).
 
 **Requirements:**
 - Structured filter builder (field = value, with AND) covering the common investigable fields (source IP, user, device, process name, file hash, URL, sender) across `security_events`.
@@ -625,7 +625,7 @@ Every service reads configuration exclusively from environment variables validat
 - **Primary keys:** every table uses a `UUID` (v4) primary key named `id`, generated application-side or via Postgres `gen_random_uuid()`. UUIDs are used instead of serial integers so that IDs are safe to expose in URLs/APIs without leaking row-count/growth-rate information, and so that pre-generated telemetry (§7.7) can assign IDs before insertion without a round-trip.
 - **Timestamps:** every table has `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`; mutable tables also have `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()` maintained by a trigger. All timestamps are stored UTC; timezone conversion is a presentation-layer concern only (§17).
 - **Soft delete vs. hard delete:** user-owned content that a Student might reasonably want "undone" (notes, evidence pins) is hard-deleted on explicit removal — there is no undo-from-trash feature at MVP. Records with compliance/audit weight (users, audit_logs, scores, certificates) are never hard-deleted; deactivation uses a `deleted_at TIMESTAMPTZ NULL` (soft delete) column instead, and all queries against these tables filter `WHERE deleted_at IS NULL` by default via the repository layer (§5.6).
-- **Tenancy model:** SOCVerse is a single database, shared-schema multi-tenant system. Every row that belongs to an institutional customer carries an `org_id UUID NULL REFERENCES organizations(id)` (nullable because individual B2C users have no org). Row-level isolation between orgs is enforced at the application/repository layer (every query scopes by the caller's `org_id` where applicable) rather than Postgres Row-Level Security at MVP, to keep the query layer simple; **migrating to native Postgres RLS is the specified hardening step before onboarding the first enterprise customer with a compliance requirement for defense-in-depth tenant isolation** (§15, noted as a Scale-phase action item, not required for MVP launch).
+- **Tenancy model:** ThreatLens is a single database, shared-schema multi-tenant system. Every row that belongs to an institutional customer carries an `org_id UUID NULL REFERENCES organizations(id)` (nullable because individual B2C users have no org). Row-level isolation between orgs is enforced at the application/repository layer (every query scopes by the caller's `org_id` where applicable) rather than Postgres Row-Level Security at MVP, to keep the query layer simple; **migrating to native Postgres RLS is the specified hardening step before onboarding the first enterprise customer with a compliance requirement for defense-in-depth tenant isolation** (§15, noted as a Scale-phase action item, not required for MVP launch).
 - **Naming:** tables are `snake_case`, plural nouns. Foreign keys are named `{referenced_table_singular}_id`. Enum-like fields use Postgres `CHECK` constraints or native `ENUM` types (native enums preferred for fields with a small, rarely-changing value set like `severity`; `CHECK` constraints preferred where the value set may grow, to avoid enum-alteration migration friction).
 
 ## 6.2 Entity-Relationship Overview
@@ -672,7 +672,7 @@ Every synthetic entity (identity, device, email message, and every event table) 
 
 Indexes: `UNIQUE (email) WHERE deleted_at IS NULL`; `INDEX (org_id)`.
 
-A separate `roles` table is **not** used as a many-to-many join for MVP — the four platform roles in §15.2 are coarse and mutually exclusive per user, so a single `role` enum column is the correct normalization (avoiding an unnecessary join on every authorization check, which is a hot path). Fine-grained **permissions** (e.g., "can this specific instructor edit this specific cohort") are modeled as ownership foreign keys (`cohorts.owner_id`) checked at the resource-level authorization step (§4.3), not as a separate permissions table. If SOCVerse later needs custom/composable roles (e.g., enterprise customers wanting a "read-only auditor" role), a `roles` and `user_roles` join table would be introduced then; the `role` enum column is kept as a computed convenience field for backward compatibility rather than removed, to avoid a breaking change to every existing authorization check.
+A separate `roles` table is **not** used as a many-to-many join for MVP — the four platform roles in §15.2 are coarse and mutually exclusive per user, so a single `role` enum column is the correct normalization (avoiding an unnecessary join on every authorization check, which is a hot path). Fine-grained **permissions** (e.g., "can this specific instructor edit this specific cohort") are modeled as ownership foreign keys (`cohorts.owner_id`) checked at the resource-level authorization step (§4.3), not as a separate permissions table. If ThreatLens later needs custom/composable roles (e.g., enterprise customers wanting a "read-only auditor" role), a `roles` and `user_roles` join table would be introduced then; the `role` enum column is kept as a computed convenience field for backward compatibility rather than removed, to avoid a breaking change to every existing authorization check.
 
 ## 6.4 `organizations`
 
@@ -1014,7 +1014,7 @@ All schema changes go through a versioned migration tool (e.g., Prisma Migrate, 
 
 ## 7.1 Purpose and Design Philosophy
 
-The Telemetry Generator is the service that makes SOCVerse possible without a single byte of real customer log data. Its job is to take a scenario's authored `ground_truth_definition` (§6.7) and produce a complete, internally consistent synthetic dataset — identities, devices, mailboxes, and thousands of individual events across the tables in §6.12 — such that: (a) the attacker's actions are present and discoverable in the data, (b) the data is surrounded by enough plausible, non-malicious "noise" that finding the attacker's actions requires actual investigation rather than pattern-matching an obviously-different-looking row, and (c) every field looks like it came from the real log source it imitates (a Windows Security Event Log 4624, a Microsoft 365 sign-in log entry, an Nginx access log line), because the *format* fluency is itself part of what a Student is learning.
+The Telemetry Generator is the service that makes ThreatLens possible without a single byte of real customer log data. Its job is to take a scenario's authored `ground_truth_definition` (§6.7) and produce a complete, internally consistent synthetic dataset — identities, devices, mailboxes, and thousands of individual events across the tables in §6.12 — such that: (a) the attacker's actions are present and discoverable in the data, (b) the data is surrounded by enough plausible, non-malicious "noise" that finding the attacker's actions requires actual investigation rather than pattern-matching an obviously-different-looking row, and (c) every field looks like it came from the real log source it imitates (a Windows Security Event Log 4624, a Microsoft 365 sign-in log entry, an Nginx access log line), because the *format* fluency is itself part of what a Student is learning.
 
 This is fundamentally a **narrative-to-data compiler**, not a log replay tool and not a purely random generator. Two failure modes are explicitly designed against:
 - **Pure randomness** produces data with no coherent story, making investigation feel like solving a puzzle with the wrong shape (SOC work is never "spot the row that looks different"; it's "follow a chain of cause and effect"). This is why the generator is narrative-driven rather than statistically-driven-from-scratch.
@@ -1066,7 +1066,7 @@ Because cold-start latency (§3.1) matters and because generation is CPU-bound w
 
 ## 8.1 Purpose and Detection Model
 
-The Alert Engine consumes the telemetry a session's Telemetry Generator run produced (§7) and materializes the `alerts` (§6.15) a Student actually sees on the Alert Dashboard (§2.1). It is deliberately **not** a general-purpose, user-authorable detection-rules engine (that would make SOCVerse a SIEM-authoring product, contradicting §1.6) — it is a fixed library of proprietary `detection_rules` (§6.15), each an internally-implemented function (not a Student-facing query language) that evaluates a specific, well-understood detection pattern against a session's event tables and emits an alert when the pattern matches.
+The Alert Engine consumes the telemetry a session's Telemetry Generator run produced (§7) and materializes the `alerts` (§6.15) a Student actually sees on the Alert Dashboard (§2.1). It is deliberately **not** a general-purpose, user-authorable detection-rules engine (that would make ThreatLens a SIEM-authoring product, contradicting §1.6) — it is a fixed library of proprietary `detection_rules` (§6.15), each an internally-implemented function (not a Student-facing query language) that evaluates a specific, well-understood detection pattern against a session's event tables and emits an alert when the pattern matches.
 
 Because the Telemetry Generator already knows and flags every ground-truth-evidence event (`is_ground_truth_evidence`, §6.12) and every intentional noise/false-positive-bait event, the Alert Engine's rule library is authored to be **behaviorally realistic** — a rule fires because a real analytic pattern is present in the data (an impossible-travel geo/time delta, a rare parent-child process pairing, an SPF-fail-plus-lookalike-domain combination) — rather than simply "fire an alert on every `is_ground_truth_evidence` row." This distinction matters pedagogically: it means alerts sometimes fire on noise (realistic false positives, §8.6) and some ground-truth evidence is deliberately **sub-alert-threshold** (discoverable only through manual investigation, not handed to the Student by an alert), which is what makes the Search, Global Timeline, and manual pivoting features (§2.8–§2.9) genuinely necessary rather than decorative.
 
@@ -1118,7 +1118,7 @@ Default sort is severity descending, then recency descending, matching common SI
 
 ## 9.1 Purpose
 
-The Identity Portal is SOCVerse's proprietary analog to an Entra ID-style identity investigation surface (§1.6) — it is where a Student investigates *who* was involved in an incident: sign-in behavior, risk signals, group membership, and device associations. It is backed entirely by the `identities` and related tables in §6.10 and the `sign_in_events`/`conditional_access_evaluations` tables in §6.12.1, scoped to the active `session_id`.
+The Identity Portal is ThreatLens's proprietary analog to an Entra ID-style identity investigation surface (§1.6) — it is where a Student investigates *who* was involved in an incident: sign-in behavior, risk signals, group membership, and device associations. It is backed entirely by the `identities` and related tables in §6.10 and the `sign_in_events`/`conditional_access_evaluations` tables in §6.12.1, scoped to the active `session_id`.
 
 ## 9.2 Identity Directory (List View)
 
@@ -1165,7 +1165,7 @@ Per §6.10/§6.12, the following columns are stripped by the API-layer DTO mappi
 
 ## 10.1 Purpose
 
-The Device Portal is SOCVerse's proprietary analog to a Defender for Endpoint-style investigation surface (§1.6) — where a Student investigates *what happened on a machine*: process execution, persistence, network activity, and file activity. Backed by `devices` (§6.11) and the device-scoped event tables in §6.12 (`process_events`, `file_events`, `network_events`, `dns_events`, `registry_events`, plus `installed_software`, `device_services`, `startup_entries`, `usb_events`).
+The Device Portal is ThreatLens's proprietary analog to a Defender for Endpoint-style investigation surface (§1.6) — where a Student investigates *what happened on a machine*: process execution, persistence, network activity, and file activity. Backed by `devices` (§6.11) and the device-scoped event tables in §6.12 (`process_events`, `file_events`, `network_events`, `dns_events`, `registry_events`, plus `installed_software`, `device_services`, `startup_entries`, `usb_events`).
 
 ## 10.2 Device Overview
 
@@ -1219,7 +1219,7 @@ Identical policy to §9.9: `is_ground_truth_actor`, all `is_ground_truth_evidenc
 
 ## 11.1 Purpose
 
-The Email Portal is SOCVerse's proprietary analog to an Outlook/Defender for Office 365-style message investigation surface (§1.6) — the primary surface for phishing and Business Email Compromise (BEC) scenario categories (§1.8). Backed by `email_messages`, `email_attachments`, and `email_urls` (§6.12.9), scoped to the active `session_id`.
+The Email Portal is ThreatLens's proprietary analog to an Outlook/Defender for Office 365-style message investigation surface (§1.6) — the primary surface for phishing and Business Email Compromise (BEC) scenario categories (§1.8). Backed by `email_messages`, `email_attachments`, and `email_urls` (§6.12.9), scoped to the active `session_id`.
 
 ## 11.2 Mailbox/Message Search
 
@@ -1255,7 +1255,7 @@ Every hash (`email_attachments.hash_sha256`) and URL/domain (`email_urls.url`) i
 
 ## 11.10 What Is Never Exposed to the Student
 
-Identical policy to §9.9/§10.12: `email_messages.is_ground_truth_evidence` and `mitre_technique_id` are stripped at the serialization layer (§18.3). Additionally, because `body_html` is rendered client-side, it is sanitized server-side (strip `<script>`, event handlers, and any active content, §15.6) before ever leaving the API — defending against the theoretical case of a maliciously-authored scenario template accidentally including unsafe markup, not because any real inbound content is untrusted (all content is authored by SOCVerse's own content team, §12.1).
+Identical policy to §9.9/§10.12: `email_messages.is_ground_truth_evidence` and `mitre_technique_id` are stripped at the serialization layer (§18.3). Additionally, because `body_html` is rendered client-side, it is sanitized server-side (strip `<script>`, event handlers, and any active content, §15.6) before ever leaving the API — defending against the theoretical case of a maliciously-authored scenario template accidentally including unsafe markup, not because any real inbound content is untrusted (all content is authored by ThreatLens's own content team, §12.1).
 
 
 ---
@@ -1391,7 +1391,7 @@ Cohort scenario assignment (§2.15, `cohort_scenario_assignments`, §6.6) can ta
 
 ## 14.1 Scope and Positioning
 
-Every capability in this section is a **Phase 3** initiative (§1.7) — none is required for MVP launch, and none is permitted to sit in the critical path of core scenario generation, alerting, or scoring (§7.6 already establishes that core telemetry generation has no runtime LLM dependency, for cost/latency/reproducibility reasons that still apply). AI features here are additive assistive layers on top of the deterministic core, each designed so that **disabling the AI feature entirely still leaves a fully functional product** — this is a hard architectural constraint, not a nice-to-have, because it keeps SOCVerse's core value proposition (a reliable, reproducible investigation simulator) independent of third-party LLM API availability, pricing changes, or quality regressions.
+Every capability in this section is a **Phase 3** initiative (§1.7) — none is required for MVP launch, and none is permitted to sit in the critical path of core scenario generation, alerting, or scoring (§7.6 already establishes that core telemetry generation has no runtime LLM dependency, for cost/latency/reproducibility reasons that still apply). AI features here are additive assistive layers on top of the deterministic core, each designed so that **disabling the AI feature entirely still leaves a fully functional product** — this is a hard architectural constraint, not a nice-to-have, because it keeps ThreatLens's core value proposition (a reliable, reproducible investigation simulator) independent of third-party LLM API availability, pricing changes, or quality regressions.
 
 All AI features are built behind a single internal `AIGatewayService` (§18) abstraction so the underlying model provider is swappable without touching feature code, and every AI-generated response is logged (prompt, response, model/version, cost) for quality monitoring and for the abuse/cost controls in §14.7.
 
@@ -1450,7 +1450,7 @@ Role capability summary: `student` — own sessions/scores/certificates only. `i
 ## 15.3 Encryption
 
 - **In transit:** TLS 1.2+ enforced on every public endpoint (HTTP requests to port 80 receive a redirect only, no data is ever served over plaintext HTTP); internal service-to-service traffic at Scale (§19.4) runs over the cluster's private network with TLS between mesh-connected services where the deployment platform supports it, and is never exposed to the public internet regardless (§4.5).
-- **At rest:** the database volume and object storage are encrypted at rest using the host/provider's disk or bucket-level encryption (LUKS on the MVP VPS; provider-managed encryption at Scale) — application-layer field encryption is *not* used for the synthetic telemetry tables (there is no real-world sensitive content there to protect beyond standard disk encryption) but **is** used for `organizations.sso_config` secret-bearing fields and any stored payment-related reference tokens (§20 — SOCVerse never stores raw card data itself; billing integrates with a PCI-compliant processor, §15.8).
+- **At rest:** the database volume and object storage are encrypted at rest using the host/provider's disk or bucket-level encryption (LUKS on the MVP VPS; provider-managed encryption at Scale) — application-layer field encryption is *not* used for the synthetic telemetry tables (there is no real-world sensitive content there to protect beyond standard disk encryption) but **is** used for `organizations.sso_config` secret-bearing fields and any stored payment-related reference tokens (§20 — ThreatLens never stores raw card data itself; billing integrates with a PCI-compliant processor, §15.8).
 - Backups (§3.11) inherit the same at-rest encryption and are additionally encrypted with a backup-specific key before leaving the primary environment.
 
 ## 15.4 Secrets Management
@@ -1476,7 +1476,7 @@ Detailed token mechanics in §5.7. Security-relevant behaviors: refresh-token ro
 
 ## 15.8 Payment Security
 
-SOCVerse never handles, stores, or transmits raw payment card data — all billing/subscription payment collection is delegated to a PCI-DSS-compliant third-party payment processor's hosted checkout/tokenization flow (§20); the platform stores only the processor-issued customer/subscription reference tokens (`organizations.billing_customer_id`, §6.4, and an equivalent field on `users` for individual subscriptions), keeping SOCVerse itself out of PCI-DSS scope entirely — a deliberate, cost- and risk-reducing architectural choice appropriate for a bootstrapped team (§20).
+ThreatLens never handles, stores, or transmits raw payment card data — all billing/subscription payment collection is delegated to a PCI-DSS-compliant third-party payment processor's hosted checkout/tokenization flow (§20); the platform stores only the processor-issued customer/subscription reference tokens (`organizations.billing_customer_id`, §6.4, and an equivalent field on `users` for individual subscriptions), keeping ThreatLens itself out of PCI-DSS scope entirely — a deliberate, cost- and risk-reducing architectural choice appropriate for a bootstrapped team (§20).
 
 ## 15.9 Audit Logging
 

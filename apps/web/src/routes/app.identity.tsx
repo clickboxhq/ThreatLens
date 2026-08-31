@@ -10,7 +10,7 @@ import { useIdentities, useIdentitySignIns } from "@/hooks/use-identities";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { MapPin, ShieldCheck, ShieldOff } from "lucide-react";
-import type { IdentityRiskLevel } from "@/types/socverse-operations";
+import type { IdentityRiskLevel } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/identity")({
   component: IdentityCenter,
