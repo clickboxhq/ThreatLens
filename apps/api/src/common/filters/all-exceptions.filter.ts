@@ -10,7 +10,7 @@ import { Request, Response } from 'express';
 import { AppException } from '../exceptions/app-exception';
 
 // Maps every thrown error to the standard envelope from
-// docs/SOCVerse-Architecture.md §16.1: { error: { code, message, correlationId } }.
+// docs/ThreatLens-Architecture.md §16.1: { error: { code, message, correlationId } }.
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('ExceptionFilter');

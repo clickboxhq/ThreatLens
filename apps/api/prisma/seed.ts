@@ -1,4 +1,4 @@
-// Reference data + the scenario library (docs/SOCVerse-Architecture.md §12.1, §12.6).
+// Reference data + the scenario library (docs/ThreatLens-Architecture.md §12.1, §12.6).
 // Idempotent: safe to re-run against the same database.
 
 import { PrismaClient } from '@prisma/client';

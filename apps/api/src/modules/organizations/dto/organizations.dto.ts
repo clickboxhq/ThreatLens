@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateOrganizationDto {
   @IsString()
@@ -10,6 +10,16 @@ export class UpdateOrganizationDto {
   @IsString()
   @MinLength(1)
   name!: string;
+
+  // Onboarding-collected, optional, editable later from org settings.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  teamSize?: number;
+
+  @IsOptional()
+  @IsString()
+  industry?: string;
 }
 
 export class CreateInviteDto {

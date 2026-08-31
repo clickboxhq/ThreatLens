@@ -39,15 +39,39 @@ enum UserStatus {
 }
 
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  teamSize   Int?     @map("team_size")
+  industry   String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   users   User[]
   invites OrganizationInvite[]
 
   @@map("organizations")
+}
+
+enum ExperienceLevel {
+  new_to_security
+  early_career
+  experienced
+  career_switcher
+}
+
+enum AvatarType {
+  initials
+  preset
+  upload
+}
+
+// l1 -> l2 -> senior. Deterministic promotion, evaluated the same way
+// AchievementKey is: pure functions over scored session history, no manual
+// self-selection (see career-progression module).
+enum CareerLevel {
+  l1
+  l2
+  senior
 }
 
 enum OrganizationInviteStatus {
@@ -100,9 +124,36 @@ model User {
   mfaEnabled           Boolean    @default(false) @map("mfa_enabled")
   mfaSecret            String?    @map("mfa_secret")
   mfaRecoveryCodesHash String[]   @default([]) @map("mfa_recovery_codes_hash")
-  deletedAt            DateTime?  @map("deleted_at")
-  createdAt            DateTime   @default(now()) @map("created_at")
-  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  // Profile — all optional/additive, collected post-signup (see /welcome).
+  // displayName above remains the name shown everywhere already built
+  // against it; firstName/lastName are independently editable, not merely
+  // a split of displayName.
+  firstName        String? @map("first_name")
+  lastName         String? @map("last_name")
+  professionalRole String? @map("professional_role")
+  bio              String?
+  careerGoal       String? @map("career_goal")
+  experienceLevel  ExperienceLevel? @map("experience_level")
+
+  // Avatar — three modes. `avatarDataUrl` holds an uploaded image as a
+  // size-capped (~2MB) base64 data URL directly in Postgres rather than via
+  // object storage: MinIO is provisioned in infra but has no application
+  // code anywhere touching it yet, and wiring a full bucket/policy/client
+  // pipeline for a small profile image is disproportionate — this is a
+  // deliberate, documented scope trade-off, not an oversight.
+  avatarType       AvatarType @default(initials) @map("avatar_type")
+  avatarPresetKey  String?    @map("avatar_preset_key")
+  avatarDataUrl    String?    @map("avatar_data_url")
+
+  // SOC Career Progression (§ enterprise upgrade) — deterministic, computed
+  // from scored session history the same way achievements are, never
+  // user-selected directly.
+  careerLevel CareerLevel @default(l1) @map("career_level")
+
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   organization          Organization?              @relation(fields: [orgId], references: [id])
   refreshTokens         RefreshToken[]
@@ -1228,6 +1279,10 @@ enum NotificationCategory {
   instructor_feedback
   certificate_issued
   org_invitation
+  // Added alongside SOC Career Progression — a real trigger now exists
+  // (career-progression.service.ts fires this on a level-up), matching the
+  // project's own rule of only adding a category once something real emits it.
+  career_milestone
 }
 
 model Notification {

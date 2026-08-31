@@ -1,11 +1,18 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Building2, CheckCircle2, Loader2, User } from "lucide-react";
+import { ArrowRight, Building2, Loader2, User } from "lucide-react";
 
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { EvidenceGraph, displayFont, monoFont } from "@/components/soc/marketing/atmos";
 import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
@@ -25,15 +32,15 @@ const ACCOUNT_OPTIONS = [
     key: "student" as const,
     icon: User,
     label: "Individual",
-    body: "Personal learning and investigation practice.",
-    features: ["Personal investigations", "Learning paths", "Certificates", "Progress tracking"],
+    description:
+      "For cybersecurity students, aspiring analysts, professionals, and independent learners developing practical investigation skills.",
   },
   {
     key: "instructor" as const,
     icon: Building2,
     label: "Organization",
-    body: "Manage analysts, students, cohorts, and training programs.",
-    features: ["Cohorts", "Instructor management", "Reporting", "Team analytics"],
+    description:
+      "For teams, training institutions, organizations, and cybersecurity groups using structured cybersecurity learning environments.",
   },
 ];
 
@@ -134,59 +141,28 @@ function SignupPage() {
               Choose how you will use ThreatLens.
             </p>
 
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {ACCOUNT_OPTIONS.map((opt) => {
-                const active = role === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => setRole(opt.key)}
-                    className={
-                      active
-                        ? "glass-card-dark relative p-5 text-left transition-all"
-                        : "relative rounded-xl border border-black/12 bg-black/[0.015] p-5 text-left transition-all hover:border-black/25"
-                    }
-                  >
-                    {active && (
-                      <CheckCircle2 className="absolute right-4 top-4 size-4 text-white" />
-                    )}
-                    <div
-                      className={
-                        active
-                          ? "icon-frame-dark text-white/85"
-                          : "flex size-11 shrink-0 items-center justify-center rounded-md border border-black/12 bg-black/[0.03] text-black/70"
-                      }
-                    >
-                      <opt.icon className="size-[18px]" />
-                    </div>
-                    <div
-                      className={`mt-3.5 text-[14px] font-semibold ${active ? "text-white" : "text-[#0A0C0F]"}`}
-                      style={displayFont}
-                    >
-                      {opt.label}
-                    </div>
-                    <div
-                      className={`mt-1 text-[11.5px] leading-[1.5] ${active ? "text-white/55" : "text-black/50"}`}
-                    >
-                      {opt.body}
-                    </div>
-                    <ul className="mt-3 space-y-1">
-                      {opt.features.map((f) => (
-                        <li
-                          key={f}
-                          className={`flex items-center gap-1.5 text-[11px] ${active ? "text-white/65" : "text-black/60"}`}
-                        >
-                          <span
-                            className={`size-1 shrink-0 rounded-full ${active ? "bg-white/50" : "bg-black/40"}`}
-                          />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                  </button>
-                );
-              })}
+            <div className="mt-6">
+              <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                Account Type
+              </span>
+              <Select value={role} onValueChange={(v) => setRole(v as "student" | "instructor")}>
+                <SelectTrigger className="h-[52px] w-full rounded-lg border-black/15 bg-black/[0.015] text-[14px] text-[#0A0C0F]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.key} value={opt.key}>
+                      <span className="flex items-center gap-2">
+                        <opt.icon className="size-4" />
+                        {opt.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-[12.5px] leading-[1.6] text-black/55">
+                {ACCOUNT_OPTIONS.find((opt) => opt.key === role)?.description}
+              </p>
             </div>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>

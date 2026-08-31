@@ -5,6 +5,8 @@
 export interface OrganizationDto {
   id: string;
   name: string;
+  teamSize?: number | null;
+  industry?: string | null;
   memberCount: number;
   createdAt: string;
 }

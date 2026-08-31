@@ -4,13 +4,34 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { apiClient, getAccessToken, onTokensChanged, setTokens, tryRefresh } from "./api-client";
 
 export type AuthRole = "student" | "instructor" | "org_admin" | "platform_admin";
+export type ExperienceLevel =
+  | "new_to_security"
+  | "early_career"
+  | "experienced"
+  | "career_switcher";
+export type AvatarType = "initials" | "preset" | "upload";
+export type CareerLevel = "l1" | "l2" | "senior";
 
 export type AuthUser = {
   id: string;
   displayName: string;
   role: AuthRole;
   emailVerified: boolean;
+  firstName?: string | null;
+  lastName?: string | null;
+  professionalRole?: string | null;
+  bio?: string | null;
+  careerGoal?: string | null;
+  experienceLevel?: ExperienceLevel | null;
+  avatarType?: AvatarType;
+  avatarPresetKey?: string | null;
+  avatarDataUrl?: string | null;
+  careerLevel?: CareerLevel;
 };
+
+export type ProfileUpdateInput = Partial<
+  Pick<AuthUser, "firstName" | "lastName" | "professionalRole" | "bio" | "careerGoal" | "experienceLevel">
+>;
 
 type Session = { accessToken: string; refreshToken: string; expiresIn: number; user: AuthUser };
 type LoginOutcome =
@@ -67,6 +88,11 @@ interface AuthState {
    * the caller already knows it just became, the same "no fresh login needed" spirit as
    * markEmailVerified(). */
   refreshAfterRoleChange: (role: AuthRole) => Promise<void>;
+  /** Re-fetch the current user's full profile (GET /auth/me) and refresh the cache. */
+  refreshMe: () => Promise<AuthUser>;
+  updateProfile: (input: ProfileUpdateInput) => Promise<AuthUser>;
+  setAvatarPreset: (presetKey: string | null) => Promise<AuthUser>;
+  uploadAvatar: (file: File) => Promise<AuthUser>;
 }
 
 function applySession(result: Session): void {
@@ -166,6 +192,36 @@ export const useAuthStore = create<AuthState>()(() => ({
     const updated = { ...current, role };
     persistUser(updated);
     useAuthStore.setState({ user: updated });
+  },
+
+  async refreshMe() {
+    const user = await apiClient.get<AuthUser>("/auth/me");
+    persistUser(user);
+    useAuthStore.setState({ user });
+    return user;
+  },
+
+  async updateProfile(input) {
+    const user = await apiClient.patch<AuthUser>("/auth/me", input);
+    persistUser(user);
+    useAuthStore.setState({ user });
+    return user;
+  },
+
+  async setAvatarPreset(presetKey) {
+    const user = await apiClient.post<AuthUser>("/auth/me/avatar-preset", { presetKey });
+    persistUser(user);
+    useAuthStore.setState({ user });
+    return user;
+  },
+
+  async uploadAvatar(file) {
+    const form = new FormData();
+    form.append("file", file);
+    const user = await apiClient.upload<AuthUser>("/auth/me/avatar", form);
+    persistUser(user);
+    useAuthStore.setState({ user });
+    return user;
   },
 }));
 

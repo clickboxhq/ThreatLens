@@ -596,7 +596,65 @@ export class AuthService {
       role: user.role,
       emailVerified: user.emailVerifiedAt !== null,
       createdAt: user.createdAt,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      professionalRole: user.professionalRole,
+      bio: user.bio,
+      careerGoal: user.careerGoal,
+      experienceLevel: user.experienceLevel,
+      avatarType: user.avatarType,
+      avatarPresetKey: user.avatarPresetKey,
+      avatarDataUrl: user.avatarDataUrl,
+      careerLevel: user.careerLevel,
     };
+  }
+
+  async updateProfile(
+    userId: string,
+    dto: {
+      firstName?: string;
+      lastName?: string;
+      professionalRole?: string;
+      bio?: string;
+      careerGoal?: string;
+      experienceLevel?: string;
+    },
+  ) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.firstName !== undefined && { firstName: dto.firstName }),
+        ...(dto.lastName !== undefined && { lastName: dto.lastName }),
+        ...(dto.professionalRole !== undefined && { professionalRole: dto.professionalRole }),
+        ...(dto.bio !== undefined && { bio: dto.bio }),
+        ...(dto.careerGoal !== undefined && { careerGoal: dto.careerGoal }),
+        ...(dto.experienceLevel !== undefined && {
+          experienceLevel: dto.experienceLevel as never,
+        }),
+      },
+    });
+    return this.getMe(user.id);
+  }
+
+  /** Set avatar to initials (no data needed) or one of the built-in role presets. */
+  async setAvatarPreset(userId: string, presetKey: string | null) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: presetKey
+        ? { avatarType: 'preset', avatarPresetKey: presetKey, avatarDataUrl: null }
+        : { avatarType: 'initials', avatarPresetKey: null, avatarDataUrl: null },
+    });
+    return this.getMe(userId);
+  }
+
+  /** Store an uploaded avatar as a data URL — see the schema comment on
+   * User.avatarDataUrl for why this isn't object-storage-backed. */
+  async setAvatarUpload(userId: string, dataUrl: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarType: 'upload', avatarDataUrl: dataUrl, avatarPresetKey: null },
+    });
+    return this.getMe(userId);
   }
 
   async mfaStatus(

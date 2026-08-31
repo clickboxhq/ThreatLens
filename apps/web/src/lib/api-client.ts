@@ -128,6 +128,21 @@ export const apiClient = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** multipart/form-data upload (e.g. avatar) — bypasses request()'s JSON
+   * Content-Type header so the browser can set its own multipart boundary. */
+  async upload<T>(path: string, form: FormData): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      body: form,
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const err = body?.error ?? { code: "UNKNOWN", message: "Upload failed." };
+      throw new ApiError(response.status, err.code, err.message, err.correlationId);
+    }
+    return body as T;
+  },
 };
 
 // Triggers a browser download for an authenticated file response (e.g. the instructor

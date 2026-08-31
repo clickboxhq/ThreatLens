@@ -62,6 +62,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { LogOut } from "lucide-react";
 
 type NavItem = {
@@ -421,12 +422,6 @@ function Topbar({
   const user = useAuthUser();
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
-  const initials = (user?.displayName ?? "?")
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md md:px-6">
       <button
@@ -479,9 +474,7 @@ function Topbar({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-md border border-border bg-card py-1 pl-1 pr-2.5 transition-colors hover:border-[color:var(--info)]/50">
-              <IconTile tone="info" size="sm" shape="circle" className="text-[11px] font-semibold">
-                {initials}
-              </IconTile>
+              {user && <UserAvatar user={user} size={28} />}
               <div className="hidden text-left leading-tight md:block">
                 <div className="text-[12px] font-medium">{user?.displayName ?? "Account"}</div>
                 <div className="text-[10px] text-muted-foreground">Profile & settings</div>

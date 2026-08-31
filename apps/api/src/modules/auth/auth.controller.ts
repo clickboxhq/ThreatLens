@@ -4,11 +4,16 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
+import { AppException } from '../../common/exceptions/app-exception';
 import { AuthService } from './auth.service';
 import { RateLimiterService } from '../../common/rate-limiter/rate-limiter.service';
 import { SignupDto } from './dto/signup.dto';
@@ -21,9 +26,14 @@ import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { EmailVerificationConfirmDto } from './dto/email-verification-confirm.dto';
 import { MfaEnrolSetupDto, MfaEnrolCompleteDto } from './dto/mfa-enrol.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SetAvatarPresetDto } from './dto/set-avatar-preset.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
+
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2MB
+const AVATAR_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // §15.5: 10 requests/minute per IP on every unauthenticated, abuse-prone auth endpoint.
 const AUTH_RATE_LIMIT = 10;
@@ -36,7 +46,7 @@ function correlationIdOf(req: Request): string | undefined {
   return (req as Request & { correlationId?: string }).correlationId;
 }
 
-// Matches docs/SOCVerse-Architecture.md §16.2.
+// Matches docs/ThreatLens-Architecture.md §16.2.
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -136,6 +146,42 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getMe(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.getMe(user.id);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  async updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
+    return this.authService.updateProfile(user.id, dto);
+  }
+
+  @Post('me/avatar-preset')
+  @UseGuards(JwtAuthGuard)
+  async setAvatarPreset(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetAvatarPresetDto) {
+    return this.authService.setAvatarPreset(user.id, dto.presetKey ?? null);
+  }
+
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_BYTES } }))
+  async uploadAvatar(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new AppException(400, 'VALIDATION_ERROR', 'No file uploaded.');
+    }
+    if (!AVATAR_ALLOWED_MIME.has(file.mimetype)) {
+      throw new AppException(
+        400,
+        'VALIDATION_ERROR',
+        'Avatar must be a JPEG, PNG, or WEBP image.',
+      );
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      throw new AppException(400, 'VALIDATION_ERROR', 'Avatar must be 2MB or smaller.');
+    }
+    const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return this.authService.setAvatarUpload(user.id, dataUrl);
   }
 
   @Get('mfa/status')

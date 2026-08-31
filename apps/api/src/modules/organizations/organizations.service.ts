@@ -94,7 +94,11 @@ export class OrganizationsService {
     const orgId = await this.getOwnedOrgId(user);
     await this.prisma.organization.update({
       where: { id: orgId },
-      data: { name: dto.name },
+      data: {
+        name: dto.name,
+        ...(dto.teamSize !== undefined && { teamSize: dto.teamSize }),
+        ...(dto.industry !== undefined && { industry: dto.industry }),
+      },
     });
     return this.toOrgDto(orgId);
   }
@@ -288,6 +292,8 @@ export class OrganizationsService {
     return {
       id: org.id,
       name: org.name,
+      teamSize: org.teamSize,
+      industry: org.industry,
       memberCount: org._count.users,
       createdAt: org.createdAt,
     };
