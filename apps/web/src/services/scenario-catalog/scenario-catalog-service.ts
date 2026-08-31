@@ -1,7 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 
-// SOCVerse's real GET /scenarios (apps/api's ScenarioCatalogController) — published scenarios
-// only, never the ground-truth-bearing scenario version underneath.
+// ThreatLens's real GET /scenarios (apps/api's ScenarioCatalogController) — published
+// scenarios only, never the ground-truth-bearing scenario version underneath.
 export interface RealScenario {
   id: string;
   slug: string;
@@ -10,8 +10,13 @@ export interface RealScenario {
   category: string;
   difficulty: string;
   estimatedMinutes: number;
-  /** MITRE technique IDs (e.g. "T1078") this scenario's kill chain actually exercises. */
-  techniqueIds: string[];
+  /**
+   * Tactic-level (not technique-level) coverage — e.g. "Credential Access" plus how many
+   * required techniques fall under it. Deliberately not exact MITRE technique IDs: those
+   * are the scoring rubric's answer key (see the backend controller's own comment) and must
+   * never be readable before a student starts the scenario.
+   */
+  tacticCoverage: { tactic: string; techniqueCount: number }[];
 }
 
 export function listRealScenarios(): Promise<RealScenario[]> {

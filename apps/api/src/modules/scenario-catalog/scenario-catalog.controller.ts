@@ -5,6 +5,29 @@ import { AppException } from '../../common/exceptions/app-exception';
 import type { ScenarioCategory, ScenarioDifficulty } from '@prisma/client';
 
 // §16.3 — never includes ground_truth_definition or internal version metadata (§12.3).
+//
+// SECURITY: this controller must never expose exact MITRE technique IDs for a scenario.
+// `ScenarioTechnique` rows are populated directly from `groundTruthDefinition
+// .scoring_rubric.required_techniques` (see scenario-builder.service.ts) with no decoy
+// techniques mixed in — so a per-technique list here IS the scoring answer key for the
+// 30%-weighted technique-accuracy rubric component, readable before a student even starts
+// a session. Only the broader tactic-level coverage (which tactics this scenario touches,
+// and how many techniques each covers) is safe to return: still useful for "recommend a
+// scenario for my weakest tactic," but nowhere near specific enough to game the rubric.
+function tacticCoverage(
+  techniques: { mitreTechnique: { tactic: string } }[] | undefined,
+): { tactic: string; techniqueCount: number }[] {
+  const counts = new Map<string, number>();
+  for (const t of techniques ?? []) {
+    const tactic = t.mitreTechnique.tactic;
+    counts.set(tactic, (counts.get(tactic) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([tactic, techniqueCount]) => ({
+    tactic,
+    techniqueCount,
+  }));
+}
+
 @Controller('scenarios')
 @UseGuards(JwtAuthGuard)
 export class ScenarioCatalogController {
@@ -32,12 +55,7 @@ export class ScenarioCatalogController {
       category: s.category,
       difficulty: s.difficulty,
       estimatedMinutes: s.estimatedMinutes,
-      // The MITRE techniques this scenario's kill chain actually exercises — lets the
-      // frontend recommend scenarios by weak tactic without a second round-trip per scenario.
-      techniqueIds:
-        s.currentVersion?.techniques.map(
-          (st) => st.mitreTechnique.techniqueId,
-        ) ?? [],
+      tacticCoverage: tacticCoverage(s.currentVersion?.techniques),
     }));
   }
 
@@ -62,10 +80,7 @@ export class ScenarioCatalogController {
       category: scenario.category,
       difficulty: scenario.difficulty,
       estimatedMinutes: scenario.estimatedMinutes,
-      techniqueIds:
-        scenario.currentVersion?.techniques.map(
-          (st) => st.mitreTechnique.techniqueId,
-        ) ?? [],
+      tacticCoverage: tacticCoverage(scenario.currentVersion?.techniques),
     };
   }
 }

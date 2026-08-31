@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { sessionsService } from "@/services/sessions";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
-import { investigationsService } from "@/services/investigations";
 import { queryKeys } from "./query-keys";
 
 export type LearningRecommendation = {
@@ -15,16 +14,19 @@ export type LearningRecommendation = {
 /**
  * Deterministic derivation (no AI): lowest-mastery MITRE tactic (from the real skill radar) ->
  * the published scenario whose kill chain covers that tactic's techniques the most. Composes
- * three already-fetched real domains rather than adding a new data source.
+ * two already-fetched real domains rather than adding a new data source.
+ *
+ * Deliberately matches on tactic-level coverage, not exact technique IDs: the backend
+ * (ScenarioCatalogController) only ever returns `tacticCoverage` for this reason — the exact
+ * technique list is the scoring rubric's answer key and must never reach the client pre-session.
  */
 export function useLearningRecommendation() {
   const query = useQuery({
     queryKey: [...queryKeys.mitreExplorer, "recommendation"],
     queryFn: async (): Promise<LearningRecommendation | undefined> => {
-      const [skillRadar, scenarios, techniques] = await Promise.all([
+      const [skillRadar, scenarios] = await Promise.all([
         sessionsService.getSkillRadar(),
         listRealScenarios(),
-        Promise.resolve(investigationsService.listMitreTechniques()),
       ]);
       if (skillRadar.length === 0 || scenarios.length === 0) return undefined;
 
@@ -33,12 +35,11 @@ export function useLearningRecommendation() {
       let best = scenarios[0];
       let bestOverlap = -1;
       for (const s of scenarios) {
-        // s.techniqueIds are real database technique-id strings ("T1078", etc.) from this
-        // scenario's current version — match against the tactic code the weakest skill-radar
-        // entry names (e.g. "TA0006"), the same field computeSkillRadar itself groups by.
-        const overlap = s.techniqueIds.filter((id) =>
-          techniques.some((t) => t.techniqueId === id && t.tactic === weakest.tactic),
-        ).length;
+        // weakest.tactic is the same raw MITRE tactic string (e.g. "Credential Access") the
+        // backend groups tacticCoverage by, so this is a direct string match — no separate
+        // technique lookup needed.
+        const overlap =
+          s.tacticCoverage.find((tc) => tc.tactic === weakest.tactic)?.techniqueCount ?? 0;
         if (overlap > bestOverlap) {
           best = s;
           bestOverlap = overlap;
