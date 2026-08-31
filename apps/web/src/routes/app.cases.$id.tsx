@@ -10,6 +10,7 @@ import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import { InvestigationGraph } from "@/components/soc/investigation-graph";
 import {
   useInvestigation,
   useSessionIncident,
@@ -657,6 +658,11 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                 ))}
               </ol>
             )}
+          </Panel>
+
+          {/* Investigation graph */}
+          <Panel title="Investigation graph">
+            <InvestigationGraph timeline={timeline} evidence={evidence} />
           </Panel>
         </div>
 

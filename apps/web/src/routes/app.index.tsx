@@ -9,7 +9,9 @@ import {
   ArrowUpRight,
   Gauge,
   PlayCircle,
+  Shield,
   ShieldAlert,
+  ShieldCheck,
   Target,
   Trophy,
 } from "lucide-react";
@@ -27,7 +29,10 @@ import { useDashboardPerformance } from "@/hooks/use-dashboard-performance";
 import { useLearningRecommendation } from "@/hooks/use-learning-recommendation";
 import { useLearningOverview } from "@/hooks/use-learning-center";
 import { useCertificates } from "@/hooks/use-certificates";
-import { useAuthUser } from "@/lib/auth-store";
+import { useCareerProgression } from "@/hooks/use-career-progression";
+import { useActiveSession } from "@/hooks/use-active-session";
+import { useAuthUser, type CareerLevel } from "@/lib/auth-store";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 
 export const Route = createFileRoute("/app/")({
   component: Dashboard,
@@ -52,6 +57,12 @@ const kpiIcons = [
   <Activity className="size-4" key="f" />,
 ];
 
+const LEVEL_ICON: Record<CareerLevel, typeof Shield> = {
+  l1: Shield,
+  l2: Award,
+  senior: ShieldCheck,
+};
+
 function masteryTone(v: number) {
   if (v >= 85) return "var(--success)";
   if (v >= 70) return "var(--info)";
@@ -74,6 +85,11 @@ function Dashboard() {
   const { recommendation } = useLearningRecommendation();
   const { tracks } = useLearningOverview();
   const { certificates } = useCertificates();
+  const { data: career } = useCareerProgression();
+  const { activeSessions } = useActiveSession();
+  // Most recently started active investigation — the one thing worth resuming right now,
+  // rather than the generic "Resume investigation" link this replaces.
+  const priority = activeSessions[0];
 
   const recentCertificates = [...certificates]
     .filter((c) => !c.revoked)
@@ -102,6 +118,82 @@ function Dashboard() {
           </>
         }
       />
+
+      {/* Career status + priority investigation */}
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {career && (
+          <Link
+            to="/app/progress"
+            className="glass-card lg:col-span-1 flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-background/40"
+          >
+            {(() => {
+              const Icon = LEVEL_ICON[career.currentLevel];
+              return (
+                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[color:var(--info)]/10 text-[color:var(--info)]">
+                  <Icon className="size-4.5" />
+                </div>
+              );
+            })()}
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Career status
+              </div>
+              <div className="truncate text-[13.5px] font-semibold">{career.currentTitle}</div>
+              <div className="mt-0.5 truncate text-[11px] text-secondary">
+                {career.nextLevel
+                  ? `${career.nextLevel.requirements.filter((r) => r.met).length}/${career.nextLevel.requirements.length} toward ${career.nextLevel.title}`
+                  : "Top of the career ladder"}
+              </div>
+            </div>
+          </Link>
+        )}
+
+        <div className="glass-card lg:col-span-2 flex items-center gap-3 px-4 py-3.5">
+          {priority ? (
+            <>
+              <IconTile tone="warning" size="md">
+                <ShieldAlert className="size-4" />
+              </IconTile>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Priority investigation
+                </div>
+                <div className="truncate text-[13.5px] font-semibold">{priority.scenarioTitle}</div>
+                <div className="mt-0.5 text-[11px] text-secondary">
+                  Started {formatRelativeTime(priority.startedAt)} · still in progress
+                </div>
+              </div>
+              <Link
+                to="/app/cases/$id"
+                params={{ id: priority.id }}
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover"
+              >
+                Resume <ArrowUpRight className="size-3.5" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <IconTile size="md">
+                <PlayCircle className="size-4" />
+              </IconTile>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Priority investigation
+                </div>
+                <div className="text-[13px] text-secondary">
+                  Nothing in progress — launch a scenario to start one.
+                </div>
+              </div>
+              <Link
+                to="/app/scenarios"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12px] text-secondary hover:text-foreground"
+              >
+                Browse
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Training KPI grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">

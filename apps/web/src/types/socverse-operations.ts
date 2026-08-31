@@ -235,6 +235,31 @@ export interface NetworkEventDto {
   processGuid: string | null;
 }
 
+export type VulnerabilitySeverity = "low" | "medium" | "high" | "critical";
+export type VulnerabilityExposure = "internal" | "internet_facing";
+export type VulnerabilityExploitability =
+  | "no_known_exploit"
+  | "proof_of_concept"
+  | "actively_exploited";
+export type VulnerabilityStatus = "open" | "remediated" | "accepted_risk" | "false_positive";
+
+export interface VulnerabilityDto {
+  id: string;
+  category: string;
+  cve: string;
+  title: string;
+  cvssScore: number;
+  severity: VulnerabilitySeverity;
+  affectedAsset: string;
+  exposure: VulnerabilityExposure;
+  exploitability: VulnerabilityExploitability;
+  remediation: string;
+  status: VulnerabilityStatus;
+  statusNote: string | null;
+  discoveredAt: string;
+  resolvedAt: string | null;
+}
+
 export interface HttpRequestDto {
   id: string;
   occurredAt: string;

@@ -6,8 +6,12 @@ import { queryKeys } from "./query-keys";
 import type { SearchEntityType } from "@/types/socverse-investigation";
 import type { SearchCategory } from "@/types/search";
 
-const ENTITY_TYPE_META: Record<SearchEntityType, { label: string; icon: SearchCategory["icon"] }> =
-  {
+// Exported for reuse by Log Explorer, which needs the same entity-type labels/icons for its
+// own (structured, session-scoped) query results.
+export const ENTITY_TYPE_META: Record<
+  SearchEntityType,
+  { label: string; icon: SearchCategory["icon"] }
+> = {
     sign_in_event: { label: "Sign-ins", icon: UserRound },
     email_message: { label: "Emails", icon: Mail },
     cloud_event: { label: "Cloud", icon: Globe },

@@ -1,19 +1,25 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
 import { useLaunchScenario } from "@/hooks/use-investigations";
 import { ApiError } from "@/lib/api-client";
 import { Clock, Loader2, PlayCircle } from "lucide-react";
 
+type ScenarioLibSearch = { slug?: string };
+
 export const Route = createFileRoute("/app/scenarios")({
   component: ScenarioLib,
+  validateSearch: (search: Record<string, unknown>): ScenarioLibSearch => ({
+    slug: typeof search.slug === "string" ? search.slug : undefined,
+  }),
   head: () => ({ meta: [{ title: "ThreatLens · Scenario Library" }] }),
 });
 
 function ScenarioLib() {
   const navigate = useNavigate();
+  const { slug: highlightSlug } = Route.useSearch();
   const { data: scenarios, isPending } = useQuery({
     queryKey: ["scenarios"],
     queryFn: listRealScenarios,
@@ -21,6 +27,16 @@ function ScenarioLib() {
   const launch = useLaunchScenario();
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // A command-palette pick or any other deep link lands on the library scrolled to (and
+  // briefly highlighting) the actual scenario, instead of a bare navigate to the top of a
+  // list the Student then has to search again by eye.
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  useEffect(() => {
+    if (!highlightSlug) return;
+    const el = cardRefs.current.get(highlightSlug);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightSlug, scenarios]);
 
   async function handleLaunch(scenarioId: string) {
     setError(null);
@@ -60,7 +76,19 @@ function ScenarioLib() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {scenarios.map((s) => (
-            <Panel key={s.id}>
+            <div
+              key={s.id}
+              ref={(el) => {
+                if (el) cardRefs.current.set(s.slug, el);
+                else cardRefs.current.delete(s.slug);
+              }}
+              className={
+                highlightSlug === s.slug
+                  ? "rounded-xl ring-2 ring-[color:var(--info)] ring-offset-2 ring-offset-background transition-shadow"
+                  : undefined
+              }
+            >
+            <Panel>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="rounded border border-border bg-background px-1.5 py-0.5">
                   {s.category}
@@ -96,6 +124,7 @@ function ScenarioLib() {
                 )}
               </button>
             </Panel>
+            </div>
           ))}
         </div>
       )}

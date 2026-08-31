@@ -4,6 +4,7 @@ import { computeScore, ScoringInput } from './scorer';
 import { summarizeEvidenceRef } from '../../common/dto/evidence-summary';
 import { CertificatesService } from '../learning/certificates.service';
 import { AchievementsService } from '../achievements/achievements.service';
+import { CareerProgressionService } from '../career-progression/career-progression.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
@@ -39,6 +40,7 @@ export class ScoringService {
     private readonly prisma: PrismaService,
     private readonly certificatesService: CertificatesService,
     private readonly achievementsService: AchievementsService,
+    private readonly careerProgressionService: CareerProgressionService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -278,6 +280,7 @@ export class ScoringService {
       session.scenarioId,
     );
     await this.achievementsService.checkAndIssue(session.userId);
+    await this.careerProgressionService.checkAndPromote(session.userId);
     await this.notificationsService.create({
       userId: session.userId,
       category: 'score_available',

@@ -15,6 +15,7 @@ import { InvestigationModule } from './modules/investigation/investigation.modul
 import { IdentityPortalModule } from './modules/identity-portal/identity-portal.module';
 import { DevicePortalModule } from './modules/device-portal/device-portal.module';
 import { EmailPortalModule } from './modules/email-portal/email-portal.module';
+import { NetworkPortalModule } from './modules/network-portal/network-portal.module';
 import { ThreatIntelModule } from './modules/threat-intel/threat-intel.module';
 import { SearchModule } from './modules/search/search.module';
 import { MitreModule } from './modules/mitre/mitre.module';
@@ -33,6 +34,8 @@ import { AchievementsApiModule } from './modules/achievements/achievements-api.m
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
 import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
+import { VulnerabilityManagementModule } from './modules/vulnerability-management/vulnerability-management.module';
+import { CareerProgressionApiModule } from './modules/career-progression/career-progression-api.module';
 
 @Module({
   imports: [
@@ -51,6 +54,7 @@ import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-build
     IdentityPortalModule,
     DevicePortalModule,
     EmailPortalModule,
+    NetworkPortalModule,
     ThreatIntelModule,
     SearchModule,
     MitreModule,
@@ -69,6 +73,8 @@ import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-build
     NotificationsModule,
     NotificationsApiModule,
     ScenarioBuilderModule,
+    VulnerabilityManagementModule,
+    CareerProgressionApiModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

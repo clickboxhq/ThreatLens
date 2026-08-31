@@ -42,6 +42,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Archive,
+  Terminal,
+  Network as NetworkIcon,
+  Bug,
+  Waypoints,
+  TrendingUp,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -86,27 +91,28 @@ const workspace: NavItem[] = [
   { to: "/app/cases", label: "Case Management", icon: Inbox },
   { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
   { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
+  { to: "/app/graph", label: "Investigation Graph", icon: Waypoints },
   { to: "/app/closed", label: "Closed Alerts & Cases", icon: Archive },
 ];
 
-// INVESTIGATION CENTERS — the per-domain investigation surfaces. Network
-// Center, Log Explorer, and Vulnerability Management are added here as each
-// ships, rather than linking to a route that doesn't exist yet.
+// INVESTIGATION CENTERS — the per-domain investigation surfaces.
 const investigationCenters: NavItem[] = [
   { to: "/app/identity", label: "Identity Center", icon: UserRound },
   { to: "/app/endpoints", label: "Endpoint Center", icon: MonitorSmartphone },
+  { to: "/app/network", label: "Network Center", icon: NetworkIcon },
   { to: "/app/email", label: "Email Investigation", icon: Mail },
   { to: "/app/threat-intel", label: "Threat Intelligence", icon: Radar },
+  { to: "/app/vulnerabilities", label: "Vulnerability Management", icon: Bug },
   { to: "/app/search", label: "Global Search", icon: Search },
+  { to: "/app/logs", label: "Log Explorer", icon: Terminal },
 ];
 
-// LEARNING & PRACTICE — content, mastery, and (once built) career
-// progression. My Progress / SOC Career Progression are added once their
-// routes exist.
+// LEARNING & PRACTICE — content, mastery, and career progression.
 const learning: NavItem[] = [
   { to: "/app/scenarios", label: "Scenario Library", icon: Library },
   { to: "/app/learning", label: "Learning Center", icon: GraduationCap },
   { to: "/app/mitre", label: "MITRE ATT&CK Explorer", icon: Crosshair },
+  { to: "/app/progress", label: "My Progress", icon: TrendingUp },
   { to: "/app/achievements", label: "Achievements", icon: Medal },
   { to: "/app/certificates", label: "Certificates", icon: Award },
   { to: "/app/leaderboard", label: "Leaderboard", icon: Trophy },
@@ -508,16 +514,21 @@ const crumbMap: Record<string, string> = {
   "/app/incidents": "Incident Queue",
   "/app/cases": "Case Management",
   "/app/evidence": "Entity Locker",
+  "/app/graph": "Investigation Graph",
   "/app/closed": "Closed Alerts & Cases",
   "/app/timeline": "Global Timeline",
   "/app/identity": "Identity Center",
   "/app/endpoints": "Endpoint Center",
+  "/app/network": "Network Center",
   "/app/email": "Email Investigation",
   "/app/threat-intel": "Threat Intelligence",
+  "/app/vulnerabilities": "Vulnerability Management",
   "/app/search": "Global Search",
+  "/app/logs": "Log Explorer",
   "/app/scenarios": "Scenario Library",
   "/app/learning": "Learning Center",
   "/app/mitre": "MITRE ATT&CK Explorer",
+  "/app/progress": "My Progress",
   "/app/achievements": "Achievements",
   "/app/certificates": "Certificates",
   "/app/leaderboard": "Leaderboard",

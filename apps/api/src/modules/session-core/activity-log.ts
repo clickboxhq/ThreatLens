@@ -40,6 +40,7 @@ const ACTION_VERBS: Record<InvestigationActionType, string> = {
   revoke_tokens: 'Revoked tokens',
   block_ip: 'Blocked an IP address',
   view_threat_intel: 'Looked up an indicator',
+  update_vulnerability_status: 'Updated',
 };
 
 // Two naming conventions reach this map. view_entity records a singular entity name
@@ -63,6 +64,7 @@ const TARGET_NOUNS: Record<string, string> = {
   http_requests: 'web request',
   cloud_events: 'cloud action',
   directory_audit_events: 'directory change',
+  vulnerability: 'vulnerability finding',
 };
 
 export function summariseAction(

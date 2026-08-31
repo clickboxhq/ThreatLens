@@ -7,7 +7,9 @@ export type NotificationCategory =
   | "score_available"
   | "instructor_feedback"
   | "certificate_issued"
-  | "org_invitation";
+  | "org_invitation"
+  // Added alongside SOC Career Progression — see career-progression.service.ts.
+  | "career_milestone";
 
 export type Notification = {
   id: string;

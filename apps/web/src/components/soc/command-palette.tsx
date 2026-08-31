@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
+import { useActiveSession } from "@/hooks/use-active-session";
 import {
   LayoutGrid,
   ShieldAlert,
@@ -22,6 +23,17 @@ import {
   Settings as SettingsIcon,
   CircleUserRound,
   Search,
+  ListTree,
+  HardDrive,
+  Archive,
+  Network,
+  Bug,
+  Terminal,
+  Waypoints,
+  TrendingUp,
+  Medal,
+  Trophy,
+  PlayCircle,
 } from "lucide-react";
 
 const modules = [
@@ -29,14 +41,24 @@ const modules = [
   { to: "/app/cases", label: "Case Management", icon: Inbox },
   { to: "/app/alerts", label: "Alerts", icon: Bell },
   { to: "/app/incidents", label: "Incident Queue", icon: ShieldAlert },
+  { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
+  { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
+  { to: "/app/graph", label: "Investigation Graph", icon: Waypoints },
+  { to: "/app/closed", label: "Closed Alerts & Cases", icon: Archive },
   { to: "/app/identity", label: "Identity Center", icon: UserRound },
   { to: "/app/endpoints", label: "Endpoint Center", icon: MonitorSmartphone },
+  { to: "/app/network", label: "Network Center", icon: Network },
   { to: "/app/email", label: "Email Investigations", icon: Mail },
   { to: "/app/threat-intel", label: "Threat Intelligence", icon: Radar },
+  { to: "/app/vulnerabilities", label: "Vulnerability Management", icon: Bug },
   { to: "/app/search", label: "Global Search", icon: Search },
+  { to: "/app/logs", label: "Log Explorer", icon: Terminal },
   { to: "/app/scenarios", label: "Scenario Library", icon: Library },
   { to: "/app/learning", label: "Learning Center", icon: GraduationCap },
+  { to: "/app/progress", label: "My Progress", icon: TrendingUp },
+  { to: "/app/achievements", label: "Achievements", icon: Medal },
   { to: "/app/certificates", label: "Certificates", icon: Award },
+  { to: "/app/leaderboard", label: "Leaderboard", icon: Trophy },
   { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/instructor", label: "Instructor Portal", icon: Presentation },
@@ -60,6 +82,7 @@ export function CommandPalette({
     queryKey: ["scenarios", "command-palette"],
     queryFn: () => listRealScenarios(),
   });
+  const { activeSessions } = useActiveSession();
 
   useEffect(() => {
     if (!open) setQ("");
@@ -68,6 +91,16 @@ export function CommandPalette({
   const go = (to: string) => {
     onOpenChange(false);
     navigate({ to });
+  };
+
+  const goToScenario = (slug: string) => {
+    onOpenChange(false);
+    navigate({ to: "/app/scenarios", search: { slug } });
+  };
+
+  const goToCase = (sessionId: string) => {
+    onOpenChange(false);
+    navigate({ to: "/app/cases/$id", params: { id: sessionId } });
   };
 
   if (!open) return null;
@@ -100,6 +133,28 @@ export function CommandPalette({
               No results.
             </Command.Empty>
 
+            {activeSessions.length > 0 && (
+              <Command.Group
+                heading="Continue investigating"
+                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground"
+              >
+                {activeSessions.map((s) => (
+                  <Command.Item
+                    key={s.id}
+                    value={`continue ${s.scenarioTitle}`}
+                    onSelect={() => goToCase(s.id)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
+                  >
+                    <PlayCircle className="size-3.5 text-[color:var(--info)]" />
+                    <span className="truncate">{s.scenarioTitle}</span>
+                    <span className="ml-auto shrink-0 text-[10.5px] text-muted-foreground">
+                      In progress
+                    </span>
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+
             <Command.Group
               heading="Modules"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground"
@@ -128,7 +183,7 @@ export function CommandPalette({
                 <Command.Item
                   key={s.id}
                   value={`scenario ${s.slug} ${s.title} ${s.tacticCoverage.map((tc) => tc.tactic).join(" ")}`}
-                  onSelect={() => go("/app/scenarios")}
+                  onSelect={() => goToScenario(s.slug)}
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
                 >
                   <Library className="size-3.5 text-muted-foreground" />

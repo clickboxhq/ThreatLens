@@ -41,13 +41,17 @@ import { Route as AppClosedRouteImport } from './routes/app.closed'
 import { Route as AppCohortsRouteImport } from './routes/app.cohorts'
 import { Route as AppEvidenceRouteImport } from './routes/app.evidence'
 import { Route as AppFeedbackRouteImport } from './routes/app.feedback'
+import { Route as AppGraphRouteImport } from './routes/app.graph'
 import { Route as AppIncidentsRouteImport } from './routes/app.incidents'
 import { Route as AppInstructorRouteImport } from './routes/app.instructor'
 import { Route as AppLeaderboardRouteImport } from './routes/app.leaderboard'
 import { Route as AppLearningRouteImport } from './routes/app.learning'
+import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppMitreRouteImport } from './routes/app.mitre'
+import { Route as AppNetworkRouteImport } from './routes/app.network'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
+import { Route as AppProgressRouteImport } from './routes/app.progress'
 import { Route as AppScenarioBuilderRouteImport } from './routes/app.scenario-builder'
 import { Route as AppScenariosRouteImport } from './routes/app.scenarios'
 import { Route as AppSearchRouteImport } from './routes/app.search'
@@ -55,6 +59,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppStudentAnalyticsRouteImport } from './routes/app.student-analytics'
 import { Route as AppThreatIntelRouteImport } from './routes/app.threat-intel'
 import { Route as AppTimelineRouteImport } from './routes/app.timeline'
+import { Route as AppVulnerabilitiesRouteImport } from './routes/app.vulnerabilities'
 import { Route as ResetPasswordTokenRouteImport } from './routes/reset-password.$token'
 import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$token'
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
@@ -229,6 +234,11 @@ const AppFeedbackRoute = AppFeedbackRouteImport.update({
   path: '/feedback',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGraphRoute = AppGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppIncidentsRoute = AppIncidentsRouteImport.update({
   id: '/incidents',
   path: '/incidents',
@@ -249,9 +259,19 @@ const AppLearningRoute = AppLearningRouteImport.update({
   path: '/learning',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLogsRoute = AppLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMitreRoute = AppMitreRouteImport.update({
   id: '/mitre',
   path: '/mitre',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNetworkRoute = AppNetworkRouteImport.update({
+  id: '/network',
+  path: '/network',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
@@ -262,6 +282,11 @@ const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProgressRoute = AppProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
   getParentRoute: () => AppRoute,
 } as any)
 const AppScenarioBuilderRoute = AppScenarioBuilderRouteImport.update({
@@ -297,6 +322,11 @@ const AppThreatIntelRoute = AppThreatIntelRouteImport.update({
 const AppTimelineRoute = AppTimelineRouteImport.update({
   id: '/timeline',
   path: '/timeline',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVulnerabilitiesRoute = AppVulnerabilitiesRouteImport.update({
+  id: '/vulnerabilities',
+  path: '/vulnerabilities',
   getParentRoute: () => AppRoute,
 } as any)
 const ResetPasswordTokenRoute = ResetPasswordTokenRouteImport.update({
@@ -401,13 +431,17 @@ export interface FileRoutesByFullPath {
   '/app/cohorts': typeof AppCohortsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
+  '/app/graph': typeof AppGraphRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
   '/app/learning': typeof AppLearningRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
+  '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -415,6 +449,7 @@ export interface FileRoutesByFullPath {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -461,13 +496,17 @@ export interface FileRoutesByTo {
   '/app/cohorts': typeof AppCohortsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
+  '/app/graph': typeof AppGraphRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
   '/app/learning': typeof AppLearningRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
+  '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -475,6 +514,7 @@ export interface FileRoutesByTo {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -523,13 +563,17 @@ export interface FileRoutesById {
   '/app/cohorts': typeof AppCohortsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
+  '/app/graph': typeof AppGraphRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
   '/app/learning': typeof AppLearningRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
+  '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -537,6 +581,7 @@ export interface FileRoutesById {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -586,13 +631,17 @@ export interface FileRouteTypes {
     | '/app/cohorts'
     | '/app/evidence'
     | '/app/feedback'
+    | '/app/graph'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
     | '/app/learning'
+    | '/app/logs'
     | '/app/mitre'
+    | '/app/network'
     | '/app/organizations'
     | '/app/profile'
+    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -600,6 +649,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -646,13 +696,17 @@ export interface FileRouteTypes {
     | '/app/cohorts'
     | '/app/evidence'
     | '/app/feedback'
+    | '/app/graph'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
     | '/app/learning'
+    | '/app/logs'
     | '/app/mitre'
+    | '/app/network'
     | '/app/organizations'
     | '/app/profile'
+    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -660,6 +714,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -707,13 +762,17 @@ export interface FileRouteTypes {
     | '/app/cohorts'
     | '/app/evidence'
     | '/app/feedback'
+    | '/app/graph'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
     | '/app/learning'
+    | '/app/logs'
     | '/app/mitre'
+    | '/app/network'
     | '/app/organizations'
     | '/app/profile'
+    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -721,6 +780,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -989,6 +1049,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFeedbackRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/graph': {
+      id: '/app/graph'
+      path: '/graph'
+      fullPath: '/app/graph'
+      preLoaderRoute: typeof AppGraphRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/incidents': {
       id: '/app/incidents'
       path: '/incidents'
@@ -1017,11 +1084,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLearningRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/logs': {
+      id: '/app/logs'
+      path: '/logs'
+      fullPath: '/app/logs'
+      preLoaderRoute: typeof AppLogsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/mitre': {
       id: '/app/mitre'
       path: '/mitre'
       fullPath: '/app/mitre'
       preLoaderRoute: typeof AppMitreRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/network': {
+      id: '/app/network'
+      path: '/network'
+      fullPath: '/app/network'
+      preLoaderRoute: typeof AppNetworkRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/organizations': {
@@ -1036,6 +1117,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/app/profile'
       preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/progress': {
+      id: '/app/progress'
+      path: '/progress'
+      fullPath: '/app/progress'
+      preLoaderRoute: typeof AppProgressRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/scenario-builder': {
@@ -1085,6 +1173,13 @@ declare module '@tanstack/react-router' {
       path: '/timeline'
       fullPath: '/app/timeline'
       preLoaderRoute: typeof AppTimelineRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/vulnerabilities': {
+      id: '/app/vulnerabilities'
+      path: '/vulnerabilities'
+      fullPath: '/app/vulnerabilities'
+      preLoaderRoute: typeof AppVulnerabilitiesRouteImport
       parentRoute: typeof AppRoute
     }
     '/reset-password/$token': {
@@ -1193,13 +1288,17 @@ interface AppRouteChildren {
   AppCohortsRoute: typeof AppCohortsRoute
   AppEvidenceRoute: typeof AppEvidenceRoute
   AppFeedbackRoute: typeof AppFeedbackRoute
+  AppGraphRoute: typeof AppGraphRoute
   AppIncidentsRoute: typeof AppIncidentsRoute
   AppInstructorRoute: typeof AppInstructorRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
   AppLearningRoute: typeof AppLearningRoute
+  AppLogsRoute: typeof AppLogsRoute
   AppMitreRoute: typeof AppMitreRoute
+  AppNetworkRoute: typeof AppNetworkRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppProgressRoute: typeof AppProgressRoute
   AppScenarioBuilderRoute: typeof AppScenarioBuilderRoute
   AppScenariosRoute: typeof AppScenariosRoute
   AppSearchRoute: typeof AppSearchRoute
@@ -1207,6 +1306,7 @@ interface AppRouteChildren {
   AppStudentAnalyticsRoute: typeof AppStudentAnalyticsRoute
   AppThreatIntelRoute: typeof AppThreatIntelRoute
   AppTimelineRoute: typeof AppTimelineRoute
+  AppVulnerabilitiesRoute: typeof AppVulnerabilitiesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCasesIdRoute: typeof AppCasesIdRoute
   AppCasesIndexRoute: typeof AppCasesIndexRoute
@@ -1232,13 +1332,17 @@ const AppRouteChildren: AppRouteChildren = {
   AppCohortsRoute: AppCohortsRoute,
   AppEvidenceRoute: AppEvidenceRoute,
   AppFeedbackRoute: AppFeedbackRoute,
+  AppGraphRoute: AppGraphRoute,
   AppIncidentsRoute: AppIncidentsRoute,
   AppInstructorRoute: AppInstructorRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
   AppLearningRoute: AppLearningRoute,
+  AppLogsRoute: AppLogsRoute,
   AppMitreRoute: AppMitreRoute,
+  AppNetworkRoute: AppNetworkRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
+  AppProgressRoute: AppProgressRoute,
   AppScenarioBuilderRoute: AppScenarioBuilderRoute,
   AppScenariosRoute: AppScenariosRoute,
   AppSearchRoute: AppSearchRoute,
@@ -1246,6 +1350,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppStudentAnalyticsRoute: AppStudentAnalyticsRoute,
   AppThreatIntelRoute: AppThreatIntelRoute,
   AppTimelineRoute: AppTimelineRoute,
+  AppVulnerabilitiesRoute: AppVulnerabilitiesRoute,
   AppIndexRoute: AppIndexRoute,
   AppCasesIdRoute: AppCasesIdRoute,
   AppCasesIndexRoute: AppCasesIndexRoute,
