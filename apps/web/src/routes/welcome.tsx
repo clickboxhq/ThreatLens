@@ -89,7 +89,7 @@ function useOnboardingStep() {
 function WelcomePage() {
   const navigate = useNavigate();
   const user = useAuthUser();
-  const onboarding = OnboardingStep();
+  const onboarding = useOnboardingStep();
 
   // Only signup.tsx ever links here, right after a fresh signup — nothing else in the app
   // navigates to /welcome, so there's no "returning user" case to guard against beyond someone

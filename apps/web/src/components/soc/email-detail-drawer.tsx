@@ -17,6 +17,7 @@ import {
 import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
 import { EntityDrawerShell } from "@/components/soc/entity-drawer-shell";
+import { PivotableValue } from "@/components/soc/ui/pivotable-value";
 import type { EmailMessageDto } from "@/types/socverse-operations";
 
 type Tab = "message" | "headers" | "recipients" | "links";
@@ -199,7 +200,11 @@ function MessageTab({
 
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-[11.5px]">
         <span className="text-muted-foreground">Sending domain:</span>
-        <span className="font-mono">{email.senderAddress.split("@")[1]}</span>
+        <PivotableValue
+          value={email.senderAddress.split("@")[1]}
+          type="domain"
+          className="font-mono text-[11.5px] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+        />
         <span className="text-muted-foreground">·</span>
         {(() => {
           if (!email.senderDomainRegisteredAt) {
@@ -245,9 +250,12 @@ function MessageTab({
               <li key={a.id} className="flex items-center gap-2 px-3 py-2 text-[12px]">
                 <Paperclip className="size-3.5 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate">{a.filename}</span>
-                <span className="font-mono text-[10.5px] text-muted-foreground">
-                  {a.hashSha256.slice(0, 12)}…
-                </span>
+                <PivotableValue
+                  value={a.hashSha256}
+                  display={`${a.hashSha256.slice(0, 12)}…`}
+                  type="hash"
+                  className="font-mono text-[10.5px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                />
                 <span
                   className={`text-[11px] ${REPUTATION_TONE[a.sandboxVerdict] ?? "text-muted-foreground"}`}
                 >
@@ -269,7 +277,13 @@ function MessageTab({
               <li key={u.id} className="px-3 py-2 text-[12px]">
                 <div className="flex items-center gap-2">
                   <LinkIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">{u.url}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    <PivotableValue
+                      value={u.url}
+                      type="url"
+                      className="font-mono text-[11.5px] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                    />
+                  </span>
                   <span
                     className={`shrink-0 text-[11px] ${REPUTATION_TONE[u.reputation] ?? "text-muted-foreground"}`}
                   >

@@ -21,6 +21,7 @@ import { ApiError } from "@/lib/api-client";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
 import { useIdentities } from "@/hooks/use-identities";
 import { useEndpoints } from "@/hooks/use-endpoints";
+import { useAuthUser, type CareerLevel } from "@/lib/auth-store";
 import {
   RESPONSE_ACTION_TYPES,
   type IncidentVerdict,
@@ -262,6 +263,16 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     lookupThreatIntel,
     lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
+
+  // Guided vs. independent investigation mode, driven by the analyst's own SOC career level
+  // (defaults to l1/full guidance for everyone until the career-progression system computes
+  // real promotions — see investigation-checklist.tsx's GuidanceLevel doc comment).
+  const authUser = useAuthUser();
+  const guidanceLevel: "full" | "reduced" | "independent" =
+    ({ l1: "full", l2: "reduced", senior: "independent" } satisfies Record<
+      CareerLevel,
+      "full" | "reduced" | "independent"
+    >)[authUser?.careerLevel ?? "l1"];
 
   const [pendingRemoveEvidenceId, setPendingRemoveEvidenceId] = useState<string | null>(null);
   const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
@@ -797,7 +808,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           {/* Hints */}
           <ActivityLogPanel sessionId={sessionId} />
 
-          <InvestigationChecklist sessionId={sessionId} incidentId={incident?.id} locked={locked} />
+          <InvestigationChecklist
+            sessionId={sessionId}
+            incidentId={incident?.id}
+            locked={locked}
+            guidance={guidanceLevel}
+          />
 
           <Panel title="Hints">
             <p className="text-[11.5px] text-secondary">

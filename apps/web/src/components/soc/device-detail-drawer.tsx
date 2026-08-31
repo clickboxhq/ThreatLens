@@ -16,6 +16,7 @@ import {
 } from "@/components/soc/entity-drawer-shell";
 import { ChevronRight, Loader2, ShieldOff } from "lucide-react";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
+import { PivotableValue } from "@/components/soc/ui/pivotable-value";
 import type { ProcessTreeNodeDto } from "@/types/socverse-operations";
 
 type Tab = "profile" | "processes" | "files" | "network" | "web";
@@ -297,7 +298,7 @@ function NetworkTab({ sessionId, deviceId }: { sessionId: string; deviceId: stri
           {top.map(([ip, s]) => (
             <EventRow
               key={ip}
-              title={ip}
+              title={<PivotableValue value={ip} type="ip" />}
               meta={`${s.count} connection${s.count === 1 ? "" : "s"} · ${formatBytes(s.sent)} sent · ${formatBytes(s.received)} received`}
             />
           ))}
@@ -311,7 +312,17 @@ function NetworkTab({ sessionId, deviceId }: { sessionId: string; deviceId: stri
           {events.map((e) => (
             <EventRow
               key={e.id}
-              title={`${e.direction} ${e.protocol} → ${e.remoteIp}:${e.remotePort}`}
+              title={
+                <span>
+                  {e.direction} {e.protocol} →{" "}
+                  <PivotableValue
+                    value={e.remoteIp}
+                    type="ip"
+                    className="font-mono text-[12px] font-medium underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                  />
+                  :{e.remotePort}
+                </span>
+              }
               meta={`${formatEventTime(e.occurredAt)} · ${formatBytes(e.bytesSent)} sent · ${formatBytes(e.bytesReceived)} received`}
             />
           ))}

@@ -15,6 +15,7 @@ import {
 } from "@/components/soc/entity-drawer-shell";
 import { Loader2 } from "lucide-react";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
+import { PivotableValue } from "@/components/soc/ui/pivotable-value";
 
 type Tab = "profile" | "signins" | "audit" | "cloud";
 
@@ -230,7 +231,7 @@ function SignInsTab({ sessionId, identityId }: { sessionId: string; identityId: 
               ["When", new Date(s.occurredAt).toUTCString()],
               ["Result", s.result],
               ["Location", `${s.sourceCity}, ${s.sourceCountry}`],
-              ["Source IP", s.sourceIp],
+              ["Source IP", <PivotableValue value={s.sourceIp} type="ip" />],
               ["Application", s.application],
               ["Client app", s.clientApp],
               ["Legacy auth", s.isLegacyAuth ? "Yes — bypasses modern auth policy" : "No"],
@@ -336,7 +337,7 @@ function AuditTab({ sessionId, identityId }: { sessionId: string; identityId: st
                 e.actorIdentityId === identityId ? "Yes — self-service" : "No",
               ],
               ["Result", e.result],
-              ["Source IP", e.sourceIp],
+              ["Source IP", <PivotableValue value={e.sourceIp} type="ip" />],
               ["Detail", e.detail ? JSON.stringify(e.detail) : "—"],
               ["Event ID", e.id],
             ]}

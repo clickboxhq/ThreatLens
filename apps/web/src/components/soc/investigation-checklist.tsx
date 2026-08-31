@@ -12,24 +12,56 @@ import { Check, ChevronDown, ChevronRight, ListChecks } from "lucide-react";
  * checkmarks rather than the investigation. It is a place to keep your method honest, and
  * the copy says so.
  */
+/**
+ * Guidance level, driven by the analyst's own SOC career level (User.careerLevel — l1 by
+ * default until the career-progression system computes real promotions):
+ * - "full" (SOC Level 1): checklist open by default — the brief's "suggested investigation
+ *   areas" for beginners, backed by real per-task persistence rather than static copy.
+ * - "reduced" (SOC Level 2): same checklist, collapsed by default — available, not pushed.
+ * - "independent" (Senior): hidden entirely — a senior analyst works from the evidence, not
+ *   a procedure list.
+ */
+export type GuidanceLevel = "full" | "reduced" | "independent";
+
 export function InvestigationChecklist({
   sessionId,
   incidentId,
   locked,
+  guidance = "full",
 }: {
   sessionId: string | undefined;
   incidentId: string | undefined;
   locked: boolean;
+  guidance?: GuidanceLevel;
 }) {
   const { tasks, completedCount, totalCount, isPending, toggleTask } = useInvestigationTasks(
     sessionId,
     incidentId,
   );
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(guidance === "reduced");
 
-  if (isPending || totalCount === 0) return null;
+  if (isPending || totalCount === 0 || guidance === "independent") return null;
 
   const pct = Math.round((completedCount / totalCount) * 100);
+
+  if (collapsed) {
+    return (
+      <Panel>
+        <button
+          onClick={() => setCollapsed(false)}
+          className="flex w-full items-center gap-2.5 text-left"
+        >
+          <ListChecks className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-[12.5px] font-medium">Investigation checklist</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {completedCount}/{totalCount}
+          </span>
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </button>
+      </Panel>
+    );
+  }
 
   return (
     <Panel

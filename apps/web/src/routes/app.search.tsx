@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { useSearch } from "@/hooks/use-search";
-import { Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import type { GlobalSearchResult } from "@/types/search";
 
 export const Route = createFileRoute("/app/search")({
   component: SearchPage,
@@ -53,37 +55,107 @@ function SearchPage() {
       </Panel>
 
       <div className="mt-6 space-y-4">
-        <Panel title={query ? `Results for "${query}"` : "Recent across your investigations"}>
-          {isPending ? (
+        {isPending ? (
+          <Panel>
             <p className="py-6 text-center text-[12px] text-muted-foreground">Searching…</p>
-          ) : results.length === 0 ? (
+          </Panel>
+        ) : results.length === 0 ? (
+          <Panel>
             <p className="py-6 text-center text-[12px] text-muted-foreground">
               No matches. Try a different term, or clear the category filter.
             </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {results.slice(0, 50).map((r, i) => (
-                <li key={i} className="flex items-center gap-3 py-3">
-                  <IconTile size="md">
-                    <Search className="size-3.5" />
-                  </IconTile>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium">{r.title}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">{r.meta}</div>
-                  </div>
-                  <Link
-                    to="/app/cases/$id"
-                    params={{ id: r.sessionId }}
-                    className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground"
-                  >
-                    Open
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+          </Panel>
+        ) : (
+          <ResultsByInvestigation results={results} query={query} />
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Groups flat results by the investigation they came from — "Related Investigations, N
+ * results" per investigation, rather than one long undifferentiated list. A search result on
+ * its own ("Sign-in from 45.86.x.x") means little without knowing which case it's part of.
+ */
+function ResultsByInvestigation({
+  results,
+  query,
+}: {
+  results: GlobalSearchResult[];
+  query: string;
+}) {
+  const groups = useMemo(() => {
+    const bySession = new Map<string, { scenarioTitle: string; items: GlobalSearchResult[] }>();
+    for (const r of results) {
+      const g = bySession.get(r.sessionId);
+      if (g) g.items.push(r);
+      else bySession.set(r.sessionId, { scenarioTitle: r.scenarioTitle, items: [r] });
+    }
+    return [...bySession.entries()].sort((a, b) => b[1].items.length - a[1].items.length);
+  }, [results]);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (sessionId: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+
+  return (
+    <>
+      {query && (
+        <p className="text-[11px] text-muted-foreground">
+          {results.length} result{results.length === 1 ? "" : "s"} across {groups.length}{" "}
+          investigation{groups.length === 1 ? "" : "s"}
+        </p>
+      )}
+      {groups.map(([sessionId, group]) => {
+        const isCollapsed = collapsed.has(sessionId);
+        return (
+          <Panel key={sessionId} padded={false}>
+            <button
+              onClick={() => toggle(sessionId)}
+              className="flex w-full items-center gap-2 border-b border-border px-4 py-2.5 text-left hover:bg-background/40"
+            >
+              {isCollapsed ? (
+                <ChevronRight className="size-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              )}
+              <span className="flex-1 text-[12.5px] font-medium">{group.scenarioTitle}</span>
+              <span className="rounded bg-card px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                {group.items.length} result{group.items.length === 1 ? "" : "s"}
+              </span>
+              <Link
+                to="/app/cases/$id"
+                params={{ id: sessionId }}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground"
+              >
+                Open
+              </Link>
+            </button>
+            {!isCollapsed && (
+              <ul className="divide-y divide-border">
+                {group.items.slice(0, 20).map((r, i) => (
+                  <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <IconTile size="sm">
+                      <Search className="size-3" />
+                    </IconTile>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12.5px] font-medium">{r.title}</div>
+                      <div className="truncate text-[10.5px] text-muted-foreground">{r.meta}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        );
+      })}
+    </>
   );
 }
