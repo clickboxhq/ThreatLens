@@ -47,17 +47,27 @@ export class CohortsService {
   }
 
   async listMyAssignments(user: AuthenticatedUser) {
-    const cohortIds = (
-      await this.prisma.cohortEnrollment.findMany({
-        where: { userId: user.id, status: 'active' },
-        select: { cohortId: true },
-      })
-    ).map((e) => e.cohortId);
+    const enrollments = await this.prisma.cohortEnrollment.findMany({
+      where: { userId: user.id, status: 'active' },
+      select: { cohortId: true, groupId: true },
+    });
+    const cohortIds = enrollments.map((e) => e.cohortId);
 
     if (cohortIds.length === 0) return [];
 
+    // Their own groups, across every cohort they are in. A group belongs to exactly one
+    // cohort, so these cannot collide between cohorts.
+    const myGroupIds = enrollments
+      .map((e) => e.groupId)
+      .filter((g): g is string => g !== null);
+
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
-      where: { cohortId: { in: cohortIds } },
+      where: {
+        cohortId: { in: cohortIds },
+        // Cohort-wide work, plus work set for a group this student is actually in. Without
+        // this a student would see — and could launch — assignments meant for another group.
+        OR: [{ groupId: null }, { groupId: { in: myGroupIds } }],
+      },
       include: { scenario: true, cohort: true },
       orderBy: { createdAt: 'desc' },
     });

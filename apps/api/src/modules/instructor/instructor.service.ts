@@ -109,9 +109,39 @@ export class InstructorService {
         'Scenario not found or not published.',
       );
     }
+    // A group_tutor may only assign into their own groups, and may not assign cohort-wide.
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'tutor',
+    );
+    if (access.groupScoped) {
+      if (!dto.groupId) {
+        throw new AppException(
+          403,
+          'FORBIDDEN',
+          'You can only assign work to a group you run, not to the whole cohort.',
+        );
+      }
+      if (!access.groupIds.includes(dto.groupId)) {
+        throw new AppException(
+          403,
+          'FORBIDDEN',
+          'You can only assign work to groups you run.',
+        );
+      }
+    }
+    if (dto.groupId) {
+      const group = await this.prisma.cohortGroup.findFirst({
+        where: { id: dto.groupId, cohortId },
+      });
+      if (!group) throw new AppException(404, 'NOT_FOUND', 'Group not found.');
+    }
+
     const assignment = await this.prisma.cohortScenarioAssignment.create({
       data: {
         cohortId,
+        groupId: dto.groupId ?? null,
         scenarioId: dto.scenarioId,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
         attemptLimit: dto.attemptLimit,
@@ -119,8 +149,14 @@ export class InstructorService {
       },
     });
 
+    // Notify only the people the assignment applies to — a group-scoped assignment landing in
+    // every student's notifications would tell them about work that is not theirs.
     const roster = await this.prisma.cohortEnrollment.findMany({
-      where: { cohortId, status: 'active' },
+      where: {
+        cohortId,
+        status: 'active',
+        ...(dto.groupId ? { groupId: dto.groupId } : {}),
+      },
       select: { userId: true },
     });
     await Promise.all(
