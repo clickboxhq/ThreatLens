@@ -10,8 +10,27 @@ export interface RealScenario {
   category: string;
   difficulty: string;
   estimatedMinutes: number;
-  /** MITRE technique IDs (e.g. "T1078") this scenario's kill chain actually exercises. */
-  techniqueIds: string[];
+}
+
+/** GET /scenarios/recommended — the scenario best covering the learner's weakest tactic.
+ *
+ * The matching runs server-side deliberately. It has to read each scenario's required
+ * techniques to rank candidates, and that list is the scoring answer key — so it must never
+ * reach the browser. This response names the tactic being worked on, which is the useful
+ * *reason*, and no techniques. */
+export interface ScenarioRecommendation {
+  scenarioId: string;
+  scenarioSlug: string;
+  scenarioTitle: string;
+  tactic: string;
+  tacticName: string;
+  percent: number;
+  hitCount: number;
+  requiredCount: number;
+}
+
+export function getRecommendedScenario(): Promise<ScenarioRecommendation | null> {
+  return apiClient.get<ScenarioRecommendation | null>("/scenarios/recommended");
 }
 
 export function listRealScenarios(): Promise<RealScenario[]> {

@@ -127,7 +127,7 @@ export function CommandPalette({
               {scenarios.map((s) => (
                 <Command.Item
                   key={s.id}
-                  value={`scenario ${s.slug} ${s.title} ${s.techniqueIds.join(" ")}`}
+                  value={`scenario ${s.slug} ${s.title} ${s.category}`}
                   onSelect={() => go("/app/scenarios")}
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] data-[selected=true]:bg-[color:var(--info)]/15"
                 >
