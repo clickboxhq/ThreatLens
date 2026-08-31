@@ -46,11 +46,19 @@ export function DeviceDetailDrawer({
   deviceId,
   onClose,
   locked,
+  variant = "drawer",
+  backTo,
+  backLabel,
+  quickPreviewLinkTo,
 }: {
   sessionId: string;
   deviceId: string;
-  onClose: () => void;
+  onClose?: () => void;
   locked?: boolean;
+  variant?: "drawer" | "page";
+  backTo?: string;
+  backLabel?: string;
+  quickPreviewLinkTo?: string;
 }) {
   const [tab, setTab] = useState<Tab>("processes");
   const { data: device, isPending } = useDeviceProfile(sessionId, deviceId);
@@ -68,6 +76,26 @@ export function DeviceDetailDrawer({
       activeTab={tab}
       onTabChange={setTab}
       onClose={onClose}
+      variant={variant}
+      backTo={backTo}
+      backLabel={backLabel}
+      quickPreviewLinkTo={quickPreviewLinkTo}
+      headerBadges={
+        device && (
+          <>
+            <span
+              className={`rounded border border-border px-1.5 py-0.5 text-[10px] ${RISK_TONE[device.riskLevel] ?? ""}`}
+            >
+              Risk: {device.riskLevel}
+            </span>
+            {isolated && (
+              <span className="rounded border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--critical)]">
+                Isolated
+              </span>
+            )}
+          </>
+        )
+      }
       footer={
         device && (
           <div className="flex items-center gap-3">

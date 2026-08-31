@@ -38,11 +38,8 @@ import { Route as AppAuditLogsRouteImport } from './routes/app.audit-logs'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppCertificatesRouteImport } from './routes/app.certificates'
 import { Route as AppCohortsRouteImport } from './routes/app.cohorts'
-import { Route as AppEmailRouteImport } from './routes/app.email'
-import { Route as AppEndpointsRouteImport } from './routes/app.endpoints'
 import { Route as AppEvidenceRouteImport } from './routes/app.evidence'
 import { Route as AppFeedbackRouteImport } from './routes/app.feedback'
-import { Route as AppIdentityRouteImport } from './routes/app.identity'
 import { Route as AppIncidentsRouteImport } from './routes/app.incidents'
 import { Route as AppInstructorRouteImport } from './routes/app.instructor'
 import { Route as AppLeaderboardRouteImport } from './routes/app.leaderboard'
@@ -62,7 +59,13 @@ import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$tok
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
 import { Route as AppCasesIndexRouteImport } from './routes/app.cases.index'
 import { Route as AppCasesIdRouteImport } from './routes/app.cases.$id'
+import { Route as AppEmailIndexRouteImport } from './routes/app.email.index'
+import { Route as AppEndpointsIndexRouteImport } from './routes/app.endpoints.index'
+import { Route as AppIdentityIndexRouteImport } from './routes/app.identity.index'
 import { Route as AppReportsIndexRouteImport } from './routes/app.reports.index'
+import { Route as AppEmailSessionIdMessageIdRouteImport } from './routes/app.email.$sessionId.$messageId'
+import { Route as AppEndpointsSessionIdDeviceIdRouteImport } from './routes/app.endpoints.$sessionId.$deviceId'
+import { Route as AppIdentitySessionIdIdentityIdRouteImport } from './routes/app.identity.$sessionId.$identityId'
 import { Route as AppReportsSessionIdIncidentIdRouteImport } from './routes/app.reports.$sessionId.$incidentId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -210,16 +213,6 @@ const AppCohortsRoute = AppCohortsRouteImport.update({
   path: '/cohorts',
   getParentRoute: () => AppRoute,
 } as any)
-const AppEmailRoute = AppEmailRouteImport.update({
-  id: '/email',
-  path: '/email',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEndpointsRoute = AppEndpointsRouteImport.update({
-  id: '/endpoints',
-  path: '/endpoints',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppEvidenceRoute = AppEvidenceRouteImport.update({
   id: '/evidence',
   path: '/evidence',
@@ -228,11 +221,6 @@ const AppEvidenceRoute = AppEvidenceRouteImport.update({
 const AppFeedbackRoute = AppFeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppIdentityRoute = AppIdentityRouteImport.update({
-  id: '/identity',
-  path: '/identity',
   getParentRoute: () => AppRoute,
 } as any)
 const AppIncidentsRoute = AppIncidentsRouteImport.update({
@@ -330,11 +318,44 @@ const AppCasesIdRoute = AppCasesIdRouteImport.update({
   path: '/cases/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEmailIndexRoute = AppEmailIndexRouteImport.update({
+  id: '/email/',
+  path: '/email/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEndpointsIndexRoute = AppEndpointsIndexRouteImport.update({
+  id: '/endpoints/',
+  path: '/endpoints/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIdentityIndexRoute = AppIdentityIndexRouteImport.update({
+  id: '/identity/',
+  path: '/identity/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppReportsIndexRoute = AppReportsIndexRouteImport.update({
   id: '/reports/',
   path: '/reports/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEmailSessionIdMessageIdRoute =
+  AppEmailSessionIdMessageIdRouteImport.update({
+    id: '/email/$sessionId/$messageId',
+    path: '/email/$sessionId/$messageId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppEndpointsSessionIdDeviceIdRoute =
+  AppEndpointsSessionIdDeviceIdRouteImport.update({
+    id: '/endpoints/$sessionId/$deviceId',
+    path: '/endpoints/$sessionId/$deviceId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppIdentitySessionIdIdentityIdRoute =
+  AppIdentitySessionIdIdentityIdRouteImport.update({
+    id: '/identity/$sessionId/$identityId',
+    path: '/identity/$sessionId/$identityId',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppReportsSessionIdIncidentIdRoute =
   AppReportsSessionIdIncidentIdRouteImport.update({
     id: '/reports/$sessionId/$incidentId',
@@ -371,11 +392,8 @@ export interface FileRoutesByFullPath {
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRoute
   '/app/cohorts': typeof AppCohortsRoute
-  '/app/email': typeof AppEmailRoute
-  '/app/endpoints': typeof AppEndpointsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
-  '/app/identity': typeof AppIdentityRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
@@ -396,7 +414,13 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases/': typeof AppCasesIndexRoute
+  '/app/email/': typeof AppEmailIndexRoute
+  '/app/endpoints/': typeof AppEndpointsIndexRoute
+  '/app/identity/': typeof AppIdentityIndexRoute
   '/app/reports/': typeof AppReportsIndexRoute
+  '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
+  '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
+  '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRoutesByTo {
@@ -427,11 +451,8 @@ export interface FileRoutesByTo {
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRoute
   '/app/cohorts': typeof AppCohortsRoute
-  '/app/email': typeof AppEmailRoute
-  '/app/endpoints': typeof AppEndpointsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
-  '/app/identity': typeof AppIdentityRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
@@ -452,7 +473,13 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases': typeof AppCasesIndexRoute
+  '/app/email': typeof AppEmailIndexRoute
+  '/app/endpoints': typeof AppEndpointsIndexRoute
+  '/app/identity': typeof AppIdentityIndexRoute
   '/app/reports': typeof AppReportsIndexRoute
+  '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
+  '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
+  '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRoutesById {
@@ -485,11 +512,8 @@ export interface FileRoutesById {
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRoute
   '/app/cohorts': typeof AppCohortsRoute
-  '/app/email': typeof AppEmailRoute
-  '/app/endpoints': typeof AppEndpointsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
-  '/app/identity': typeof AppIdentityRoute
   '/app/incidents': typeof AppIncidentsRoute
   '/app/instructor': typeof AppInstructorRoute
   '/app/leaderboard': typeof AppLeaderboardRoute
@@ -510,7 +534,13 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/cases/$id': typeof AppCasesIdRoute
   '/app/cases/': typeof AppCasesIndexRoute
+  '/app/email/': typeof AppEmailIndexRoute
+  '/app/endpoints/': typeof AppEndpointsIndexRoute
+  '/app/identity/': typeof AppIdentityIndexRoute
   '/app/reports/': typeof AppReportsIndexRoute
+  '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
+  '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
+  '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
 }
 export interface FileRouteTypes {
@@ -544,11 +574,8 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/certificates'
     | '/app/cohorts'
-    | '/app/email'
-    | '/app/endpoints'
     | '/app/evidence'
     | '/app/feedback'
-    | '/app/identity'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
@@ -569,7 +596,13 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/cases/$id'
     | '/app/cases/'
+    | '/app/email/'
+    | '/app/endpoints/'
+    | '/app/identity/'
     | '/app/reports/'
+    | '/app/email/$sessionId/$messageId'
+    | '/app/endpoints/$sessionId/$deviceId'
+    | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -600,11 +633,8 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/certificates'
     | '/app/cohorts'
-    | '/app/email'
-    | '/app/endpoints'
     | '/app/evidence'
     | '/app/feedback'
-    | '/app/identity'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
@@ -625,7 +655,13 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/cases/$id'
     | '/app/cases'
+    | '/app/email'
+    | '/app/endpoints'
+    | '/app/identity'
     | '/app/reports'
+    | '/app/email/$sessionId/$messageId'
+    | '/app/endpoints/$sessionId/$deviceId'
+    | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
   id:
     | '__root__'
@@ -657,11 +693,8 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/certificates'
     | '/app/cohorts'
-    | '/app/email'
-    | '/app/endpoints'
     | '/app/evidence'
     | '/app/feedback'
-    | '/app/identity'
     | '/app/incidents'
     | '/app/instructor'
     | '/app/leaderboard'
@@ -682,7 +715,13 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/cases/$id'
     | '/app/cases/'
+    | '/app/email/'
+    | '/app/endpoints/'
+    | '/app/identity/'
     | '/app/reports/'
+    | '/app/email/$sessionId/$messageId'
+    | '/app/endpoints/$sessionId/$deviceId'
+    | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
   fileRoutesById: FileRoutesById
 }
@@ -917,20 +956,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCohortsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/email': {
-      id: '/app/email'
-      path: '/email'
-      fullPath: '/app/email'
-      preLoaderRoute: typeof AppEmailRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/endpoints': {
-      id: '/app/endpoints'
-      path: '/endpoints'
-      fullPath: '/app/endpoints'
-      preLoaderRoute: typeof AppEndpointsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/app/evidence': {
       id: '/app/evidence'
       path: '/evidence'
@@ -943,13 +968,6 @@ declare module '@tanstack/react-router' {
       path: '/feedback'
       fullPath: '/app/feedback'
       preLoaderRoute: typeof AppFeedbackRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/identity': {
-      id: '/app/identity'
-      path: '/identity'
-      fullPath: '/app/identity'
-      preLoaderRoute: typeof AppIdentityRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/incidents': {
@@ -1085,11 +1103,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCasesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/email/': {
+      id: '/app/email/'
+      path: '/email'
+      fullPath: '/app/email/'
+      preLoaderRoute: typeof AppEmailIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/endpoints/': {
+      id: '/app/endpoints/'
+      path: '/endpoints'
+      fullPath: '/app/endpoints/'
+      preLoaderRoute: typeof AppEndpointsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/identity/': {
+      id: '/app/identity/'
+      path: '/identity'
+      fullPath: '/app/identity/'
+      preLoaderRoute: typeof AppIdentityIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/reports/': {
       id: '/app/reports/'
       path: '/reports'
       fullPath: '/app/reports/'
       preLoaderRoute: typeof AppReportsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/email/$sessionId/$messageId': {
+      id: '/app/email/$sessionId/$messageId'
+      path: '/email/$sessionId/$messageId'
+      fullPath: '/app/email/$sessionId/$messageId'
+      preLoaderRoute: typeof AppEmailSessionIdMessageIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/endpoints/$sessionId/$deviceId': {
+      id: '/app/endpoints/$sessionId/$deviceId'
+      path: '/endpoints/$sessionId/$deviceId'
+      fullPath: '/app/endpoints/$sessionId/$deviceId'
+      preLoaderRoute: typeof AppEndpointsSessionIdDeviceIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/identity/$sessionId/$identityId': {
+      id: '/app/identity/$sessionId/$identityId'
+      path: '/identity/$sessionId/$identityId'
+      fullPath: '/app/identity/$sessionId/$identityId'
+      preLoaderRoute: typeof AppIdentitySessionIdIdentityIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/reports/$sessionId/$incidentId': {
@@ -1111,11 +1171,8 @@ interface AppRouteChildren {
   AppBillingRoute: typeof AppBillingRoute
   AppCertificatesRoute: typeof AppCertificatesRoute
   AppCohortsRoute: typeof AppCohortsRoute
-  AppEmailRoute: typeof AppEmailRoute
-  AppEndpointsRoute: typeof AppEndpointsRoute
   AppEvidenceRoute: typeof AppEvidenceRoute
   AppFeedbackRoute: typeof AppFeedbackRoute
-  AppIdentityRoute: typeof AppIdentityRoute
   AppIncidentsRoute: typeof AppIncidentsRoute
   AppInstructorRoute: typeof AppInstructorRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
@@ -1133,7 +1190,13 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppCasesIdRoute: typeof AppCasesIdRoute
   AppCasesIndexRoute: typeof AppCasesIndexRoute
+  AppEmailIndexRoute: typeof AppEmailIndexRoute
+  AppEndpointsIndexRoute: typeof AppEndpointsIndexRoute
+  AppIdentityIndexRoute: typeof AppIdentityIndexRoute
   AppReportsIndexRoute: typeof AppReportsIndexRoute
+  AppEmailSessionIdMessageIdRoute: typeof AppEmailSessionIdMessageIdRoute
+  AppEndpointsSessionIdDeviceIdRoute: typeof AppEndpointsSessionIdDeviceIdRoute
+  AppIdentitySessionIdIdentityIdRoute: typeof AppIdentitySessionIdIdentityIdRoute
   AppReportsSessionIdIncidentIdRoute: typeof AppReportsSessionIdIncidentIdRoute
 }
 
@@ -1146,11 +1209,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppBillingRoute: AppBillingRoute,
   AppCertificatesRoute: AppCertificatesRoute,
   AppCohortsRoute: AppCohortsRoute,
-  AppEmailRoute: AppEmailRoute,
-  AppEndpointsRoute: AppEndpointsRoute,
   AppEvidenceRoute: AppEvidenceRoute,
   AppFeedbackRoute: AppFeedbackRoute,
-  AppIdentityRoute: AppIdentityRoute,
   AppIncidentsRoute: AppIncidentsRoute,
   AppInstructorRoute: AppInstructorRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
@@ -1168,7 +1228,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppCasesIdRoute: AppCasesIdRoute,
   AppCasesIndexRoute: AppCasesIndexRoute,
+  AppEmailIndexRoute: AppEmailIndexRoute,
+  AppEndpointsIndexRoute: AppEndpointsIndexRoute,
+  AppIdentityIndexRoute: AppIdentityIndexRoute,
   AppReportsIndexRoute: AppReportsIndexRoute,
+  AppEmailSessionIdMessageIdRoute: AppEmailSessionIdMessageIdRoute,
+  AppEndpointsSessionIdDeviceIdRoute: AppEndpointsSessionIdDeviceIdRoute,
+  AppIdentitySessionIdIdentityIdRoute: AppIdentitySessionIdIdentityIdRoute,
   AppReportsSessionIdIncidentIdRoute: AppReportsSessionIdIncidentIdRoute,
 }
 

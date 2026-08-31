@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
@@ -6,10 +6,10 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useEndpoints, useIsolateDevice } from "@/hooks/use-endpoints";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { Cpu, Lock } from "lucide-react";
+import { ChevronRight, Cpu, Lock } from "lucide-react";
 import type { DeviceRiskLevel } from "@/types/socverse-operations";
 
-export const Route = createFileRoute("/app/endpoints")({
+export const Route = createFileRoute("/app/endpoints/")({
   component: EndpointCenter,
   head: () => ({ meta: [{ title: "ThreatLens · Endpoint Center" }] }),
 });
@@ -30,6 +30,7 @@ function EndpointCenter() {
   } = useActiveSession();
   const endpointsQuery = useEndpoints(selectedSessionId);
   const isolate = useIsolateDevice(selectedSessionId);
+  const navigate = useNavigate();
 
   if (sessionsLoading) {
     return (
@@ -120,7 +121,16 @@ function EndpointCenter() {
               </thead>
               <tbody className="divide-y divide-border">
                 {devices.map((d) => (
-                  <tr key={d.id} className="hover:bg-background/40">
+                  <tr
+                    key={d.id}
+                    onClick={() =>
+                      navigate({
+                        to: "/app/endpoints/$sessionId/$deviceId",
+                        params: { sessionId: selectedSessionId, deviceId: d.id },
+                      })
+                    }
+                    className="cursor-pointer hover:bg-background/40"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Cpu className="size-3.5 text-muted-foreground" />
@@ -150,15 +160,21 @@ function EndpointCenter() {
                       {formatRelativeTime(d.lastSeenAt)}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      {d.isolationStatus !== "isolated" && (
-                        <button
-                          disabled={isolate.isPending}
-                          onClick={() => isolate.mutate(d.id)}
-                          className="rounded-md border border-[color:var(--critical)]/40 bg-[color:var(--critical)]/10 px-2 py-1 text-[11px] text-[color:var(--critical)] hover:bg-[color:var(--critical)]/20 disabled:opacity-50"
-                        >
-                          Isolate
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {d.isolationStatus !== "isolated" && (
+                          <button
+                            disabled={isolate.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              isolate.mutate(d.id);
+                            }}
+                            className="rounded-md border border-[color:var(--critical)]/40 bg-[color:var(--critical)]/10 px-2 py-1 text-[11px] text-[color:var(--critical)] hover:bg-[color:var(--critical)]/20 disabled:opacity-50"
+                          >
+                            Isolate
+                          </button>
+                        )}
+                        <ChevronRight className="size-3.5 text-muted-foreground" />
+                      </div>
                     </td>
                   </tr>
                 ))}

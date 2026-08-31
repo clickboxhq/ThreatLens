@@ -12,14 +12,21 @@ import {
   Pin,
   PinOff,
   Users,
-  X,
   Link as LinkIcon,
 } from "lucide-react";
 import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
+import { EntityDrawerShell } from "@/components/soc/entity-drawer-shell";
 import type { EmailMessageDto } from "@/types/socverse-operations";
 
 type Tab = "message" | "headers" | "recipients" | "links";
+
+const TABS = [
+  ["message", "Message"],
+  ["headers", "Headers"],
+  ["recipients", "Who else received it"],
+  ["links", "Link activity"],
+] as const;
 
 const AUTH_TONE: Record<string, string> = {
   pass: "text-[color:var(--success)]",
@@ -49,121 +56,95 @@ export function EmailDetailDrawer({
   onUnpin,
   isPinned,
   locked,
+  variant = "drawer",
+  backTo,
+  backLabel,
+  quickPreviewLinkTo,
 }: {
   sessionId: string;
   emailId: string;
-  onClose: () => void;
+  onClose?: () => void;
   onPin?: (input: { eventTable: string; eventId: string; justification: string }) => void;
   onUnpin?: () => void;
   /** Whether this message is already pinned as evidence on the open incident. */
   isPinned?: boolean;
   locked?: boolean;
+  variant?: "drawer" | "page";
+  backTo?: string;
+  backLabel?: string;
+  quickPreviewLinkTo?: string;
 }) {
   const [tab, setTab] = useState<Tab>("message");
   const { data: email, isPending } = useEmailMessage(sessionId, emailId);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
-      <div
-        className="flex h-full w-full max-w-2xl flex-col border-l border-border bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Email message
-            </div>
-            <h2 className="mt-1 truncate text-[15px] font-semibold">
-              {isPending ? "Loading…" : email?.subject}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md border border-border p-1.5 text-secondary hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        {isPending || !email ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-[12.5px] text-secondary">
-            <Loader2 className="size-4 animate-spin" /> Loading message…
-          </div>
-        ) : (
-          <>
-            <div className="flex gap-1 border-b border-border px-5 pt-2">
-              {(
-                [
-                  ["message", "Message"],
-                  ["headers", "Headers"],
-                  ["recipients", "Who else received it"],
-                  ["links", "Link activity"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={`rounded-t-md px-3 py-2 text-[12px] transition-colors ${
-                    tab === id
-                      ? "border-b-2 border-[color:var(--info)] font-medium text-foreground"
-                      : "text-secondary hover:text-foreground"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {tab === "message" && (
-                <MessageTab email={email} sessionId={sessionId} emailId={emailId} />
-              )}
-              {tab === "headers" && <EmailHeaderAnalysis email={email} />}
-              {tab === "recipients" && <RecipientsTab sessionId={sessionId} emailId={emailId} />}
-              {tab === "links" && (
-                <LinksTab sessionId={sessionId} emailId={emailId} onPin={onPin} locked={locked} />
-              )}
-            </div>
-
-            {onPin && (
-              <div className="flex items-center gap-3 border-t border-border px-5 py-3">
-                {isPinned ? (
-                  <>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--success)]">
-                      <Pin className="size-3.5" /> Pinned as evidence
-                    </span>
-                    {onUnpin && (
-                      <button
-                        disabled={locked}
-                        onClick={onUnpin}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-[12px] text-secondary hover:text-foreground disabled:opacity-50"
-                      >
-                        <PinOff className="size-3.5" /> Unpin
-                      </button>
-                    )}
-                  </>
-                ) : (
+    <EntityDrawerShell
+      kind="Email message"
+      title={isPending ? "Loading…" : (email?.subject ?? "Unknown message")}
+      subtitle={email ? `From ${email.senderAddress}` : undefined}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onClose={onClose}
+      variant={variant}
+      backTo={backTo}
+      backLabel={backLabel}
+      quickPreviewLinkTo={quickPreviewLinkTo}
+      footer={
+        email &&
+        onPin && (
+          <div className="flex items-center gap-3">
+            {isPinned ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--success)]">
+                  <Pin className="size-3.5" /> Pinned as evidence
+                </span>
+                {onUnpin && (
                   <button
                     disabled={locked}
-                    onClick={() =>
-                      onPin({
-                        eventTable: "email_messages",
-                        eventId: email.id,
-                        justification: `Email from ${email.senderAddress}: "${email.subject}"`,
-                      })
-                    }
-                    className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                    onClick={onUnpin}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-[12px] text-secondary hover:text-foreground disabled:opacity-50"
                   >
-                    <Pin className="size-3.5" /> Pin this email as evidence
+                    <PinOff className="size-3.5" /> Unpin
                   </button>
                 )}
-              </div>
+              </>
+            ) : (
+              <button
+                disabled={locked}
+                onClick={() =>
+                  onPin({
+                    eventTable: "email_messages",
+                    eventId: email.id,
+                    justification: `Email from ${email.senderAddress}: "${email.subject}"`,
+                  })
+                }
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+              >
+                <Pin className="size-3.5" /> Pin this email as evidence
+              </button>
             )}
-          </>
-        )}
-      </div>
-    </div>
+          </div>
+        )
+      }
+    >
+      {isPending || !email ? (
+        <div className="flex items-center gap-2 py-6 text-[12.5px] text-secondary">
+          <Loader2 className="size-4 animate-spin" /> Loading message…
+        </div>
+      ) : (
+        <>
+          {tab === "message" && (
+            <MessageTab email={email} sessionId={sessionId} emailId={emailId} />
+          )}
+          {tab === "headers" && <EmailHeaderAnalysis email={email} />}
+          {tab === "recipients" && <RecipientsTab sessionId={sessionId} emailId={emailId} />}
+          {tab === "links" && (
+            <LinksTab sessionId={sessionId} emailId={emailId} onPin={onPin} locked={locked} />
+          )}
+        </>
+      )}
+    </EntityDrawerShell>
   );
 }
 

@@ -62,10 +62,18 @@ export function IdentityDetailDrawer({
   sessionId,
   identityId,
   onClose,
+  variant = "drawer",
+  backTo,
+  backLabel,
+  quickPreviewLinkTo,
 }: {
   sessionId: string;
   identityId: string;
-  onClose: () => void;
+  onClose?: () => void;
+  variant?: "drawer" | "page";
+  backTo?: string;
+  backLabel?: string;
+  quickPreviewLinkTo?: string;
 }) {
   const [tab, setTab] = useState<Tab>("profile");
   const { data: identity, isPending } = useIdentityProfile(sessionId, identityId);
@@ -80,6 +88,26 @@ export function IdentityDetailDrawer({
       activeTab={tab}
       onTabChange={setTab}
       onClose={onClose}
+      variant={variant}
+      backTo={backTo}
+      backLabel={backLabel}
+      quickPreviewLinkTo={quickPreviewLinkTo}
+      headerBadges={
+        identity && (
+          <>
+            <span
+              className={`rounded border border-border px-1.5 py-0.5 text-[10px] ${RISK_TONE[identity.riskLevel] ?? ""}`}
+            >
+              Risk: {identity.riskLevel}
+            </span>
+            {identity.isPrivileged && (
+              <span className="rounded border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--critical)]">
+                Privileged
+              </span>
+            )}
+          </>
+        )
+      }
     >
       {isPending || !identity ? (
         <div className="flex items-center gap-2 py-6 text-[12.5px] text-secondary">

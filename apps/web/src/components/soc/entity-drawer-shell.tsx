@@ -1,8 +1,23 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, ExternalLink, X } from "lucide-react";
 
-/** Shared chrome for the case workspace's entity pivots (email / identity / device) so all
- * three open, tab, and close identically rather than each re-implementing a panel. */
+/**
+ * Shared chrome for entity investigation surfaces (email / identity / device)
+ * so every one of them opens, tabs, and closes identically rather than each
+ * re-implementing a panel. Two variants:
+ *
+ * - "drawer" (default): the case workspace's in-place pivot — a quick
+ *   preview without leaving the case, unchanged from before.
+ * - "page": the standalone centralized investigation workspace
+ *   (/app/identity/$sessionId/$id etc.) — same tabs and body content, full
+ *   page real estate, a real back-nav instead of an overlay close button,
+ *   and room for the header actions/status chips a full workspace needs.
+ *
+ * The tab bodies (children) are identical between the two — that's the
+ * point: write the investigation content once, get both a quick-preview
+ * drawer and a full centralized workspace from it.
+ */
 export function EntityDrawerShell<T extends string>({
   kind,
   title,
@@ -13,6 +28,12 @@ export function EntityDrawerShell<T extends string>({
   onClose,
   footer,
   children,
+  variant = "drawer",
+  backTo,
+  backLabel = "Back",
+  headerBadges,
+  headerActions,
+  quickPreviewLinkTo,
 }: {
   kind: string;
   title: ReactNode;
@@ -20,10 +41,70 @@ export function EntityDrawerShell<T extends string>({
   tabs: readonly (readonly [T, string])[];
   activeTab: T;
   onTabChange: (tab: T) => void;
-  onClose: () => void;
+  onClose?: () => void;
   footer?: ReactNode;
   children: ReactNode;
+  variant?: "drawer" | "page";
+  /** page variant only — where the back-nav link goes. */
+  backTo?: string;
+  /** page variant only — back-nav label, e.g. "Back to Identity Center". Defaults to "Back". */
+  backLabel?: string;
+  /** page variant only — status/severity/MITRE-style chips next to the title. */
+  headerBadges?: ReactNode;
+  /** page variant only — primary actions (assign/escalate/etc.), top-right. */
+  headerActions?: ReactNode;
+  /** drawer variant only — link to the full page, shown as a "quick preview" affordance. */
+  quickPreviewLinkTo?: string;
 }) {
+  const tabStrip = (
+    <div className="flex gap-1 overflow-x-auto border-b border-border px-5 pt-2">
+      {tabs.map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => onTabChange(id)}
+          className={`whitespace-nowrap rounded-t-md px-3 py-2 text-[12px] transition-colors ${
+            activeTab === id
+              ? "border-b-2 border-[color:var(--info)] font-medium text-foreground"
+              : "text-secondary hover:text-foreground"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (variant === "page") {
+    return (
+      <div className="px-4 py-6 md:px-8 md:py-8">
+        {backTo && (
+          <Link
+            to={backTo}
+            className="mb-4 inline-flex items-center gap-1.5 text-[12px] text-secondary hover:text-foreground"
+          >
+            <ArrowLeft className="size-3.5" /> {backLabel}
+          </Link>
+        )}
+        <div className="glass-card overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+            <div className="min-w-0">
+              <div className="t-label">{kind}</div>
+              <h1 className="mt-1 truncate text-[19px] font-semibold">{title}</h1>
+              {subtitle && <div className="mt-0.5 text-[12px] text-secondary">{subtitle}</div>}
+              {headerBadges && <div className="mt-2 flex flex-wrap gap-1.5">{headerBadges}</div>}
+            </div>
+            {headerActions && (
+              <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+            )}
+          </div>
+          {tabStrip}
+          <div className="px-5 py-5">{children}</div>
+          {footer && <div className="border-t border-border px-5 py-3">{footer}</div>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
       <div
@@ -40,30 +121,27 @@ export function EntityDrawerShell<T extends string>({
               <div className="mt-0.5 truncate text-[11.5px] text-secondary">{subtitle}</div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-md border border-border p-1.5 text-secondary hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {quickPreviewLinkTo && (
+              <Link
+                to={quickPreviewLinkTo}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11.5px] text-secondary hover:text-foreground"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Open full workspace <ExternalLink className="size-3" />
+              </Link>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-md border border-border p-1.5 text-secondary hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-5 pt-2">
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => onTabChange(id)}
-              className={`whitespace-nowrap rounded-t-md px-3 py-2 text-[12px] transition-colors ${
-                activeTab === id
-                  ? "border-b-2 border-[color:var(--info)] font-medium text-foreground"
-                  : "text-secondary hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {tabStrip}
 
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
 

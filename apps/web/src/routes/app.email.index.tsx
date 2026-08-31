@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
@@ -7,10 +7,16 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useEmailInvestigations } from "@/hooks/use-email-investigations";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { Paperclip, Link as LinkIcon, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  ExternalLink,
+  Paperclip,
+  Link as LinkIcon,
+  ShieldCheck,
+  ShieldAlert,
+} from "lucide-react";
 import type { EmailMessageDto } from "@/types/socverse-operations";
 
-export const Route = createFileRoute("/app/email")({
+export const Route = createFileRoute("/app/email/")({
   component: EmailPage,
   head: () => ({ meta: [{ title: "ThreatLens · Email Investigations" }] }),
 });
@@ -123,7 +129,16 @@ function EmailPage() {
                     <span>·</span>
                     <span>{formatRelativeTime(selected.occurredAt)}</span>
                   </div>
-                  <h2 className="mt-1 text-lg font-semibold tracking-tight">{selected.subject}</h2>
+                  <div className="mt-1 flex items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight">{selected.subject}</h2>
+                    <Link
+                      to="/app/email/$sessionId/$messageId"
+                      params={{ sessionId: selectedSessionId, messageId: selected.id }}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] text-[color:var(--info)] hover:bg-background/40"
+                    >
+                      Full investigation <ExternalLink className="size-3" />
+                    </Link>
+                  </div>
                   <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-[12px] sm:grid-cols-2">
                     <div>
                       <span className="text-muted-foreground">From </span>
@@ -216,10 +231,24 @@ function EmailPage() {
               />
             </Panel>
 
-            <Panel title="Raw headers">
-              <pre className="max-h-56 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-[11px] leading-relaxed text-secondary">
-                {JSON.stringify(selected.headersRaw, null, 2)}
-              </pre>
+            <Panel
+              title="Header analysis"
+              actions={
+                <Link
+                  to="/app/email/$sessionId/$messageId"
+                  params={{ sessionId: selectedSessionId, messageId: selected.id }}
+                  hash="headers"
+                  className="text-[11.5px] text-[color:var(--info)] hover:underline"
+                >
+                  Open full analyzer →
+                </Link>
+              }
+            >
+              <p className="text-[12px] text-secondary">
+                Full authentication-chain forensics — SPF/DKIM/DMARC breakdown, Reply-To and
+                Return-Path mismatches, and the Received-header routing path — are in the full
+                investigation workspace, not a raw header dump here.
+              </p>
             </Panel>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
@@ -7,12 +7,11 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useIdentities, useIdentitySignIns } from "@/hooks/use-identities";
-import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { MapPin, ShieldCheck, ShieldOff } from "lucide-react";
+import { ExternalLink, MapPin, ShieldCheck, ShieldOff } from "lucide-react";
 import type { IdentityRiskLevel } from "@/types/socverse-operations";
 
-export const Route = createFileRoute("/app/identity")({
+export const Route = createFileRoute("/app/identity/")({
   component: IdentityCenter,
   head: () => ({ meta: [{ title: "ThreatLens · Identity Center" }] }),
 });
@@ -44,7 +43,6 @@ function IdentityCenter() {
   // The side panel is a preview capped at a dozen sign-ins; with a month of history behind
   // each account that hides most of it, and it has never shown the directory audit trail at
   // all. Selecting a row opens the full record instead.
-  const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const signInsQuery = useIdentitySignIns(selectedSessionId, selectedIdentityId);
 
   if (sessionsLoading) {
@@ -141,10 +139,7 @@ function IdentityCenter() {
                   {identities.map((u) => (
                     <tr
                       key={u.id}
-                      onClick={() => {
-                        setSelectedIdentityId(u.id);
-                        setOpenIdentityId(u.id);
-                      }}
+                      onClick={() => setSelectedIdentityId(u.id)}
                       className={`cursor-pointer hover:bg-background/40 ${u.id === selectedIdentityId ? "bg-background/60" : ""}`}
                     >
                       <td className="px-4 py-3">
@@ -192,13 +187,14 @@ function IdentityCenter() {
         <Panel
           title={selected ? selected.displayName : "Sign-in history"}
           actions={
-            selected ? (
-              <button
-                onClick={() => setOpenIdentityId(selected.id)}
-                className="text-[11.5px] text-[color:var(--info)] hover:underline"
+            selected && selectedSessionId ? (
+              <Link
+                to="/app/identity/$sessionId/$identityId"
+                params={{ sessionId: selectedSessionId, identityId: selected.id }}
+                className="inline-flex items-center gap-1 text-[11.5px] text-[color:var(--info)] hover:underline"
               >
-                Full record
-              </button>
+                Full workspace <ExternalLink className="size-3" />
+              </Link>
             ) : undefined
           }
         >
@@ -237,13 +233,6 @@ function IdentityCenter() {
           )}
         </Panel>
       </div>
-      {openIdentityId && selectedSessionId && (
-        <IdentityDetailDrawer
-          sessionId={selectedSessionId}
-          identityId={openIdentityId}
-          onClose={() => setOpenIdentityId(null)}
-        />
-      )}
     </div>
   );
 }

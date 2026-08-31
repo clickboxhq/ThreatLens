@@ -9,6 +9,7 @@ import { InvestigationChecklist } from "@/components/soc/investigation-checklist
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
+import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import {
   useInvestigation,
   useSessionIncident,
@@ -261,6 +262,9 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     lookupThreatIntel,
     lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
+
+  const [pendingRemoveEvidenceId, setPendingRemoveEvidenceId] = useState<string | null>(null);
+  const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SearchEntityType | "all">("all");
@@ -604,7 +608,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                       </div>
                       <button
                         disabled={locked}
-                        onClick={() => removeEvidence(item.id)}
+                        onClick={() => setPendingRemoveEvidenceId(item.id)}
                         className="grid size-7 shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground hover:text-foreground disabled:opacity-40"
                       >
                         <Trash2 className="size-3" />
@@ -936,6 +940,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           sessionId={sessionId}
           identityId={openIdentityId}
           onClose={() => setOpenIdentityId(null)}
+          quickPreviewLinkTo={`/app/identity/${sessionId}/${openIdentityId}`}
         />
       )}
       {openDeviceId && (
@@ -944,8 +949,22 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           deviceId={openDeviceId}
           onClose={() => setOpenDeviceId(null)}
           locked={locked}
+          quickPreviewLinkTo={`/app/endpoints/${sessionId}/${openDeviceId}`}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingRemoveEvidenceId !== null}
+        onOpenChange={(open) => !open && setPendingRemoveEvidenceId(null)}
+        title="Remove pinned evidence?"
+        description="You are about to unpin this item from your evidence collection:"
+        target={pendingRemoveEvidenceItem?.display?.title ?? "This item"}
+        note="Your justification for pinning it will be lost. This doesn't affect the underlying event — you can pin it again later."
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (pendingRemoveEvidenceId) removeEvidence(pendingRemoveEvidenceId);
+        }}
+      />
     </div>
   );
 }

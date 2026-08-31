@@ -86,6 +86,7 @@ const workspace: NavItem[] = [
   { to: "/app/cases", label: "Case Management", icon: Inbox },
   { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
   { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
+  { to: "/app/closed", label: "Closed Alerts & Cases", icon: Archive },
 ];
 
 // INVESTIGATION CENTERS — the per-domain investigation surfaces. Network
@@ -506,10 +507,11 @@ const crumbMap: Record<string, string> = {
   "/app/alerts": "Alert Center",
   "/app/incidents": "Incident Queue",
   "/app/cases": "Case Management",
-  "/app/evidence": "Evidence Locker",
+  "/app/evidence": "Entity Locker",
+  "/app/closed": "Closed Alerts & Cases",
   "/app/timeline": "Global Timeline",
   "/app/identity": "Identity Center",
-  "/app/endpoints": "Device Center",
+  "/app/endpoints": "Endpoint Center",
   "/app/email": "Email Investigation",
   "/app/threat-intel": "Threat Intelligence",
   "/app/search": "Global Search",
@@ -537,7 +539,16 @@ const crumbMap: Record<string, string> = {
 export function AppShell({ children }: { children?: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const crumb =
-    crumbMap[path] ?? (path.startsWith("/app/cases/") ? "Case Management" : "Dashboard");
+    crumbMap[path] ??
+    (path.startsWith("/app/cases/")
+      ? "Case Management"
+      : path.startsWith("/app/identity/")
+        ? "Identity Center"
+        : path.startsWith("/app/endpoints/")
+          ? "Endpoint Center"
+          : path.startsWith("/app/email/")
+            ? "Email Investigation"
+            : "Dashboard");
   const { open, setOpen } = useCommandPalette();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Collapsed sidebar preference persists per-browser (not per-user server
