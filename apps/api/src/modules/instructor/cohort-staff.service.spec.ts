@@ -171,6 +171,27 @@ describe('CohortStaffService', () => {
   // Support repairing a cohort and the cohort's own lead acting normally produce the same
   // rows otherwise, and the log is the only place the difference survives.
   describe('platform admin overrides', () => {
+    it('refuses a platform admin who staffs themselves', async () => {
+      // Otherwise "can repair, cannot teach" is one API call from being untrue: staff
+      // yourself as lead, and canWrite becomes true.
+      const { service } = build({
+        isPlatformAdmin: true,
+        invitee: { id: 'lead-1', status: 'active', role: 'platform_admin' },
+      });
+      await expect(
+        service.addStaff(LEAD, 'cohort-1', 'admin@example.com', 'lead'),
+      ).rejects.toMatchObject({ status: 403, code: 'CANNOT_STAFF_SELF' });
+    });
+
+    it('still lets a platform admin staff somebody else', async () => {
+      const { service, staffCreate } = build({
+        isPlatformAdmin: true,
+        invitee: { id: 'someone-else', status: 'active', role: 'instructor' },
+      });
+      await service.addStaff(LEAD, 'cohort-1', 'tutor@example.com', 'lead');
+      expect(staffCreate).toHaveBeenCalled();
+    });
+
     it('marks staffing done by a platform admin as an override', async () => {
       const { service, auditLog } = build({ isPlatformAdmin: true });
       await service.addStaff(LEAD, 'cohort-1', 'colleague@example.com', 'lead');

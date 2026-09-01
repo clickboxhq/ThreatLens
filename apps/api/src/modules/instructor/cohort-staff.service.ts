@@ -88,6 +88,21 @@ export class CohortStaffService {
         'That account is not active.',
       );
     }
+    // A platform admin may staff a cohort but not teach it. Staffing themselves would turn
+    // that into one API call: they would become staff, canWrite would be true, and they could
+    // grade. Repair means putting somebody else in charge, not taking charge.
+    //
+    // This is a guardrail, not a wall — a platform admin has database access by other means.
+    // The point is that the restriction cannot be stepped around by accident, and that doing
+    // it deliberately has to happen somewhere that leaves a different kind of trace.
+    if (access.isPlatformAdmin && invitee.id === user.id) {
+      throw new AppException(
+        403,
+        'CANNOT_STAFF_SELF',
+        'Platform admins can staff a cohort with somebody else, but not with themselves.',
+      );
+    }
+
     // Students are enrolled, not staffed. Staffing one would give them access to the review
     // queue and to other students' work.
     if (invitee.role === 'student') {
