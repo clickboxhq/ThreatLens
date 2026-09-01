@@ -44,7 +44,6 @@ import {
   Archive,
   Terminal,
   Network as NetworkIcon,
-  Bug,
   Waypoints,
   TrendingUp,
 } from "lucide-react";
@@ -102,7 +101,6 @@ const investigationCenters: NavItem[] = [
   { to: "/app/network", label: "Network Center", icon: NetworkIcon },
   { to: "/app/email", label: "Email Investigation", icon: Mail },
   { to: "/app/threat-intel", label: "Threat Intelligence", icon: Radar },
-  { to: "/app/vulnerabilities", label: "Vulnerability Management", icon: Bug },
   { to: "/app/search", label: "Global Search", icon: Search },
   { to: "/app/logs", label: "Log Explorer", icon: Terminal },
 ];
@@ -522,7 +520,6 @@ const crumbMap: Record<string, string> = {
   "/app/network": "Network Center",
   "/app/email": "Email Investigation",
   "/app/threat-intel": "Threat Intelligence",
-  "/app/vulnerabilities": "Vulnerability Management",
   "/app/search": "Global Search",
   "/app/logs": "Log Explorer",
   "/app/scenarios": "Scenario Library",

@@ -59,7 +59,6 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppStudentAnalyticsRouteImport } from './routes/app.student-analytics'
 import { Route as AppThreatIntelRouteImport } from './routes/app.threat-intel'
 import { Route as AppTimelineRouteImport } from './routes/app.timeline'
-import { Route as AppVulnerabilitiesRouteImport } from './routes/app.vulnerabilities'
 import { Route as ResetPasswordTokenRouteImport } from './routes/reset-password.$token'
 import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$token'
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
@@ -324,11 +323,6 @@ const AppTimelineRoute = AppTimelineRouteImport.update({
   path: '/timeline',
   getParentRoute: () => AppRoute,
 } as any)
-const AppVulnerabilitiesRoute = AppVulnerabilitiesRouteImport.update({
-  id: '/vulnerabilities',
-  path: '/vulnerabilities',
-  getParentRoute: () => AppRoute,
-} as any)
 const ResetPasswordTokenRoute = ResetPasswordTokenRouteImport.update({
   id: '/reset-password/$token',
   path: '/reset-password/$token',
@@ -449,7 +443,6 @@ export interface FileRoutesByFullPath {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
-  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -514,7 +507,6 @@ export interface FileRoutesByTo {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
-  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -581,7 +573,6 @@ export interface FileRoutesById {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
-  '/app/vulnerabilities': typeof AppVulnerabilitiesRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -649,7 +640,6 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
-    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -714,7 +704,6 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
-    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -780,7 +769,6 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
-    | '/app/vulnerabilities'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -1175,13 +1163,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTimelineRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/vulnerabilities': {
-      id: '/app/vulnerabilities'
-      path: '/vulnerabilities'
-      fullPath: '/app/vulnerabilities'
-      preLoaderRoute: typeof AppVulnerabilitiesRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/reset-password/$token': {
       id: '/reset-password/$token'
       path: '/reset-password/$token'
@@ -1306,7 +1287,6 @@ interface AppRouteChildren {
   AppStudentAnalyticsRoute: typeof AppStudentAnalyticsRoute
   AppThreatIntelRoute: typeof AppThreatIntelRoute
   AppTimelineRoute: typeof AppTimelineRoute
-  AppVulnerabilitiesRoute: typeof AppVulnerabilitiesRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCasesIdRoute: typeof AppCasesIdRoute
   AppCasesIndexRoute: typeof AppCasesIndexRoute
@@ -1350,7 +1330,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppStudentAnalyticsRoute: AppStudentAnalyticsRoute,
   AppThreatIntelRoute: AppThreatIntelRoute,
   AppTimelineRoute: AppTimelineRoute,
-  AppVulnerabilitiesRoute: AppVulnerabilitiesRoute,
   AppIndexRoute: AppIndexRoute,
   AppCasesIdRoute: AppCasesIdRoute,
   AppCasesIndexRoute: AppCasesIndexRoute,

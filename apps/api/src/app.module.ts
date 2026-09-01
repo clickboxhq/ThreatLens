@@ -34,7 +34,6 @@ import { AchievementsApiModule } from './modules/achievements/achievements-api.m
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
 import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
-import { VulnerabilityManagementModule } from './modules/vulnerability-management/vulnerability-management.module';
 import { CareerProgressionApiModule } from './modules/career-progression/career-progression-api.module';
 
 @Module({
@@ -73,7 +72,6 @@ import { CareerProgressionApiModule } from './modules/career-progression/career-
     NotificationsModule,
     NotificationsApiModule,
     ScenarioBuilderModule,
-    VulnerabilityManagementModule,
     CareerProgressionApiModule,
   ],
   controllers: [HealthController],

@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateTelemetry, GroundTruthDefinition } from './generator';
-import { generateVulnerabilities } from './vulnerability-generator';
 
 @Injectable()
 export class TelemetryGeneratorService {
@@ -25,7 +24,7 @@ export class TelemetryGeneratorService {
 
     const session = await this.prisma.investigationSession.findUniqueOrThrow({
       where: { id: sessionId },
-      include: { scenarioVersion: true, scenario: true },
+      include: { scenarioVersion: true },
     });
 
     const def = session.scenarioVersion
@@ -46,13 +45,6 @@ export class TelemetryGeneratorService {
       session.seed,
       def,
       techniqueIdBySlug,
-    );
-
-    const vulnerabilities = generateVulnerabilities(
-      sessionId,
-      session.seed,
-      session.scenario.category,
-      session.startedAt,
     );
 
     await this.prisma.$transaction([
@@ -90,18 +82,13 @@ export class TelemetryGeneratorService {
       ]);
     }
 
-    // Independent of the kill-chain telemetry above — only needs the session row, which
-    // already exists — so it isn't part of either transaction.
-    await this.prisma.vulnerability.createMany({ data: vulnerabilities });
-
     this.logger.log(
       `Generated telemetry for session ${sessionId}: ${telemetry.identities.length} identities, ` +
         `${telemetry.devices.length} devices, ${telemetry.signInEvents.length} sign-ins, ` +
         `${telemetry.processEvents.length} process events, ${telemetry.fileEvents.length} file events, ` +
         `${telemetry.networkEvents.length} network events, ${telemetry.cloudEvents.length} cloud events, ` +
         `${telemetry.httpRequests.length} http requests, ${telemetry.emailMessages.length} emails, ` +
-        `${telemetry.directoryAuditEvents.length} directory audit events, ` +
-        `${vulnerabilities.length} vulnerabilities.`,
+        `${telemetry.directoryAuditEvents.length} directory audit events.`,
     );
   }
 }

@@ -431,7 +431,6 @@ model InvestigationSession {
   investigationActions InvestigationAction[]
   score                Score?
   hintUnlocks          HintUnlock[]
-  vulnerabilities      Vulnerability[]
 
   @@index([userId, status])
   @@index([scenarioId])
@@ -1114,9 +1113,6 @@ enum InvestigationActionType {
   // 20260829140000_add_view_threat_intel) — backs a Student's own "Threat Intelligence"
   // history without ever exposing a scenario's full indicator set (its ground truth).
   view_threat_intel
-  // Vulnerability Management's real triage action — moving a finding to remediated,
-  // accepted_risk, or false_positive (see vulnerability-management.service.ts).
-  update_vulnerability_status
 }
 
 model InvestigationAction {
@@ -1272,63 +1268,6 @@ model Achievement {
   @@map("achievements")
 }
 
-// ---------- Vulnerability Management (Phase 2 UI/UX upgrade: net-new) ----------
-//
-// Session-scoped, same as every other telemetry domain: each investigation's synthetic
-// environment gets its own seeded findings correlated to the scenario's own category
-// (reuses ScenarioCategory rather than inventing a parallel taxonomy — an endpoint-category
-// scenario's findings skew toward endpoint-relevant CVEs, a cloud scenario's toward
-// cloud-relevant ones), not a real CVE feed. `status` starts `open`; an analyst can move a
-// finding to `remediated`, `accepted_risk`, or `false_positive` — the same three real
-// decisions §1.6's "no fake UI" rule leaves room for without pretending this platform runs
-// an actual patch-management or ticketing system underneath.
-enum VulnerabilitySeverity {
-  low
-  medium
-  high
-  critical
-}
-
-enum VulnerabilityExposure {
-  internal
-  internet_facing
-}
-
-enum VulnerabilityExploitability {
-  no_known_exploit
-  proof_of_concept
-  actively_exploited
-}
-
-enum VulnerabilityStatus {
-  open
-  remediated
-  accepted_risk
-  false_positive
-}
-
-model Vulnerability {
-  id             String                       @id @default(uuid()) @db.Uuid
-  sessionId      String                       @map("session_id") @db.Uuid
-  category       ScenarioCategory
-  cve            String
-  title          String
-  cvssScore      Float                        @map("cvss_score")
-  severity       VulnerabilitySeverity
-  affectedAsset  String                       @map("affected_asset")
-  exposure       VulnerabilityExposure
-  exploitability VulnerabilityExploitability
-  remediation    String
-  status         VulnerabilityStatus          @default(open)
-  statusNote     String?                      @map("status_note")
-  discoveredAt   DateTime                     @map("discovered_at")
-  resolvedAt     DateTime?                    @map("resolved_at")
-
-  session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@map("vulnerabilities")
-}
 
 // §Phase 6 (merge plan): net-new. Only categories with a real backend trigger are modeled —
 // deliberately excludes ThreatLens's original mock categories with no backing event yet
