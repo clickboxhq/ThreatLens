@@ -12,6 +12,7 @@ function build(
     invitee?: { id: string; status: string; role: string } | null;
     groupScoped?: boolean;
     groupIds?: string[];
+    isPlatformAdmin?: boolean;
   } = {},
 ) {
   const staffUpdate = jest.fn().mockResolvedValue({});
@@ -70,6 +71,7 @@ function build(
       groupIds: opts.groupIds ?? [],
       canWrite: true,
       canManageStaff: true,
+      isPlatformAdmin: opts.isPlatformAdmin ?? false,
     }),
     enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
   };
@@ -163,6 +165,36 @@ describe('CohortStaffService', () => {
       expect(auditLog.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'cohort_staff_added' }),
       );
+    });
+  });
+
+  // Support repairing a cohort and the cohort's own lead acting normally produce the same
+  // rows otherwise, and the log is the only place the difference survives.
+  describe('platform admin overrides', () => {
+    it('marks staffing done by a platform admin as an override', async () => {
+      const { service, auditLog } = build({ isPlatformAdmin: true });
+      await service.addStaff(LEAD, 'cohort-1', 'colleague@example.com', 'lead');
+
+      expect(auditLog.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ platformAdminOverride: true }),
+        }),
+      );
+    });
+
+    it("does not mark a real lead's own action as an override", async () => {
+      const { service, auditLog } = build();
+      await service.addStaff(
+        LEAD,
+        'cohort-1',
+        'colleague@example.com',
+        'tutor',
+      );
+
+      const call = auditLog.record.mock.calls[0][0] as {
+        metadata: Record<string, unknown>;
+      };
+      expect(call.metadata).not.toHaveProperty('platformAdminOverride');
     });
   });
 

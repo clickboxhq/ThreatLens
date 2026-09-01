@@ -38,7 +38,11 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 // widen what they can actually do.
 @Controller('instructor')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('instructor', 'org_admin')
+// Coarse gate only. org_admin and platform_admin are admitted here so they can reach a
+// cohort at all; CohortAccessService decides what each may actually do with it — an
+// org_admin reads their organisation's cohorts, a platform_admin reads any cohort and may
+// repair its staffing, and neither may teach.
+@Roles('instructor', 'org_admin', 'platform_admin')
 export class InstructorController {
   constructor(
     private readonly instructorService: InstructorService,

@@ -22,6 +22,14 @@ export class CohortStaffService {
     private readonly auditLog: AuditLogService,
   ) {}
 
+  /**
+   * Marks an action taken by a platform admin who is not staffed on the cohort. Without it the
+   * audit log cannot distinguish support repairing a cohort from its own lead acting normally.
+   */
+  private override(access: { isPlatformAdmin: boolean }) {
+    return access.isPlatformAdmin ? { platformAdminOverride: true } : {};
+  }
+
   // ---------------------------------------------------------------- staff
 
   async listStaff(user: AuthenticatedUser, cohortId: string) {
@@ -59,7 +67,11 @@ export class CohortStaffService {
     email: string,
     role: CohortStaffRole,
   ) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'lead',
+    );
 
     const invitee = await this.prisma.user.findUnique({ where: { email } });
     if (!invitee) {
@@ -105,7 +117,12 @@ export class CohortStaffService {
       action: 'cohort_staff_added',
       targetType: 'cohort',
       targetId: cohortId,
-      metadata: { staffUserId: invitee.id, email, role },
+      metadata: {
+        staffUserId: invitee.id,
+        email,
+        role,
+        ...this.override(access),
+      },
     });
 
     return this.listStaff(user, cohortId);
@@ -117,7 +134,11 @@ export class CohortStaffService {
     userId: string,
     role: CohortStaffRole,
   ) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'lead',
+    );
     const target = await this.getStaffOrThrow(cohortId, userId);
 
     if (target.role === 'lead' && role !== 'lead') {
@@ -141,14 +162,23 @@ export class CohortStaffService {
       action: 'cohort_staff_role_changed',
       targetType: 'cohort',
       targetId: cohortId,
-      metadata: { staffUserId: userId, from: target.role, to: role },
+      metadata: {
+        staffUserId: userId,
+        from: target.role,
+        to: role,
+        ...this.override(access),
+      },
     });
 
     return this.listStaff(user, cohortId);
   }
 
   async removeStaff(user: AuthenticatedUser, cohortId: string, userId: string) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'lead',
+    );
     const target = await this.getStaffOrThrow(cohortId, userId);
 
     if (target.role === 'lead') {
@@ -169,7 +199,11 @@ export class CohortStaffService {
       action: 'cohort_staff_removed',
       targetType: 'cohort',
       targetId: cohortId,
-      metadata: { staffUserId: userId, role: target.role },
+      metadata: {
+        staffUserId: userId,
+        role: target.role,
+        ...this.override(access),
+      },
     });
 
     return this.listStaff(user, cohortId);
@@ -260,7 +294,11 @@ export class CohortStaffService {
     groupId: string,
     userId: string,
   ) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'lead',
+    );
     await this.getGroupOrThrow(cohortId, groupId);
 
     // They must already be staff — a group tutorship is a narrowing of cohort access, not a
@@ -284,7 +322,7 @@ export class CohortStaffService {
       action: 'cohort_group_tutor_assigned',
       targetType: 'cohort',
       targetId: cohortId,
-      metadata: { groupId, staffUserId: userId },
+      metadata: { groupId, staffUserId: userId, ...this.override(access) },
     });
     return this.listGroups(user, cohortId);
   }
@@ -295,10 +333,23 @@ export class CohortStaffService {
     groupId: string,
     userId: string,
   ) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'lead',
+    );
     await this.getGroupOrThrow(cohortId, groupId);
     await this.prisma.cohortGroupTutor.deleteMany({
       where: { groupId, userId },
+    });
+    // Every other staffing change is recorded; this one was not, so removing somebody's
+    // access left no trace while granting it did.
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'cohort_group_tutor_removed',
+      targetType: 'cohort',
+      targetId: cohortId,
+      metadata: { groupId, staffUserId: userId, ...this.override(access) },
     });
     return this.listGroups(user, cohortId);
   }

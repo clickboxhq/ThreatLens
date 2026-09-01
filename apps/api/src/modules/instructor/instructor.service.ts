@@ -241,7 +241,18 @@ export class InstructorService {
     }
     // Any staff member on the cohort may give feedback, not only whoever created it. A
     // group_tutor is additionally limited to students in their own groups.
+    //
+    // Staff, though — not merely anyone who can see the cohort. Feedback carries rubric
+    // overrides, so it changes a grade. Asking for the lowest staff rank by name would also
+    // admit an org_admin, whose read access is explicitly not permission to teach.
     const access = await this.cohortAccess.requireAccess(cohort.id, user);
+    if (!access.canWrite) {
+      throw new AppException(
+        403,
+        'FORBIDDEN',
+        'You can view this cohort but not give feedback on its work.',
+      );
+    }
     if (access.groupScoped) {
       const enrollment = await this.prisma.cohortEnrollment.findUnique({
         where: {

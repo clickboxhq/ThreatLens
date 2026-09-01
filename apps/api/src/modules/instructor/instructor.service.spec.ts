@@ -161,6 +161,55 @@ describe('InstructorService.createAssignment', () => {
 });
 
 describe('InstructorService.submitFeedback', () => {
+  // Feedback carries rubric overrides, so it changes a grade. It was previously gated on the
+  // lowest staff rank by name, which also admitted anyone holding read-only access to the
+  // cohort — an org_admin could have graded work in a cohort they may only look at.
+  it('refuses somebody who can only view the cohort', async () => {
+    const { service } = buildService({
+      requireAccess: jest.fn().mockResolvedValue({
+        cohortId: 'c1',
+        role: null,
+        groupScoped: false,
+        groupIds: [],
+        canWrite: false,
+        canManageStaff: false,
+        isPlatformAdmin: false,
+      }),
+      enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
+      listAccessibleCohortIds: jest.fn().mockResolvedValue([]),
+    });
+
+    await expect(
+      service.submitFeedback(buildUser({ role: 'org_admin' }), 'incident-1', {
+        comment: 'Nice work.',
+      } as never),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('refuses a platform admin, who can repair a cohort but not grade it', async () => {
+    const { service } = buildService({
+      requireAccess: jest.fn().mockResolvedValue({
+        cohortId: 'c1',
+        role: null,
+        groupScoped: false,
+        groupIds: [],
+        canWrite: false,
+        canManageStaff: true,
+        isPlatformAdmin: true,
+      }),
+      enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
+      listAccessibleCohortIds: jest.fn().mockResolvedValue([]),
+    });
+
+    await expect(
+      service.submitFeedback(
+        buildUser({ role: 'platform_admin' }),
+        'incident-1',
+        { comment: 'Nice work.' } as never,
+      ),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
   it("notifies the incident's owning student, not the instructor", async () => {
     const { service, notificationsService } = buildService();
     const user = buildUser();

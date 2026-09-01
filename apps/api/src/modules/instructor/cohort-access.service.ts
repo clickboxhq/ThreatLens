@@ -21,6 +21,12 @@ import type { CohortStaffRole } from '@prisma/client';
  * org_admin gets read access to every cohort in their organisation without being staffed on
  * it, and no write access. Seeing what is running under your organisation is a different
  * thing from teaching it.
+ *
+ * platform_admin reaches every cohort, but only to read it or to repair its staffing. The
+ * case this exists for is mundane and needs no bug: a tutor leaves, and their account was the
+ * only lead on several cohorts, so nobody can restaff them. Teaching — assignments, grading,
+ * feedback — stays with the people actually running the cohort, so a support action can never
+ * be mistaken for an instructor's own.
  */
 
 const RANK: Record<CohortStaffRole, number> = {
@@ -37,8 +43,15 @@ export interface CohortAccess {
   groupScoped: boolean;
   /** Populated for a group_tutor; empty otherwise. */
   groupIds: string[];
+  /**
+   * True when the caller is staff on the cohort, which is what authorises teaching actions —
+   * assignments, grading, feedback. False for an org_admin or platform_admin, who can reach
+   * the cohort without teaching it. Enforce this for any write that is not staffing.
+   */
   canWrite: boolean;
   canManageStaff: boolean;
+  /** True when access came from being a platform admin, so an override can be audited as one. */
+  isPlatformAdmin: boolean;
 }
 
 @Injectable()
@@ -67,6 +80,28 @@ export class CohortAccessService {
     });
 
     if (!staff) {
+      // The permitted set here is deliberately not a rank range: 'lead' (staffing) is allowed
+      // while 'tutor' (teaching) is refused, even though lead outranks tutor. The distinction
+      // is what the action is, not how much authority it takes.
+      if (user.role === 'platform_admin') {
+        if (minRole === 'tutor') {
+          throw new AppException(
+            403,
+            'FORBIDDEN',
+            'Platform admins can repair a cohort’s staffing but not teach it.',
+          );
+        }
+        return {
+          cohortId,
+          role: null,
+          groupScoped: false,
+          groupIds: [],
+          canWrite: false,
+          canManageStaff: true,
+          isPlatformAdmin: true,
+        };
+      }
+
       // An org_admin may look at any cohort in their organisation, but not change it. Anyone
       // else gets the same 404 a non-existent cohort gives, so the endpoint cannot be used to
       // discover which cohort ids are real.
@@ -92,6 +127,7 @@ export class CohortAccessService {
         groupIds: [],
         canWrite: false,
         canManageStaff: false,
+        isPlatformAdmin: false,
       };
     }
 
@@ -118,8 +154,11 @@ export class CohortAccessService {
       role: staff.role,
       groupScoped,
       groupIds,
+      // Every staff role can teach; this is what separates staff from an org_admin or
+      // platform_admin who can see the cohort without being on it.
       canWrite: RANK[staff.role] >= RANK['group_tutor'],
       canManageStaff: staff.role === 'lead',
+      isPlatformAdmin: false,
     };
   }
 
@@ -144,6 +183,13 @@ export class CohortAccessService {
       select: { cohortId: true },
     });
     const ids = new Set(staffed.map((s) => s.cohortId));
+
+    // A platform admin can reach every cohort, so listing is not scoped for them.
+    if (user.role === 'platform_admin') {
+      const all = await this.prisma.cohort.findMany({ select: { id: true } });
+      for (const c of all) ids.add(c.id);
+      return [...ids];
+    }
 
     if (user.role === 'org_admin' && user.orgId) {
       const orgCohorts = await this.prisma.cohort.findMany({

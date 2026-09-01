@@ -123,7 +123,9 @@ describe('CohortAccessService', () => {
         user({ role: 'org_admin' }),
       );
       expect(a.role).toBeNull();
+      // canWrite is what stops a reader grading. It is checked, not decorative.
       expect(a.canWrite).toBe(false);
+      expect(a.isPlatformAdmin).toBe(false);
     });
 
     it('may not change it', async () => {
@@ -143,6 +145,52 @@ describe('CohortAccessService', () => {
           user({ role: 'org_admin', orgId: 'some-other-org' }),
         ),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  // A platform admin exists to keep the product working, not to teach on it. The case this
+  // is for needs no bug: a tutor leaves, their account was the only lead on several cohorts,
+  // and without this nobody can restaff them without database surgery.
+  describe('platform_admin', () => {
+    const admin = () => user({ role: 'platform_admin', orgId: null });
+
+    it('may read any cohort without being staffed or in the organisation', async () => {
+      const a = await build({ staff: null }).requireAccess('cohort-1', admin());
+      expect(a.role).toBeNull();
+      expect(a.isPlatformAdmin).toBe(true);
+    });
+
+    it('may repair staffing, so a cohort whose lead has left is recoverable', async () => {
+      const a = await build({ staff: null }).requireAccess(
+        'cohort-1',
+        admin(),
+        'lead',
+      );
+      expect(a.canManageStaff).toBe(true);
+    });
+
+    it('may NOT teach, even though teaching needs less authority than staffing', async () => {
+      // The permitted set is not a rank range. What separates the two is what the action is,
+      // not how much authority it takes, so this asymmetry is deliberate.
+      await expect(
+        build({ staff: null }).requireAccess('cohort-1', admin(), 'tutor'),
+      ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+    });
+
+    it('cannot grade: canWrite stays false so teaching writes refuse them', async () => {
+      const a = await build({ staff: null }).requireAccess('cohort-1', admin());
+      expect(a.canWrite).toBe(false);
+    });
+
+    it('uses their staff role when they are actually staffed on the cohort', async () => {
+      const a = await build({ staff: { role: 'tutor' } }).requireAccess(
+        'cohort-1',
+        admin(),
+        'tutor',
+      );
+      expect(a.role).toBe('tutor');
+      expect(a.isPlatformAdmin).toBe(false);
+      expect(a.canWrite).toBe(true);
     });
   });
 
