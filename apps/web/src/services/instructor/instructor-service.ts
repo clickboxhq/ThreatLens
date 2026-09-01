@@ -22,7 +22,13 @@ export interface InstructorService {
   listAssignments(cohortId: string): Promise<AssignmentDto[]>;
   createAssignment(
     cohortId: string,
-    input: { scenarioId: string; dueAt?: string; attemptLimit?: number },
+    input: {
+      scenarioId: string;
+      /** Omitted assigns to the whole cohort; set targets one group. */
+      groupId?: string;
+      dueAt?: string;
+      attemptLimit?: number;
+    },
   ): Promise<AssignmentDto>;
   reviewQueue(cohortId: string): Promise<ReviewQueueItemDto[]>;
   submitFeedback(

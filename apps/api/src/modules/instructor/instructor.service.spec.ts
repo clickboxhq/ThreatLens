@@ -12,7 +12,10 @@ function buildUser(
   } as AuthenticatedUser;
 }
 
-function buildService(accessOverride?: unknown) {
+function buildService(
+  accessOverride?: unknown,
+  group?: { id: string; name: string },
+) {
   const cohort = {
     id: 'cohort-1',
     ownerId: 'instructor-1',
@@ -31,15 +34,18 @@ function buildService(accessOverride?: unknown) {
       findUniqueOrThrow: jest.fn(async () => cohort),
     },
     attackScenario: { findUnique: jest.fn(async () => scenario) },
+    cohortGroup: { findFirst: jest.fn(async () => group ?? null) },
     cohortScenarioAssignment: {
       create: jest.fn(async () => ({ id: 'assignment-1' })),
       findUniqueOrThrow: jest.fn(async () => ({
         id: 'assignment-1',
         scenarioId: scenario.id,
+        groupId: group?.id ?? null,
         dueAt: null,
         attemptLimit: null,
         createdAt: new Date(),
         scenario,
+        group: group ?? null,
       })),
     },
     cohortEnrollment: {
@@ -108,6 +114,34 @@ describe('InstructorService.createAssignment', () => {
     expect(notificationsService.create).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'student-2', category: 'assignment' }),
     );
+  });
+
+  // The write path took a groupId but the read path dropped it, so a group-scoped assignment
+  // came back indistinguishable from a cohort-wide one. Both directions are asserted because
+  // only having one of them is what let this through the first time.
+  it('reports which group a group-scoped assignment is for', async () => {
+    const { service } = buildService(undefined, {
+      id: 'group-1',
+      name: 'Seminar A',
+    });
+    const result = await service.createAssignment(buildUser(), 'cohort-1', {
+      scenarioId: 'scenario-1',
+      groupId: 'group-1',
+    } as never);
+
+    expect(result).toMatchObject({
+      groupId: 'group-1',
+      groupName: 'Seminar A',
+    });
+  });
+
+  it('reports a cohort-wide assignment as belonging to no group', async () => {
+    const { service } = buildService();
+    const result = await service.createAssignment(buildUser(), 'cohort-1', {
+      scenarioId: 'scenario-1',
+    } as never);
+
+    expect(result).toMatchObject({ groupId: null, groupName: null });
   });
 
   it('only notifies actively-enrolled students, not the whole cohort table', async () => {

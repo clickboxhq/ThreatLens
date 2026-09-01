@@ -68,8 +68,12 @@ export function useAssignments(cohortId: string | undefined) {
 export function useCreateAssignment(cohortId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { scenarioId: string; dueAt?: string; attemptLimit?: number }) =>
-      instructorService.createAssignment(cohortId!, input),
+    mutationFn: (input: {
+      scenarioId: string;
+      groupId?: string;
+      dueAt?: string;
+      attemptLimit?: number;
+    }) => instructorService.createAssignment(cohortId!, input),
     onSuccess: () => {
       if (cohortId) {
         queryClient.invalidateQueries({ queryKey: keys.assignments(cohortId) });

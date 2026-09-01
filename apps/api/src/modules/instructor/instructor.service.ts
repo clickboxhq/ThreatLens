@@ -178,7 +178,7 @@ export class InstructorService {
     await this.cohortAccess.requireAccess(cohortId, user);
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
       where: { cohortId },
-      include: { scenario: true },
+      include: { scenario: true, group: true },
       orderBy: { createdAt: 'desc' },
     });
     return assignments.map(mapAssignment);
@@ -339,7 +339,7 @@ export class InstructorService {
     const cohort = await this.requireCohort(cohortId, user, 'tutor');
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
       where: { cohortId },
-      include: { scenario: true },
+      include: { scenario: true, group: true },
     });
     const assignmentIds = assignments.map((a) => a.id);
     const scenarioTitleByAssignment = new Map(
@@ -410,7 +410,7 @@ export class InstructorService {
     const assignment =
       await this.prisma.cohortScenarioAssignment.findUniqueOrThrow({
         where: { id: assignmentId },
-        include: { scenario: true },
+        include: { scenario: true, group: true },
       });
     return mapAssignment(assignment);
   }
@@ -419,15 +419,22 @@ export class InstructorService {
 function mapAssignment(a: {
   id: string;
   scenarioId: string;
+  groupId: string | null;
   dueAt: Date | null;
   attemptLimit: number | null;
   createdAt: Date;
   scenario: { title: string };
+  group: { name: string } | null;
 }) {
   return {
     id: a.id,
     scenarioId: a.scenarioId,
     scenarioTitle: a.scenario.title,
+    // Null means the whole cohort. Without these an instructor cannot tell a group-scoped
+    // assignment from a cohort-wide one after creating it — the write path knew, the read
+    // path forgot.
+    groupId: a.groupId,
+    groupName: a.group?.name ?? null,
     dueAt: a.dueAt,
     attemptLimit: a.attemptLimit,
     createdAt: a.createdAt,

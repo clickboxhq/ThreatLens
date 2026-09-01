@@ -37,6 +37,9 @@ export interface RosterEntryDto {
   displayName: string;
   email: string;
   status: EnrollmentStatus;
+  /** Null means enrolled in the cohort but not placed in any group. */
+  groupId: string | null;
+  groupName: string | null;
   enrolledAt: string;
 }
 
@@ -44,6 +47,9 @@ export interface AssignmentDto {
   id: string;
   scenarioId: string;
   scenarioTitle: string;
+  /** Null means the whole cohort; set targets one group. */
+  groupId: string | null;
+  groupName: string | null;
   dueAt: string | null;
   attemptLimit: number | null;
   createdAt: string;

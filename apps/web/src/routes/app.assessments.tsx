@@ -5,7 +5,12 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { CohortPicker } from "@/components/soc/cohort-picker";
 import { NoCohorts } from "@/components/soc/no-cohorts";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
-import { useSelectedCohort, useAssignments, useCreateAssignment } from "@/hooks/use-instructor";
+import {
+  useSelectedCohort,
+  useAssignments,
+  useCreateAssignment,
+  useCohortGroups,
+} from "@/hooks/use-instructor";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
 import { Plus } from "lucide-react";
 
@@ -28,6 +33,7 @@ function Assessments() {
   const { isLoading, cohorts, selectedCohort, selectedCohortId, setSelectedCohortId } =
     useSelectedCohort();
   const assignmentsQuery = useAssignments(selectedCohortId);
+  const groupsQuery = useCohortGroups(selectedCohortId);
   const createAssignment = useCreateAssignment(selectedCohortId);
   const scenariosQuery = useQuery({
     queryKey: ["scenarios", "catalog"],
@@ -38,6 +44,9 @@ function Assessments() {
   const [scenarioId, setScenarioId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [attemptLimit, setAttemptLimit] = useState("");
+  // "" targets the whole cohort. Groups are optional, so this stays out of the way until the
+  // instructor has actually created one.
+  const [groupId, setGroupId] = useState("");
 
   if (isLoading) {
     return (
@@ -54,6 +63,7 @@ function Assessments() {
 
   const assignments = assignmentsQuery.data ?? [];
   const scenarios = scenariosQuery.data ?? [];
+  const groups = groupsQuery.data ?? [];
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,12 +71,14 @@ function Assessments() {
     createAssignment.mutate(
       {
         scenarioId,
+        groupId: groupId || undefined,
         dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
         attemptLimit: attemptLimit ? Number(attemptLimit) : undefined,
       },
       {
         onSuccess: () => {
           setScenarioId("");
+          setGroupId("");
           setDueAt("");
           setAttemptLimit("");
           setShowForm(false);
@@ -117,6 +129,27 @@ function Assessments() {
                 ))}
               </select>
             </label>
+            {/* Only shown once groups exist — a cohort without them assigns to everyone, and an
+             * always-visible "Whole cohort" dropdown would imply a choice that is not there. */}
+            {groups.length > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Assign to
+                </span>
+                <select
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  className="h-9 rounded-md border border-border bg-background px-3 text-[13px] focus:outline-none"
+                >
+                  <option value="">Whole cohort</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.studentCount})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="flex flex-col gap-1">
               <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                 Due date
@@ -175,6 +208,7 @@ function Assessments() {
               <thead className="bg-background/50 text-[10.5px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2.5 text-left">Scenario</th>
+                  <th className="px-4 py-2.5 text-left">Assigned to</th>
                   <th className="px-4 py-2.5 text-left">Due</th>
                   <th className="px-4 py-2.5 text-left">Attempt limit</th>
                   <th className="px-4 py-2.5 text-right">Assigned</th>
@@ -184,6 +218,7 @@ function Assessments() {
                 {assignments.map((a) => (
                   <tr key={a.id} className="hover:bg-background/40">
                     <td className="px-4 py-3 font-medium">{a.scenarioTitle}</td>
+                    <td className="px-4 py-3 text-secondary">{a.groupName ?? "Whole cohort"}</td>
                     <td className="px-4 py-3 text-secondary">
                       {a.dueAt ? new Date(a.dueAt).toLocaleDateString() : "No due date"}
                     </td>
