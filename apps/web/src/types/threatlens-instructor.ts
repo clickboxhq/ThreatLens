@@ -68,3 +68,26 @@ export interface InstructorFeedbackDto {
   reopenedSession: boolean;
   createdAt: string;
 }
+
+// ---------- Cohort staffing and groups ----------
+
+export type CohortStaffRole = "lead" | "tutor" | "group_tutor";
+
+export interface CohortStaffDto {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: CohortStaffRole;
+  addedAt: string;
+  /** Populated for a group_tutor; empty for whole-cohort staff. */
+  groups: { id: string; name: string }[];
+}
+
+export interface CohortGroupDto {
+  id: string;
+  name: string;
+  studentCount: number;
+  assignmentCount: number;
+  tutors: { userId: string; displayName: string }[];
+  createdAt: string;
+}

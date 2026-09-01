@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useOwnedCohorts, useCreateCohort } from "@/hooks/use-instructor";
-import { Plus, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Users } from "lucide-react";
+import { CohortStaffing } from "@/components/soc/cohort-staffing";
 
 export const Route = createFileRoute("/app/cohorts")({
   component: Cohorts,
@@ -28,6 +29,9 @@ function Cohorts() {
   const createCohort = useCreateCohort();
   const [name, setName] = useState("");
   const [showForm, setShowForm] = useState(false);
+  // Staffing and groups are per-cohort, so they expand inline rather than needing a route of
+  // their own — a cohort list is short and this keeps the two visible together.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const cohorts = cohortsQuery.data ?? [];
 
@@ -117,22 +121,39 @@ function Cohorts() {
               </thead>
               <tbody className="divide-y divide-border">
                 {cohorts.map((c) => (
-                  <tr key={c.id} className="hover:bg-background/40">
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/app/instructor"
-                        className="inline-flex items-center gap-1.5 font-medium text-foreground hover:text-[color:var(--info)]"
-                      >
-                        <Users className="size-3.5 text-muted-foreground" /> {c.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-[12px] tracking-wider">{c.joinCode}</td>
-                    <td className="px-4 py-3 tabular-nums">{c.enrollmentCount}</td>
-                    <td className="px-4 py-3 tabular-nums">{c.assignmentCount}</td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      {new Date(c.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
+                  <Fragment key={c.id}>
+                    <tr className="hover:bg-background/40">
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                          aria-expanded={expandedId === c.id}
+                          className="inline-flex items-center gap-1.5 font-medium text-foreground hover:text-[color:var(--info)]"
+                        >
+                          {expandedId === c.id ? (
+                            <ChevronDown className="size-3.5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="size-3.5 text-muted-foreground" />
+                          )}
+                          <Users className="size-3.5 text-muted-foreground" /> {c.name}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[12px] tracking-wider">
+                        {c.joinCode}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">{c.enrollmentCount}</td>
+                      <td className="px-4 py-3 tabular-nums">{c.assignmentCount}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {new Date(c.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                    {expandedId === c.id && (
+                      <tr>
+                        <td colSpan={5} className="bg-background/30 px-4 py-4">
+                          <CohortStaffing cohortId={c.id} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
