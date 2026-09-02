@@ -1,11 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
-import { IconTile } from "@/components/soc/ui/icon-tile";
 import { useAchievements } from "@/hooks/use-achievements";
 import type { AchievementKey } from "@/types/socverse-achievements";
-import { Award, Crosshair, Flame, Radar, ShieldCheck, Target } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/app/achievements")({
   component: Achievements,
@@ -25,14 +22,18 @@ export const Route = createFileRoute("/app/achievements")({
   }),
 });
 
-const ICONS: Record<AchievementKey, LucideIcon> = {
-  first_blood: Flame,
-  perfect_score: Award,
-  sharpshooter: Crosshair,
-  technique_master: Target,
-  verdict_veteran: ShieldCheck,
-  no_hints_needed: Radar,
-  category_explorer: Radar,
+// One illustrated emblem per achievement — real artwork, not a UI icon standing in for one.
+// Each ships on a solid black backing; `mix-blend-mode: screen` in the badge below drops that
+// black to nothing against the card's own dark background rather than showing as a mismatched
+// square, so the hexagon reads as sitting directly on the card.
+const BADGES: Record<AchievementKey, string> = {
+  first_blood: "/badges/first-blood.jpg",
+  perfect_score: "/badges/perfect-score.jpg",
+  sharpshooter: "/badges/sharpshooter.jpg",
+  technique_master: "/badges/technique-master.jpg",
+  verdict_veteran: "/badges/verdict-veteran.jpg",
+  no_hints_needed: "/badges/no-hints-needed.jpg",
+  category_explorer: "/badges/category-explorer.jpg",
 };
 
 function Achievements() {
@@ -55,15 +56,22 @@ function Achievements() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {achievements.map((a) => {
-            const Icon = ICONS[a.key];
             const got = a.earnedAt !== null;
             return (
               <Panel key={a.key}>
-                <div className="flex items-start gap-3">
-                  <IconTile tone={got ? "success" : "neutral"} size="lg">
-                    <Icon className="size-5" />
-                  </IconTile>
-                  <div className="min-w-0">
+                <div className="flex items-start gap-4">
+                  <img
+                    src={BADGES[a.key]}
+                    alt=""
+                    aria-hidden="true"
+                    className="size-20 shrink-0 mix-blend-screen transition-[filter,opacity] duration-300"
+                    style={
+                      got
+                        ? undefined
+                        : { filter: "grayscale(0.9) brightness(0.5) contrast(0.9)", opacity: 0.7 }
+                    }
+                  />
+                  <div className="min-w-0 pt-1">
                     <div className="text-[13.5px] font-medium">{a.title}</div>
                     <div className="mt-0.5 text-[11.5px] text-muted-foreground">
                       {a.description}
