@@ -1,7 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 
-// ThreatLens's real GET /scenarios (apps/api's ScenarioCatalogController) — published
-// scenarios only, never the ground-truth-bearing scenario version underneath.
+// SOCVerse's real GET /scenarios (apps/api's ScenarioCatalogController) — published scenarios
+// only, never the ground-truth-bearing scenario version underneath.
 export interface RealScenario {
   id: string;
   slug: string;
@@ -10,13 +10,27 @@ export interface RealScenario {
   category: string;
   difficulty: string;
   estimatedMinutes: number;
-  /**
-   * Tactic-level (not technique-level) coverage — e.g. "Credential Access" plus how many
-   * required techniques fall under it. Deliberately not exact MITRE technique IDs: those
-   * are the scoring rubric's answer key (see the backend controller's own comment) and must
-   * never be readable before a student starts the scenario.
-   */
-  tacticCoverage: { tactic: string; techniqueCount: number }[];
+}
+
+/** GET /scenarios/recommended — the scenario best covering the learner's weakest tactic.
+ *
+ * The matching runs server-side deliberately. It has to read each scenario's required
+ * techniques to rank candidates, and that list is the scoring answer key — so it must never
+ * reach the browser. This response names the tactic being worked on, which is the useful
+ * *reason*, and no techniques. */
+export interface ScenarioRecommendation {
+  scenarioId: string;
+  scenarioSlug: string;
+  scenarioTitle: string;
+  tactic: string;
+  tacticName: string;
+  percent: number;
+  hitCount: number;
+  requiredCount: number;
+}
+
+export function getRecommendedScenario(): Promise<ScenarioRecommendation | null> {
+  return apiClient.get<ScenarioRecommendation | null>("/scenarios/recommended");
 }
 
 export function listRealScenarios(): Promise<RealScenario[]> {

@@ -1,19 +1,27 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { InstructorService } from './instructor.service';
+import { CohortStaffService } from './cohort-staff.service';
 import {
+  AddCohortStaffDto,
+  AssignGroupTutorDto,
   CreateAssignmentDto,
   CreateCohortDto,
+  CreateCohortGroupDto,
+  PlaceStudentInGroupDto,
   SubmitInstructorFeedbackDto,
+  UpdateCohortStaffRoleDto,
 } from './dto/instructor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -21,14 +29,126 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
-// §16.13 — Instructor Service. Every route here is coarse-gated to the `instructor`
-// role (§15.2 layer 1); fine-grained cohort-ownership checks happen in the service
-// (§15.2 layer 2), since an instructor may own some cohorts but not others.
+// §16.13 — Instructor Service. Every route here is coarse-gated by role (§15.2 layer 1);
+// which cohort, and with what authority, is decided in the service (§15.2 layer 2), since an
+// instructor is staffed on some cohorts and not others.
+//
+// org_admin is admitted at this coarse layer so they can read cohorts in their organisation.
+// CohortAccessService refuses them every write, so the guard staying permissive here does not
+// widen what they can actually do.
 @Controller('instructor')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('instructor')
+// Coarse gate only. org_admin and platform_admin are admitted here so they can reach a
+// cohort at all; CohortAccessService decides what each may actually do with it — an
+// org_admin reads their organisation's cohorts, a platform_admin reads any cohort and may
+// repair its staffing, and neither may teach.
+@Roles('instructor', 'org_admin', 'platform_admin')
 export class InstructorController {
-  constructor(private readonly instructorService: InstructorService) {}
+  constructor(
+    private readonly instructorService: InstructorService,
+    private readonly cohortStaff: CohortStaffService,
+  ) {}
+
+  // ---------------------------------------------------------------- staff
+
+  @Get('cohorts/:id/staff')
+  async listStaff(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.cohortStaff.listStaff(user, id);
+  }
+
+  @Post('cohorts/:id/staff')
+  async addStaff(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddCohortStaffDto,
+  ) {
+    return this.cohortStaff.addStaff(user, id, dto.email, dto.role);
+  }
+
+  @Patch('cohorts/:id/staff/:userId')
+  async updateStaffRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: UpdateCohortStaffRoleDto,
+  ) {
+    return this.cohortStaff.updateStaffRole(user, id, userId, dto.role);
+  }
+
+  @Delete('cohorts/:id/staff/:userId')
+  async removeStaff(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.cohortStaff.removeStaff(user, id, userId);
+  }
+
+  // ---------------------------------------------------------------- groups
+
+  @Get('cohorts/:id/groups')
+  async listGroups(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.cohortStaff.listGroups(user, id);
+  }
+
+  @Post('cohorts/:id/groups')
+  async createGroup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateCohortGroupDto,
+  ) {
+    return this.cohortStaff.createGroup(user, id, dto.name);
+  }
+
+  @Delete('cohorts/:id/groups/:groupId')
+  async deleteGroup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.cohortStaff.deleteGroup(user, id, groupId);
+  }
+
+  @Post('cohorts/:id/groups/:groupId/tutors')
+  async assignGroupTutor(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: AssignGroupTutorDto,
+  ) {
+    return this.cohortStaff.assignGroupTutor(user, id, groupId, dto.userId);
+  }
+
+  @Delete('cohorts/:id/groups/:groupId/tutors/:userId')
+  async removeGroupTutor(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.cohortStaff.removeGroupTutor(user, id, groupId, userId);
+  }
+
+  @Patch('cohorts/:id/students/:userId/group')
+  async placeStudentInGroup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: PlaceStudentInGroupDto,
+  ) {
+    return this.cohortStaff.placeStudentInGroup(
+      user,
+      id,
+      userId,
+      dto.groupId ?? null,
+    );
+  }
 
   @Post('cohorts')
   async createCohort(

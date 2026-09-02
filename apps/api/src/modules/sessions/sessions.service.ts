@@ -317,6 +317,17 @@ export class SessionsService {
       );
     }
 
+    // A group-scoped assignment belongs to one group. Being in the cohort is not enough —
+    // otherwise a student could launch another group's work by passing its id directly, which
+    // the listing no longer shows them but the API would still have accepted.
+    if (assignment.groupId && assignment.groupId !== enrollment.groupId) {
+      throw new AppException(
+        403,
+        'NOT_IN_ASSIGNED_GROUP',
+        'This assignment is set for a different group.',
+      );
+    }
+
     if (assignment.attemptLimit != null) {
       const attempts = await this.prisma.investigationSession.count({
         where: { cohortAssignmentId, userId: user.id },

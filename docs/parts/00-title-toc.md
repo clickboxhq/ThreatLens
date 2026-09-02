@@ -1,8 +1,8 @@
-# SOCVerse
+# ThreatLens
 ## Software Architecture & Technical Design Specification
 
 **Document status:** Draft v1.0 — Architecture Baseline
-**Prepared for:** SOCVerse Engineering Team
+**Prepared for:** ThreatLens Engineering Team
 **Classification:** Internal / Confidential
 **Date:** 2026-07-28
 
@@ -10,9 +10,9 @@
 
 ### Purpose of This Document
 
-This document is the complete software architecture and technical design specification for SOCVerse, a proprietary, cloud-based cybersecurity training platform that simulates realistic Security Operations Center (SOC) investigations. It is written to be sufficiently detailed and unambiguous that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural assumptions. Every service boundary, data model, API contract, and infrastructure decision is intended to be treated as authoritative for implementation purposes unless a subsequent, explicitly versioned decision supersedes it.
+This document is the complete software architecture and technical design specification for ThreatLens, a proprietary, cloud-based cybersecurity training platform that simulates realistic Security Operations Center (SOC) investigations. It is written to be sufficiently detailed and unambiguous that an engineering team — or an AI coding agent — can implement the platform from an empty repository without having to make architectural assumptions. Every service boundary, data model, API contract, and infrastructure decision is intended to be treated as authoritative for implementation purposes unless a subsequent, explicitly versioned decision supersedes it.
 
-SOCVerse is **not** a SIEM and depends on **no** existing SIEM, EDR, or identity platform (Wazuh, Splunk, Elastic, Sentinel, Chronicle, QRadar, or otherwise). All telemetry, detection logic, investigation surfaces, and scoring are proprietary, generated and owned entirely by this platform. See §1.6 for the explicit non-goals this implies.
+ThreatLens is **not** a SIEM and depends on **no** existing SIEM, EDR, or identity platform (Wazuh, Splunk, Elastic, Sentinel, Chronicle, QRadar, or otherwise). All telemetry, detection logic, investigation surfaces, and scoring are proprietary, generated and owned entirely by this platform. See §1.6 for the explicit non-goals this implies.
 
 ---
 

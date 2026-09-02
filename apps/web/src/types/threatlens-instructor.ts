@@ -37,6 +37,9 @@ export interface RosterEntryDto {
   displayName: string;
   email: string;
   status: EnrollmentStatus;
+  /** Null means enrolled in the cohort but not placed in any group. */
+  groupId: string | null;
+  groupName: string | null;
   enrolledAt: string;
 }
 
@@ -44,6 +47,9 @@ export interface AssignmentDto {
   id: string;
   scenarioId: string;
   scenarioTitle: string;
+  /** Null means the whole cohort; set targets one group. */
+  groupId: string | null;
+  groupName: string | null;
   dueAt: string | null;
   attemptLimit: number | null;
   createdAt: string;
@@ -66,5 +72,28 @@ export interface InstructorFeedbackDto {
   rubricOverrides: unknown;
   comment: string;
   reopenedSession: boolean;
+  createdAt: string;
+}
+
+// ---------- Cohort staffing and groups ----------
+
+export type CohortStaffRole = "lead" | "tutor" | "group_tutor";
+
+export interface CohortStaffDto {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: CohortStaffRole;
+  addedAt: string;
+  /** Populated for a group_tutor; empty for whole-cohort staff. */
+  groups: { id: string; name: string }[];
+}
+
+export interface CohortGroupDto {
+  id: string;
+  name: string;
+  studentCount: number;
+  assignmentCount: number;
+  tutors: { userId: string; displayName: string }[];
   createdAt: string;
 }

@@ -1,4 +1,4 @@
-# Phase 1 / MVP production topology (docs/SOCVerse-Architecture.md §19.1): single VPS, one
+# Phase 1 / MVP production topology (docs/ThreatLens-Architecture.md §19.1): single VPS, one
 # `app` container running both the API and the BullMQ workers (splitting them into separate
 # processes is a deferred follow-up, not done here), nginx terminating TLS in front of it and
 # of the static `web` build, postgres/redis/minio self-hosted on the same host, and a `migrate`

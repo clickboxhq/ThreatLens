@@ -106,6 +106,7 @@ describe('LeaderboardService — cross-tenant disclosure', () => {
           .fn()
           .mockResolvedValue({ id: 'c1', ownerId: 'someone' }),
       },
+      cohortStaff: { findUnique: jest.fn().mockResolvedValue(null) },
       cohortEnrollment: {
         findUnique: jest.fn().mockResolvedValue({ status: 'active' }),
       },

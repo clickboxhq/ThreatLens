@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
+import { EventOwnershipService } from '../session-core/event-ownership.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
@@ -16,6 +17,7 @@ export class EvidenceNotesService {
     private readonly prisma: PrismaService,
     private readonly sessionAccess: SessionAccessService,
     private readonly investigationActions: InvestigationActionsService,
+    private readonly eventOwnership: EventOwnershipService,
   ) {}
 
   async pinEvidence(
@@ -26,6 +28,13 @@ export class EvidenceNotesService {
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentEditable(sessionId, incidentId);
+    // The event id arrives from the client; confirm it belongs to this session rather than
+    // trusting it because it parses as a UUID.
+    await this.eventOwnership.assertEventInSession(
+      sessionId,
+      dto.eventTable,
+      dto.eventId,
+    );
 
     const evidence = await this.prisma.evidenceCollection.create({
       data: {

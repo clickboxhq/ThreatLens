@@ -21,7 +21,7 @@ Role capability summary: `student` — own sessions/scores/certificates only. `i
 ## 15.3 Encryption
 
 - **In transit:** TLS 1.2+ enforced on every public endpoint (HTTP requests to port 80 receive a redirect only, no data is ever served over plaintext HTTP); internal service-to-service traffic at Scale (§19.4) runs over the cluster's private network with TLS between mesh-connected services where the deployment platform supports it, and is never exposed to the public internet regardless (§4.5).
-- **At rest:** the database volume and object storage are encrypted at rest using the host/provider's disk or bucket-level encryption (LUKS on the MVP VPS; provider-managed encryption at Scale) — application-layer field encryption is *not* used for the synthetic telemetry tables (there is no real-world sensitive content there to protect beyond standard disk encryption) but **is** used for `organizations.sso_config` secret-bearing fields and any stored payment-related reference tokens (§20 — SOCVerse never stores raw card data itself; billing integrates with a PCI-compliant processor, §15.8).
+- **At rest:** the database volume and object storage are encrypted at rest using the host/provider's disk or bucket-level encryption (LUKS on the MVP VPS; provider-managed encryption at Scale) — application-layer field encryption is *not* used for the synthetic telemetry tables (there is no real-world sensitive content there to protect beyond standard disk encryption) but **is** used for `organizations.sso_config` secret-bearing fields and any stored payment-related reference tokens (§20 — ThreatLens never stores raw card data itself; billing integrates with a PCI-compliant processor, §15.8).
 - Backups (§3.11) inherit the same at-rest encryption and are additionally encrypted with a backup-specific key before leaving the primary environment.
 
 ## 15.4 Secrets Management
@@ -47,7 +47,7 @@ Detailed token mechanics in §5.7. Security-relevant behaviors: refresh-token ro
 
 ## 15.8 Payment Security
 
-SOCVerse never handles, stores, or transmits raw payment card data — all billing/subscription payment collection is delegated to a PCI-DSS-compliant third-party payment processor's hosted checkout/tokenization flow (§20); the platform stores only the processor-issued customer/subscription reference tokens (`organizations.billing_customer_id`, §6.4, and an equivalent field on `users` for individual subscriptions), keeping SOCVerse itself out of PCI-DSS scope entirely — a deliberate, cost- and risk-reducing architectural choice appropriate for a bootstrapped team (§20).
+ThreatLens never handles, stores, or transmits raw payment card data — all billing/subscription payment collection is delegated to a PCI-DSS-compliant third-party payment processor's hosted checkout/tokenization flow (§20); the platform stores only the processor-issued customer/subscription reference tokens (`organizations.billing_customer_id`, §6.4, and an equivalent field on `users` for individual subscriptions), keeping ThreatLens itself out of PCI-DSS scope entirely — a deliberate, cost- and risk-reducing architectural choice appropriate for a bootstrapped team (§20).
 
 ## 15.9 Audit Logging
 

@@ -2,7 +2,7 @@
 
 ## 9.1 Purpose
 
-The Identity Portal is SOCVerse's proprietary analog to an Entra ID-style identity investigation surface (§1.6) — it is where a Student investigates *who* was involved in an incident: sign-in behavior, risk signals, group membership, and device associations. It is backed entirely by the `identities` and related tables in §6.10 and the `sign_in_events`/`conditional_access_evaluations` tables in §6.12.1, scoped to the active `session_id`.
+The Identity Portal is ThreatLens's proprietary analog to an Entra ID-style identity investigation surface (§1.6) — it is where a Student investigates *who* was involved in an incident: sign-in behavior, risk signals, group membership, and device associations. It is backed entirely by the `identities` and related tables in §6.10 and the `sign_in_events`/`conditional_access_evaluations` tables in §6.12.1, scoped to the active `session_id`.
 
 ## 9.2 Identity Directory (List View)
 

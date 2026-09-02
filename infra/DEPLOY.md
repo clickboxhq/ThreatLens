@@ -1,4 +1,4 @@
-# Production deploy runbook (Phase 1 / MVP — docs/SOCVerse-Architecture.md §19.1)
+# Production deploy runbook (Phase 1 / MVP — docs/ThreatLens-Architecture.md §19.1)
 
 **Not the current deployment target.** The team moved to Railway — see `infra/RAILWAY.md`.
 This file is kept as a reference/fallback (a self-hosted single-VPS setup remains a valid,

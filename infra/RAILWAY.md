@@ -1,7 +1,7 @@
 # Deploying to Railway
 
 This is the current deployment target — `infra/docker-compose.prod.yml`/`DEPLOY.md` (a
-single-VPS setup per `docs/SOCVerse-Architecture.md` §19.1) is kept as a reference/fallback,
+single-VPS setup per `docs/ThreatLens-Architecture.md` §19.1) is kept as a reference/fallback,
 not actively used. Railway replaces the VPS, nginx, and certbot entirely: every service gets
 its own TLS-terminated domain and its own logs/metrics dashboard from Railway itself, so a
 few pieces built for the VPS don't carry over — see "What's different" at the bottom.
