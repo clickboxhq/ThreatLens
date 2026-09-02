@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { WorkspacePage } from "@/components/soc/workspace-page";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
-import type { LeaderboardPeriod } from "@/types/socverse-learning";
+import type { LeaderboardPeriod } from "@/types/threatlens-learning";
 import { Trophy } from "lucide-react";
 
 export const Route = createFileRoute("/app/leaderboard")({

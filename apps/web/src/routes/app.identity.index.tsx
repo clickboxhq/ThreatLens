@@ -9,7 +9,7 @@ import { useActiveSession } from "@/hooks/use-active-session";
 import { useIdentities, useIdentitySignIns } from "@/hooks/use-identities";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { ExternalLink, MapPin, ShieldCheck, ShieldOff } from "lucide-react";
-import type { IdentityRiskLevel } from "@/types/socverse-operations";
+import type { IdentityRiskLevel } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/identity/")({
   component: IdentityCenter,

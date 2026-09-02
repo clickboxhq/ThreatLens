@@ -2,7 +2,7 @@ import { Panel } from "@/components/soc/primitives";
 import { EventTypeIcon, eventTypeLabel } from "@/components/soc/ui/event-icon";
 import { InvestigationGraph } from "@/components/soc/investigation-graph";
 import { Trash2 } from "lucide-react";
-import type { EvidenceItemDto, TimelineItemDto } from "@/types/socverse-investigation";
+import type { EvidenceItemDto, TimelineItemDto } from "@/types/threatlens-investigation";
 
 /**
  * Evidence: what you pinned, why it's arranged the way it is, and how it connects — the

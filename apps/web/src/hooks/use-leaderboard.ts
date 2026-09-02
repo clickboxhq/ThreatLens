@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { leaderboardService } from "@/services/leaderboard";
 import { cohortsService } from "@/services/cohorts";
-import type { LeaderboardPeriod } from "@/types/socverse-learning";
+import type { LeaderboardPeriod } from "@/types/threatlens-learning";
 
 /**
  * Ranks a learner against the people they actually share a classroom with, and falls back to

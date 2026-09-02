@@ -6,7 +6,7 @@ import type {
   OwnedCohortDto,
   ReviewQueueItemDto,
   RosterEntryDto,
-} from "@/types/socverse-instructor";
+} from "@/types/threatlens-instructor";
 
 export const apiInstructorService: InstructorService = {
   listCohorts: () => apiClient.get<OwnedCohortDto[]>("/instructor/cohorts"),

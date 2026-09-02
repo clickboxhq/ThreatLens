@@ -14,7 +14,7 @@ import { investigationsService } from "@/services/investigations";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
 import { formatEventTime } from "@/components/soc/entity-drawer-shell";
 import { ChevronDown, ChevronRight, Loader2, Terminal, X } from "lucide-react";
-import type { SearchEntityType, SearchResultItem } from "@/types/socverse-investigation";
+import type { SearchEntityType, SearchResultItem } from "@/types/threatlens-investigation";
 
 export const Route = createFileRoute("/app/logs")({
   component: LogExplorer,

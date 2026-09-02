@@ -12,7 +12,7 @@ import {
   useRenameOrganization,
 } from "@/hooks/use-organizations";
 import { Building2, Clock, Pencil, UserPlus } from "lucide-react";
-import type { InviteRole } from "@/types/socverse-organizations";
+import type { InviteRole } from "@/types/threatlens-organizations";
 
 export const Route = createFileRoute("/app/organizations")({
   component: OrgsPage,

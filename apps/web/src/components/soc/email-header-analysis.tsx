@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
-import type { EmailMessageDto } from "@/types/socverse-operations";
+import type { EmailMessageDto } from "@/types/threatlens-operations";
 
 type Finding = {
   severity: "suspicious" | "clean" | "info";

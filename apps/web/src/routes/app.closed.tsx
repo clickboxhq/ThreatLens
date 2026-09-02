@@ -5,7 +5,7 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useMySessions } from "@/hooks/use-sessions";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { CheckCircle2, XCircle } from "lucide-react";
-import type { SessionListItemDto } from "@/types/socverse-operations";
+import type { SessionListItemDto } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/closed")({
   component: ClosedCasesPage,

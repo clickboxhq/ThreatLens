@@ -4,7 +4,7 @@ import type {
   OrganizationDto,
   OrganizationInviteDto,
   OrganizationMemberDto,
-} from "@/types/socverse-organizations";
+} from "@/types/threatlens-organizations";
 
 export interface OrganizationsService {
   create(name: string): Promise<OrganizationDto>;

@@ -10,7 +10,7 @@ import { useActiveSession } from "@/hooks/use-active-session";
 import { useSessionNetwork } from "@/hooks/use-network";
 import { useEndpoints } from "@/hooks/use-endpoints";
 import { ArrowDown, ArrowUp, Network } from "lucide-react";
-import type { NetworkEventDto } from "@/types/socverse-operations";
+import type { NetworkEventDto } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/network")({
   component: NetworkCenter,

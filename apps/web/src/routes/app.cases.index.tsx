@@ -4,8 +4,8 @@ import { StatusBadge } from "@/components/soc/primitives";
 import { useMySessions } from "@/hooks/use-sessions";
 import { deriveViewState } from "@/hooks/use-query-state";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import type { SessionStatus } from "@/types/socverse-investigation";
-import type { SessionListItemDto } from "@/types/socverse-operations";
+import type { SessionStatus } from "@/types/threatlens-investigation";
+import type { SessionListItemDto } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/cases/")({
   component: CaseManagement,

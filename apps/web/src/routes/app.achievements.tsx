@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useAchievements } from "@/hooks/use-achievements";
-import type { AchievementKey } from "@/types/socverse-achievements";
+import type { AchievementKey } from "@/types/threatlens-achievements";
 
 export const Route = createFileRoute("/app/achievements")({
   component: Achievements,

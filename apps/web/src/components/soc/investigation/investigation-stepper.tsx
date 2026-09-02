@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
-import type { HintDto } from "@/types/socverse-investigation";
+import type { HintDto } from "@/types/threatlens-investigation";
 
 export type Stage =
   | "investigate"

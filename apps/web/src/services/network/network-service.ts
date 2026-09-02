@@ -1,4 +1,4 @@
-import type { NetworkEventDto } from "@/types/socverse-operations";
+import type { NetworkEventDto } from "@/types/threatlens-operations";
 
 /** Network Center — every connection recorded across every device in one investigation, the
  * session-wide counterpart to endpointsService.getNetwork's per-device view. */

@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { AuditLogsService } from "./audit-logs-service";
-import type { AuditLogEntryDto } from "@/types/socverse-learning";
+import type { AuditLogEntryDto } from "@/types/threatlens-learning";
 
 export const apiAuditLogsService: AuditLogsService = {
   list: (filters = {}) => {

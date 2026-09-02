@@ -18,7 +18,7 @@ import { EmailHeaderAnalysis } from "@/components/soc/email-header-analysis";
 import { InsightPrompts } from "@/components/soc/insight-prompts";
 import { EntityDrawerShell } from "@/components/soc/entity-drawer-shell";
 import { PivotableValue } from "@/components/soc/ui/pivotable-value";
-import type { EmailMessageDto } from "@/types/socverse-operations";
+import type { EmailMessageDto } from "@/types/threatlens-operations";
 
 type Tab = "message" | "headers" | "recipients" | "links";
 

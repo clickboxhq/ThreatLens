@@ -5,7 +5,7 @@ import type {
   CloudEventDto,
   DirectoryAuditEventDto,
   EntityInsightDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
 /** Identities are generated per session — each scenario invents its own small "org" of users,
  * so this is always scoped to one investigation, never a global directory. */

@@ -1,4 +1,4 @@
-import type { MyCertificateDto, PublicCertificateDto } from "@/types/socverse-learning";
+import type { MyCertificateDto, PublicCertificateDto } from "@/types/threatlens-learning";
 
 export interface CertificatesService {
   listCertificates(): Promise<MyCertificateDto[]>;

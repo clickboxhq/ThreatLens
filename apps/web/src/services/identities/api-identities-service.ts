@@ -7,7 +7,7 @@ import type {
   CloudEventDto,
   DirectoryAuditEventDto,
   EntityInsightDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
 export const apiIdentitiesService: IdentitiesService = {
   list: (sessionId) => apiClient.get<IdentityDto[]>(`/sessions/${sessionId}/identities`),

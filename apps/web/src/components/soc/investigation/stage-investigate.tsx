@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Panel, SeverityBadge } from "@/components/soc/primitives";
 import { Pin, ListTree, Search, Mail, UserRound, MonitorSmartphone } from "lucide-react";
 import { labelForResult, detailForResult } from "@/lib/search-result-format";
-import type { SearchEntityType } from "@/types/socverse-investigation";
+import type { SearchEntityType } from "@/types/threatlens-investigation";
 
 const ENTITY_TYPE_LABEL: Record<string, string> = {
   sign_in_event: "Sign-ins",

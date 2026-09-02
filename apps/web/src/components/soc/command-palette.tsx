@@ -172,7 +172,7 @@ export function CommandPalette({
             </Command.Group>
 
             {/* Alerts/identities/devices are generated per investigation session, not a global
-             * "SOC" directory (see socverse-operations.ts) — jumping to Global Search above is
+             * "SOC" directory (see threatlens-operations.ts) — jumping to Global Search above is
              * the real way to look one up, rather than faking an org-wide index here. */}
             <Command.Group heading="Scenarios">
               {scenarios.map((s) => (

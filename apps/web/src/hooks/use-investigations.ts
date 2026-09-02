@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { investigationsService } from "@/services/investigations";
-import type { IncidentVerdict, ResponseActionType } from "@/types/socverse-investigation";
+import type { IncidentVerdict, ResponseActionType } from "@/types/threatlens-investigation";
 
 const keys = {
   session: (sessionId: string) => ["session", sessionId] as const,

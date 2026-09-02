@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import type { SearchEntityType } from "./socverse-investigation";
+import type { SearchEntityType } from "./threatlens-investigation";
 
 // Backed by SOCVerse's real POST /search/mine — the same field=value/freetext query the
 // in-case search panel uses, run across every session the Student has ever run instead of

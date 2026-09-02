@@ -3,8 +3,8 @@ import { Panel } from "@/components/soc/primitives";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { ApiError } from "@/lib/api-client";
 import { Loader2, ShieldCheck } from "lucide-react";
-import type { IncidentVerdict } from "@/types/socverse-investigation";
-import type { MitreTechniqueDto } from "@/types/socverse-investigation";
+import type { IncidentVerdict } from "@/types/threatlens-investigation";
+import type { MitreTechniqueDto } from "@/types/threatlens-investigation";
 
 const VERDICTS: { id: IncidentVerdict; label: string; hint: string }[] = [
   { id: "true_positive", label: "True positive", hint: "Malicious activity confirmed with impact" },

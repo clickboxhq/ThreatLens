@@ -1,14 +1,14 @@
 // Types matching SOCVerse's real API responses for the "operations" surface — the student's
 // own session history, and the per-session alert/identity/device/email portals. Verified
 // against apps/api's controllers/DTOs (sessions, alerts, identity-portal, device-portal,
-// email-portal), same as socverse-investigation.ts covers the case-workspace domain.
+// email-portal), same as threatlens-investigation.ts covers the case-workspace domain.
 //
 // Everything here except SessionListItemDto is scoped to one investigation session at a time —
 // SOCVerse generates each scenario's identities/devices/emails/alerts fresh per session, so
 // there's no cross-session "org" for these to live in the way ThreatLens's original mock UI
 // assumed. See use-active-session.ts for how pages pick which session they're showing.
 
-import type { SessionStatus } from "./socverse-investigation";
+import type { SessionStatus } from "./threatlens-investigation";
 
 export interface SessionListItemDto {
   id: string;

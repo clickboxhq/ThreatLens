@@ -1,4 +1,4 @@
-import type { SessionListItemDto } from "@/types/socverse-operations";
+import type { SessionListItemDto } from "@/types/threatlens-operations";
 import { ChevronDown } from "lucide-react";
 
 /** Shown in the header of pages scoped to one active investigation (Alert Center, Identity/

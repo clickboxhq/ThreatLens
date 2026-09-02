@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Panel } from "@/components/soc/primitives";
-import type { NoteDto } from "@/types/socverse-investigation";
+import type { NoteDto } from "@/types/threatlens-investigation";
 
 // Quick-insert prefixes — a lightweight authoring aid, not a structured-notes schema. The
 // backend note shape is just {id, body, createdAt} (see evidence-notes.service.ts's createNote)

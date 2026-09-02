@@ -16,7 +16,7 @@ import type {
   AlertEntityType,
   AlertSeverity,
   AlertStatus,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 import type { Severity, Status } from "@/components/soc/primitives";
 
 export const Route = createFileRoute("/app/alerts")({

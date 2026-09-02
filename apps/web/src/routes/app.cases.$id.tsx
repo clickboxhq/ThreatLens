@@ -27,7 +27,7 @@ import { ApiError } from "@/lib/api-client";
 import { useIdentities } from "@/hooks/use-identities";
 import { useEndpoints } from "@/hooks/use-endpoints";
 import { toast } from "sonner";
-import type { IncidentVerdict, ResponseActionType } from "@/types/socverse-investigation";
+import type { IncidentVerdict, ResponseActionType } from "@/types/threatlens-investigation";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 
 const STAGE_IDS = new Set(STAGES.map((s) => s.id));

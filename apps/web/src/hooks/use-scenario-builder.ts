@@ -3,7 +3,7 @@ import { useState } from "react";
 import { scenarioBuilderService } from "@/services/scenario-builder";
 import { investigationsService } from "@/services/investigations";
 import { queryKeys } from "./query-keys";
-import type { ScenarioDraft } from "@/types/socverse-scenario-builder";
+import type { ScenarioDraft } from "@/types/threatlens-scenario-builder";
 
 let refCounter = 0;
 function nextRef(prefix: string): string {

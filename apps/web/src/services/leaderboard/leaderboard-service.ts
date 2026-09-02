@@ -2,7 +2,7 @@ import type {
   LeaderboardDto,
   LeaderboardPeriod,
   LeaderboardScope,
-} from "@/types/socverse-learning";
+} from "@/types/threatlens-learning";
 
 export interface LeaderboardService {
   get(

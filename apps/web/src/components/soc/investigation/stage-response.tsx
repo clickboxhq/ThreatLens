@@ -3,7 +3,7 @@ import { Panel } from "@/components/soc/primitives";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { toast } from "sonner";
 import { CheckCircle2, Zap } from "lucide-react";
-import type { ResponseActionType } from "@/types/socverse-investigation";
+import type { ResponseActionType } from "@/types/threatlens-investigation";
 
 // Response actions have no entity picker server-side (LogResponseActionDto only ever accepts
 // {actionType, targetType} — see incident.dto.ts) — the audit trail records the incident, not

@@ -8,7 +8,7 @@ import { useActiveSession } from "@/hooks/use-active-session";
 import { useEndpoints, useIsolateDevice } from "@/hooks/use-endpoints";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { ChevronRight, Cpu, Lock } from "lucide-react";
-import type { DeviceRiskLevel } from "@/types/socverse-operations";
+import type { DeviceRiskLevel } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/endpoints/")({
   component: EndpointCenter,

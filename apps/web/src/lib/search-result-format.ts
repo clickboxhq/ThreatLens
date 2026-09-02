@@ -1,4 +1,4 @@
-import type { SearchEntityType } from "@/types/socverse-investigation";
+import type { SearchEntityType } from "@/types/threatlens-investigation";
 
 // Shared by the in-case search panel (app.cases.$id.tsx) and Global Search
 // (services/search/api-search-service.ts) — both render the same

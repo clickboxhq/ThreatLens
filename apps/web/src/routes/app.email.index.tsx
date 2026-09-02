@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   ShieldAlert,
 } from "lucide-react";
-import type { EmailMessageDto } from "@/types/socverse-operations";
+import type { EmailMessageDto } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/email/")({
   component: EmailPage,

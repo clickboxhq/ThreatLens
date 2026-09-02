@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { ArrowLeft, ArrowRight, Clock3, FileText, Layers, ShieldAlert } from "lucide-react";
-import type { SessionDto } from "@/types/socverse-investigation";
+import type { SessionDto } from "@/types/threatlens-investigation";
 
 const DIFFICULTY_TONE: Record<string, string> = {
   beginner: "text-[color:var(--success)] border-[color:var(--success)]/30 bg-[color:var(--success)]/10",

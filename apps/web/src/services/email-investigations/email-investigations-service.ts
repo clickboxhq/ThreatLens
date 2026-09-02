@@ -2,9 +2,9 @@ import type {
   EmailMessageDto,
   EmailLinkActivityDto,
   EntityInsightDto,
-} from "@/types/socverse-operations";
+} from "@/types/threatlens-operations";
 
-/** Emails are generated per session, same as identities/devices — see socverse-operations.ts. */
+/** Emails are generated per session, same as identities/devices — see threatlens-operations.ts. */
 export interface EmailInvestigationsService {
   list(sessionId: string): Promise<EmailMessageDto[]>;
   getMessage(sessionId: string, messageId: string): Promise<EmailMessageDto>;

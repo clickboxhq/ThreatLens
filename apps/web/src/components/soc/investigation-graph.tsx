@@ -13,7 +13,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Mail, MonitorSmartphone, Pin, UserRound } from "lucide-react";
-import type { EvidenceItemDto, TimelineEntityType, TimelineItemDto } from "@/types/socverse-investigation";
+import type { EvidenceItemDto, TimelineEntityType, TimelineItemDto } from "@/types/threatlens-investigation";
 
 const ENTITY_ICON: Record<TimelineEntityType, typeof UserRound> = {
   identity: UserRound,

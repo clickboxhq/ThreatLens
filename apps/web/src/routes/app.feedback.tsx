@@ -7,7 +7,7 @@ import { NoCohorts } from "@/components/soc/no-cohorts";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useSelectedCohort, useReviewQueue, useSubmitFeedback } from "@/hooks/use-instructor";
 import { investigationsService } from "@/services/investigations";
-import type { ReviewQueueItemDto } from "@/types/socverse-instructor";
+import type { ReviewQueueItemDto } from "@/types/threatlens-instructor";
 
 export const Route = createFileRoute("/app/feedback")({
   component: FeedbackCenter,

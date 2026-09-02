@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { AlertsService } from "./alerts-service";
-import type { AlertDto, AlertEvidenceDto } from "@/types/socverse-operations";
+import type { AlertDto, AlertEvidenceDto } from "@/types/threatlens-operations";
 
 export const apiAlertsService: AlertsService = {
   getEvidence: (sessionId, alertId) =>
