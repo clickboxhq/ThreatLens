@@ -41,7 +41,7 @@ const modules = [
   { to: "/app/alerts", label: "Alerts", icon: Bell },
   { to: "/app/incidents", label: "Incident Queue", icon: ShieldAlert },
   { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
-  { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
+  { to: "/app/evidence", label: "Evidence Locker", icon: HardDrive },
   { to: "/app/graph", label: "Investigation Graph", icon: Waypoints },
   { to: "/app/closed", label: "Closed Alerts & Cases", icon: Archive },
   { to: "/app/identity", label: "Identity Center", icon: UserRound },

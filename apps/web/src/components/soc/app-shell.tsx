@@ -20,7 +20,6 @@ import {
   Settings as SettingsIcon,
   CircleUserRound,
   CreditCard,
-  BookOpen,
   LifeBuoy,
   HardDrive,
   ChevronsUpDown,
@@ -89,7 +88,7 @@ const workspace: NavItem[] = [
   { to: "/app/incidents", label: "Incident Queue", icon: ShieldAlert },
   { to: "/app/cases", label: "Case Management", icon: Inbox },
   { to: "/app/timeline", label: "Global Timeline", icon: ListTree },
-  { to: "/app/evidence", label: "Entity Locker", icon: HardDrive },
+  { to: "/app/evidence", label: "Evidence Locker", icon: HardDrive },
   { to: "/app/graph", label: "Investigation Graph", icon: Waypoints },
   { to: "/app/closed", label: "Closed Alerts & Cases", icon: Archive },
 ];
@@ -275,8 +274,10 @@ function SidebarBody({
         )}
       </nav>
 
-      {/* Footer: subscription + storage — hidden in collapsed mode, not worth
-          the icon-only treatment */}
+      {/* Footer: plan + support — hidden in collapsed mode, not worth
+          the icon-only treatment. Storage and Docs were dropped (§1.6 "no fake UI"):
+          Storage was a hardcoded number with no backing quota, Docs had nowhere real
+          to link. Support now points at a real mailbox instead of href="#". */}
       {!collapsed && (
         <div className="border-t border-sidebar-border p-3">
           <div className="rounded-lg border border-[color:var(--card-border-tint)] bg-background/40 p-3">
@@ -286,21 +287,11 @@ function SidebarBody({
                 {isOrg ? "Cohort Plan" : "Individual Plan"}
               </span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Storage</span>
-              <span className="tabular-nums">{isOrg ? "184 / 500 GB" : "1.2 / 5 GB"}</span>
-            </div>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
-              <div
-                className="h-full rounded-full bg-[color:var(--info)]"
-                style={{ width: isOrg ? "36%" : "24%" }}
-              />
-            </div>
             <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
-              <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
-                <BookOpen className="size-3.5" /> Docs
-              </a>
-              <a href="#" className="inline-flex items-center gap-1 hover:text-foreground">
+              <a
+                href="mailto:info@useclickbox.com"
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
                 <LifeBuoy className="size-3.5" /> Support
               </a>
               {isOrg ? (
@@ -511,7 +502,7 @@ const crumbMap: Record<string, string> = {
   "/app/alerts": "Alert Center",
   "/app/incidents": "Incident Queue",
   "/app/cases": "Case Management",
-  "/app/evidence": "Entity Locker",
+  "/app/evidence": "Evidence Locker",
   "/app/graph": "Investigation Graph",
   "/app/closed": "Closed Alerts & Cases",
   "/app/timeline": "Global Timeline",
