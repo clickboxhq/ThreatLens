@@ -54,7 +54,7 @@ function EndpointCenter() {
   const atRisk = devices.filter((d) => d.riskLevel !== "none").length;
 
   return (
-    <div className="relative px-4 py-6 md:px-8 md:py-8">
+    <div className="relative min-h-screen px-4 py-6 md:px-8 md:py-8">
       <EndpointIconField />
       <SectionHeader
         title="Endpoint Center"
