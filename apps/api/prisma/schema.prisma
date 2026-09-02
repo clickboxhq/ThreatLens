@@ -65,9 +65,9 @@ enum AvatarType {
   upload
 }
 
-// l1 -> l2 -> senior. Deterministic promotion, evaluated the same way
-// AchievementKey is: pure functions over scored session history, no manual
-// self-selection (see career-progression module).
+// l1 -> l2 -> senior. Drives the guided-vs-independent investigation mode
+// (see investigation-checklist.tsx's GuidanceLevel). Set manually — there is
+// no automatic-promotion system computing this from scored session history.
 enum CareerLevel {
   l1
   l2
@@ -146,9 +146,8 @@ model User {
   avatarPresetKey  String?    @map("avatar_preset_key")
   avatarDataUrl    String?    @map("avatar_data_url")
 
-  // SOC Career Progression (§ enterprise upgrade) — deterministic, computed
-  // from scored session history the same way achievements are, never
-  // user-selected directly.
+  // Drives guided-vs-independent investigation mode. Manually set — the
+  // automatic-promotion system that once computed this was removed.
   careerLevel CareerLevel @default(l1) @map("career_level")
 
   deletedAt DateTime? @map("deleted_at")
@@ -1280,10 +1279,6 @@ enum NotificationCategory {
   instructor_feedback
   certificate_issued
   org_invitation
-  // Added alongside SOC Career Progression — a real trigger now exists
-  // (career-progression.service.ts fires this on a level-up), matching the
-  // project's own rule of only adding a category once something real emits it.
-  career_milestone
 }
 
 model Notification {

@@ -51,7 +51,6 @@ import { Route as AppMitreRouteImport } from './routes/app.mitre'
 import { Route as AppNetworkRouteImport } from './routes/app.network'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
-import { Route as AppProgressRouteImport } from './routes/app.progress'
 import { Route as AppScenarioBuilderRouteImport } from './routes/app.scenario-builder'
 import { Route as AppScenariosRouteImport } from './routes/app.scenarios'
 import { Route as AppSearchRouteImport } from './routes/app.search'
@@ -283,11 +282,6 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
-const AppProgressRoute = AppProgressRouteImport.update({
-  id: '/progress',
-  path: '/progress',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppScenarioBuilderRoute = AppScenarioBuilderRouteImport.update({
   id: '/scenario-builder',
   path: '/scenario-builder',
@@ -435,7 +429,6 @@ export interface FileRoutesByFullPath {
   '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -499,7 +492,6 @@ export interface FileRoutesByTo {
   '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -565,7 +557,6 @@ export interface FileRoutesById {
   '/app/network': typeof AppNetworkRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
-  '/app/progress': typeof AppProgressRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
   '/app/scenarios': typeof AppScenariosRoute
   '/app/search': typeof AppSearchRoute
@@ -632,7 +623,6 @@ export interface FileRouteTypes {
     | '/app/network'
     | '/app/organizations'
     | '/app/profile'
-    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -696,7 +686,6 @@ export interface FileRouteTypes {
     | '/app/network'
     | '/app/organizations'
     | '/app/profile'
-    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -761,7 +750,6 @@ export interface FileRouteTypes {
     | '/app/network'
     | '/app/organizations'
     | '/app/profile'
-    | '/app/progress'
     | '/app/scenario-builder'
     | '/app/scenarios'
     | '/app/search'
@@ -1107,13 +1095,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/progress': {
-      id: '/app/progress'
-      path: '/progress'
-      fullPath: '/app/progress'
-      preLoaderRoute: typeof AppProgressRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/app/scenario-builder': {
       id: '/app/scenario-builder'
       path: '/scenario-builder'
@@ -1279,7 +1260,6 @@ interface AppRouteChildren {
   AppNetworkRoute: typeof AppNetworkRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
-  AppProgressRoute: typeof AppProgressRoute
   AppScenarioBuilderRoute: typeof AppScenarioBuilderRoute
   AppScenariosRoute: typeof AppScenariosRoute
   AppSearchRoute: typeof AppSearchRoute
@@ -1322,7 +1302,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppNetworkRoute: AppNetworkRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
-  AppProgressRoute: AppProgressRoute,
   AppScenarioBuilderRoute: AppScenarioBuilderRoute,
   AppScenariosRoute: AppScenariosRoute,
   AppSearchRoute: AppSearchRoute,

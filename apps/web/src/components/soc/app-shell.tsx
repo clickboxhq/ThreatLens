@@ -44,7 +44,6 @@ import {
   Terminal,
   Network as NetworkIcon,
   Waypoints,
-  TrendingUp,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -104,12 +103,11 @@ const investigationCenters: NavItem[] = [
   { to: "/app/logs", label: "Log Explorer", icon: Terminal },
 ];
 
-// LEARNING & PRACTICE — content, mastery, and career progression.
+// LEARNING & PRACTICE — content and mastery.
 const learning: NavItem[] = [
   { to: "/app/scenarios", label: "Scenario Library", icon: Library },
   { to: "/app/learning", label: "Learning Center", icon: GraduationCap },
   { to: "/app/mitre", label: "MITRE ATT&CK Explorer", icon: Crosshair },
-  { to: "/app/progress", label: "My Progress", icon: TrendingUp },
   { to: "/app/achievements", label: "Achievements", icon: Medal },
   { to: "/app/certificates", label: "Certificates", icon: Award },
   { to: "/app/leaderboard", label: "Leaderboard", icon: Trophy },
@@ -516,7 +514,6 @@ const crumbMap: Record<string, string> = {
   "/app/scenarios": "Scenario Library",
   "/app/learning": "Learning Center",
   "/app/mitre": "MITRE ATT&CK Explorer",
-  "/app/progress": "My Progress",
   "/app/achievements": "Achievements",
   "/app/certificates": "Certificates",
   "/app/leaderboard": "Leaderboard",

@@ -14,7 +14,7 @@ import { Check, ChevronDown, ChevronRight, ListChecks } from "lucide-react";
  */
 /**
  * Guidance level, driven by the analyst's own SOC career level (User.careerLevel — l1 by
- * default until the career-progression system computes real promotions):
+ * default; there is no automatic promotion system, so this currently only changes by hand):
  * - "full" (SOC Level 1): checklist open by default — the brief's "suggested investigation
  *   areas" for beginners, backed by real per-task persistence rather than static copy.
  * - "reduced" (SOC Level 2): same checklist, collapsed by default — available, not pushed.

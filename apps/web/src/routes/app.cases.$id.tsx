@@ -265,9 +265,9 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
 
-  // Guided vs. independent investigation mode, driven by the analyst's own SOC career level
-  // (defaults to l1/full guidance for everyone until the career-progression system computes
-  // real promotions — see investigation-checklist.tsx's GuidanceLevel doc comment).
+  // Guided vs. independent investigation mode, driven by the analyst's own SOC career level.
+  // careerLevel currently only ever changes by hand (the automatic-promotion system that
+  // once computed it was removed) — see investigation-checklist.tsx's GuidanceLevel doc comment.
   const authUser = useAuthUser();
   const guidanceLevel: "full" | "reduced" | "independent" =
     ({ l1: "full", l2: "reduced", senior: "independent" } satisfies Record<

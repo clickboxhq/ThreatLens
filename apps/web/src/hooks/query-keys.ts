@@ -30,5 +30,4 @@ export const queryKeys = {
   timeline: ["timeline"] as const,
   emailInvestigations: ["email-investigations"] as const,
   notifications: ["notifications"] as const,
-  careerProgression: ["career-progression"] as const,
 };

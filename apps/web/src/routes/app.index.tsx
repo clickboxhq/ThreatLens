@@ -9,9 +9,7 @@ import {
   ArrowUpRight,
   Gauge,
   PlayCircle,
-  Shield,
   ShieldAlert,
-  ShieldCheck,
   Target,
   Trophy,
 } from "lucide-react";
@@ -29,9 +27,8 @@ import { useDashboardPerformance } from "@/hooks/use-dashboard-performance";
 import { useLearningRecommendation } from "@/hooks/use-learning-recommendation";
 import { useLearningOverview } from "@/hooks/use-learning-center";
 import { useCertificates } from "@/hooks/use-certificates";
-import { useCareerProgression } from "@/hooks/use-career-progression";
 import { useActiveSession } from "@/hooks/use-active-session";
-import { useAuthUser, type CareerLevel } from "@/lib/auth-store";
+import { useAuthUser } from "@/lib/auth-store";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 
 export const Route = createFileRoute("/app/")({
@@ -57,12 +54,6 @@ const kpiIcons = [
   <Activity className="size-4" key="f" />,
 ];
 
-const LEVEL_ICON: Record<CareerLevel, typeof Shield> = {
-  l1: Shield,
-  l2: Award,
-  senior: ShieldCheck,
-};
-
 function masteryTone(v: number) {
   if (v >= 85) return "var(--success)";
   if (v >= 70) return "var(--info)";
@@ -85,7 +76,6 @@ function Dashboard() {
   const { recommendation } = useLearningRecommendation();
   const { tracks } = useLearningOverview();
   const { certificates } = useCertificates();
-  const { data: career } = useCareerProgression();
   const { activeSessions } = useActiveSession();
   // Most recently started active investigation — the one thing worth resuming right now,
   // rather than the generic "Resume investigation" link this replaces.
@@ -119,36 +109,9 @@ function Dashboard() {
         }
       />
 
-      {/* Career status + priority investigation */}
-      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {career && (
-          <Link
-            to="/app/progress"
-            className="glass-card lg:col-span-1 flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-background/40"
-          >
-            {(() => {
-              const Icon = LEVEL_ICON[career.currentLevel];
-              return (
-                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[color:var(--info)]/10 text-[color:var(--info)]">
-                  <Icon className="size-4.5" />
-                </div>
-              );
-            })()}
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                Career status
-              </div>
-              <div className="truncate text-[13.5px] font-semibold">{career.currentTitle}</div>
-              <div className="mt-0.5 truncate text-[11px] text-secondary">
-                {career.nextLevel
-                  ? `${career.nextLevel.requirements.filter((r) => r.met).length}/${career.nextLevel.requirements.length} toward ${career.nextLevel.title}`
-                  : "Top of the career ladder"}
-              </div>
-            </div>
-          </Link>
-        )}
-
-        <div className="glass-card lg:col-span-2 flex items-center gap-3 px-4 py-3.5">
+      {/* Priority investigation */}
+      <div className="mb-6">
+        <div className="glass-card flex items-center gap-3 px-4 py-3.5">
           {priority ? (
             <>
               <IconTile tone="warning" size="md">
