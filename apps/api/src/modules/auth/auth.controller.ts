@@ -150,19 +150,27 @@ export class AuthController {
 
   @Patch('me')
   @UseGuards(JwtAuthGuard)
-  async updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
+  async updateMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
     return this.authService.updateProfile(user.id, dto);
   }
 
   @Post('me/avatar-preset')
   @UseGuards(JwtAuthGuard)
-  async setAvatarPreset(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetAvatarPresetDto) {
+  async setAvatarPreset(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SetAvatarPresetDto,
+  ) {
     return this.authService.setAvatarPreset(user.id, dto.presetKey ?? null);
   }
 
   @Post('me/avatar')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_BYTES } }))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: AVATAR_MAX_BYTES } }),
+  )
   async uploadAvatar(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: Express.Multer.File,
@@ -178,7 +186,11 @@ export class AuthController {
       );
     }
     if (file.size > AVATAR_MAX_BYTES) {
-      throw new AppException(400, 'VALIDATION_ERROR', 'Avatar must be 2MB or smaller.');
+      throw new AppException(
+        400,
+        'VALIDATION_ERROR',
+        'Avatar must be 2MB or smaller.',
+      );
     }
     const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
     return this.authService.setAvatarUpload(user.id, dataUrl);

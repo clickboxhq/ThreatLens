@@ -1,13 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  Award,
-  Bell,
-  Building2,
-  ClipboardCheck,
-  MessageSquare,
-  Target,
-} from "lucide-react";
+import { Award, Bell, Building2, ClipboardCheck, MessageSquare, Target } from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
 import { useNotifications } from "@/hooks/use-notifications";

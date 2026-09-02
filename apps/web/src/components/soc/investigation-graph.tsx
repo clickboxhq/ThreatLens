@@ -13,7 +13,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Mail, MonitorSmartphone, Pin, UserRound } from "lucide-react";
-import type { EvidenceItemDto, TimelineEntityType, TimelineItemDto } from "@/types/threatlens-investigation";
+import type {
+  EvidenceItemDto,
+  TimelineEntityType,
+  TimelineItemDto,
+} from "@/types/threatlens-investigation";
 
 const ENTITY_ICON: Record<TimelineEntityType, typeof UserRound> = {
   identity: UserRound,
@@ -113,11 +117,19 @@ export function InvestigationGraph({
       }
     }
 
-    const entityMeta = new Map<string, { label: string; entityType: TimelineEntityType; count: number }>();
+    const entityMeta = new Map<
+      string,
+      { label: string; entityType: TimelineEntityType; count: number }
+    >();
     for (const item of sorted) {
       const cur = entityMeta.get(item.entityId);
       if (cur) cur.count += 1;
-      else entityMeta.set(item.entityId, { label: item.entityLabel, entityType: item.entityType, count: 1 });
+      else
+        entityMeta.set(item.entityId, {
+          label: item.entityLabel,
+          entityType: item.entityType,
+          count: 1,
+        });
     }
 
     const nodes: Node[] = [];

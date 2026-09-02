@@ -25,7 +25,9 @@ export function StageEvidence({
     <div className="flex flex-col gap-4">
       <Panel
         title="Pinned evidence"
-        actions={<span className="text-[11px] text-muted-foreground">{evidence.length} pinned</span>}
+        actions={
+          <span className="text-[11px] text-muted-foreground">{evidence.length} pinned</span>
+        }
         padded={false}
       >
         {evidence.length === 0 ? (
@@ -81,7 +83,9 @@ export function StageEvidence({
                   <span className="font-mono text-[10.5px] text-muted-foreground">
                     {new Date(t.occurredAt).toISOString().slice(11, 16)} UTC
                   </span>
-                  <span className="text-[10.5px] text-muted-foreground">{eventTypeLabel(t.eventTable)}</span>
+                  <span className="text-[10.5px] text-muted-foreground">
+                    {eventTypeLabel(t.eventTable)}
+                  </span>
                   <span className="font-medium">{t.entityLabel}</span>
                 </div>
                 <p className="mt-0.5 text-[11.5px] text-secondary">{t.summary}</p>

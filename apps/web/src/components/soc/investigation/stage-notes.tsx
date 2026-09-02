@@ -26,8 +26,8 @@ export function StageNotes({
       <Panel title="Case notebook" padded={false}>
         {notes.length === 0 ? (
           <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-            Your working memory for this investigation. Not graded, but retained for review —
-            write down what you're seeing and why, as you go.
+            Your working memory for this investigation. Not graded, but retained for review — write
+            down what you're seeing and why, as you go.
           </div>
         ) : (
           <ul className="flex flex-col divide-y divide-border">

@@ -25,7 +25,10 @@ export const Route = createFileRoute("/app/threat-intel")({
   component: TIPage,
   validateSearch: (search: Record<string, unknown>): ThreatIntelSearch => ({
     type:
-      search.type === "ip" || search.type === "domain" || search.type === "hash" || search.type === "url"
+      search.type === "ip" ||
+      search.type === "domain" ||
+      search.type === "hash" ||
+      search.type === "url"
         ? search.type
         : undefined,
     value: typeof search.value === "string" ? search.value : undefined,
@@ -57,8 +60,12 @@ const REPUTATION_COPY: Record<LookupResult["reputation"], string> = {
  */
 function TIPage() {
   const { type: prefillType, value: prefillValue } = Route.useSearch();
-  const { isLoading: sessionsLoading, activeSessions, selectedSessionId, setSelectedSessionId } =
-    useActiveSession();
+  const {
+    isLoading: sessionsLoading,
+    activeSessions,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useActiveSession();
   const { actors, iocs, state } = useThreatIntel();
 
   const [type, setType] = useState<IndicatorType>(prefillType ?? "ip");
@@ -142,7 +149,11 @@ function TIPage() {
                 disabled={looking || !value.trim()}
                 className="btn-app-primary"
               >
-                {looking ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+                {looking ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Search className="size-3.5" />
+                )}
                 Look up
               </button>
             </div>

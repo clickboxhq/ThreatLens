@@ -24,9 +24,7 @@ function ClosedCasesPage() {
   const { data, isPending } = useMySessions();
   const [filter, setFilter] = useState<Filter>("all");
 
-  const closed = (data ?? []).filter(
-    (s) => s.status === "scored" || s.status === "abandoned",
-  );
+  const closed = (data ?? []).filter((s) => s.status === "scored" || s.status === "abandoned");
   const visible = closed.filter((s) => filter === "all" || s.status === filter);
 
   return (

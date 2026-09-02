@@ -19,8 +19,12 @@ export const Route = createFileRoute("/app/graph")({
  * what you built without scrolling past the evidence locker and response actions to see it.
  */
 function GraphPage() {
-  const { isLoading: sessionsLoading, activeSessions, selectedSessionId, setSelectedSessionId } =
-    useActiveSession();
+  const {
+    isLoading: sessionsLoading,
+    activeSessions,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useActiveSession();
 
   if (sessionsLoading) {
     return (

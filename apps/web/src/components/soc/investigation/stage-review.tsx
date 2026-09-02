@@ -1,5 +1,8 @@
 import { Panel } from "@/components/soc/primitives";
-import { InvestigationChecklist, type GuidanceLevel } from "@/components/soc/investigation-checklist";
+import {
+  InvestigationChecklist,
+  type GuidanceLevel,
+} from "@/components/soc/investigation-checklist";
 import { ActivityLogPanel } from "@/components/soc/activity-log-panel";
 import type { Stage } from "./investigation-stepper";
 
@@ -44,7 +47,12 @@ export function StageReview({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <InvestigationChecklist sessionId={sessionId} incidentId={incidentId} locked={locked} guidance={guidance} />
+      <InvestigationChecklist
+        sessionId={sessionId}
+        incidentId={incidentId}
+        locked={locked}
+        guidance={guidance}
+      />
 
       <Panel title="Investigation summary" className="mt-4">
         <ul className="flex flex-col divide-y divide-border">

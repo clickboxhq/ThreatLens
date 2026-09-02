@@ -18,10 +18,7 @@ export function EndpointIconField() {
   const id = useId();
 
   return (
-    <svg
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 size-full select-none"
-    >
+    <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full select-none">
       <defs>
         <pattern
           id={id}
@@ -31,22 +28,50 @@ export function EndpointIconField() {
           patternTransform="rotate(-8)"
         >
           {/* Monitor */}
-          <g transform="translate(18 22)" stroke="var(--info)" strokeWidth={1.4} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g
+            transform="translate(18 22)"
+            stroke="var(--info)"
+            strokeWidth={1.4}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x={0} y={0} width={62} height={42} rx={5} />
             <path d="M22 42v10M42 42v10M16 52h32" />
           </g>
           {/* Laptop */}
-          <g transform="translate(120 24) rotate(10)" stroke="var(--info)" strokeWidth={1.4} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g
+            transform="translate(120 24) rotate(10)"
+            stroke="var(--info)"
+            strokeWidth={1.4}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x={0} y={0} width={58} height={38} rx={4} />
             <path d="M-6 44h70l-6 10H0z" />
           </g>
           {/* Shield-check */}
-          <g transform="translate(60 128) rotate(-6)" stroke="var(--info)" strokeWidth={1.4} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g
+            transform="translate(60 128) rotate(-6)"
+            stroke="var(--info)"
+            strokeWidth={1.4}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M26 0 50 9v20c0 17-10 28-24 33C12 57 2 46 2 29V9Z" />
             <path d="M14 27l8 8 16-17" />
           </g>
           {/* Terminal */}
-          <g transform="translate(150 140)" stroke="var(--info)" strokeWidth={1.4} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g
+            transform="translate(150 140)"
+            stroke="var(--info)"
+            strokeWidth={1.4}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x={0} y={0} width={54} height={40} rx={5} />
             <path d="M10 14l10 8-10 8M28 30h16" />
           </g>

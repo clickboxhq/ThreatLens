@@ -7,13 +7,7 @@ import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useEmailInvestigations } from "@/hooks/use-email-investigations";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import {
-  ExternalLink,
-  Paperclip,
-  Link as LinkIcon,
-  ShieldCheck,
-  ShieldAlert,
-} from "lucide-react";
+import { ExternalLink, Paperclip, Link as LinkIcon, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { EmailMessageDto } from "@/types/threatlens-operations";
 
 export const Route = createFileRoute("/app/email/")({

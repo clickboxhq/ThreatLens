@@ -108,7 +108,9 @@ export function AvatarPickerDialog({
                 <User className="size-4" />
               </span>
               <span className="flex-1 text-[13px]">Use my initials</span>
-              {user.avatarType === "initials" && <Check className="size-4 text-[color:var(--info)]" />}
+              {user.avatarType === "initials" && (
+                <Check className="size-4 text-[color:var(--info)]" />
+              )}
               {pending === "initials" && <Loader2 className="size-3.5 animate-spin" />}
             </button>
           </div>

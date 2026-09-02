@@ -57,7 +57,8 @@ export function ConfirmDialog({
   const [pending, setPending] = useState(false);
   const [typed, setTyped] = useState("");
 
-  const locked = Boolean(typeToConfirm) && typed.trim().toLowerCase() !== typeToConfirm?.toLowerCase();
+  const locked =
+    Boolean(typeToConfirm) && typed.trim().toLowerCase() !== typeToConfirm?.toLowerCase();
 
   const handleConfirm = async () => {
     setPending(true);
@@ -102,7 +103,11 @@ export function ConfirmDialog({
         {typeToConfirm && (
           <label className="block">
             <span className="t-label mb-1.5 block">
-              Type <span className="font-mono normal-case tracking-normal text-foreground">{typeToConfirm}</span> to confirm
+              Type{" "}
+              <span className="font-mono normal-case tracking-normal text-foreground">
+                {typeToConfirm}
+              </span>{" "}
+              to confirm
             </span>
             <input
               autoFocus

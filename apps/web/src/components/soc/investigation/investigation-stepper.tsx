@@ -13,13 +13,7 @@ import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import type { HintDto } from "@/types/threatlens-investigation";
 
 export type Stage =
-  | "investigate"
-  | "evidence"
-  | "response"
-  | "intelligence"
-  | "notes"
-  | "review"
-  | "submit";
+  "investigate" | "evidence" | "response" | "intelligence" | "notes" | "review" | "submit";
 
 export const STAGES: { id: Stage; label: string; icon: typeof FileSearch }[] = [
   { id: "investigate", label: "Investigate", icon: FileSearch },

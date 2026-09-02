@@ -32,7 +32,12 @@ function severityForEntity(
   return "info";
 }
 
-type Pivot = { kind: "email" | "identity" | "device"; id: string; label: string; icon: typeof Mail };
+type Pivot = {
+  kind: "email" | "identity" | "device";
+  id: string;
+  label: string;
+  icon: typeof Mail;
+};
 
 function pivotsFor(entityType: SearchEntityType, data: Record<string, unknown>): Pivot[] {
   const pivots: Pivot[] = [];
@@ -41,12 +46,18 @@ function pivotsFor(entityType: SearchEntityType, data: Record<string, unknown>):
   if (entityType === "email_message") {
     pivots.push({ kind: "email", id: String(data.id), label: "Open message", icon: Mail });
   }
-  if (identityId) pivots.push({ kind: "identity", id: identityId, label: "View account", icon: UserRound });
-  if (deviceId) pivots.push({ kind: "device", id: deviceId, label: "View device", icon: MonitorSmartphone });
+  if (identityId)
+    pivots.push({ kind: "identity", id: identityId, label: "View account", icon: UserRound });
+  if (deviceId)
+    pivots.push({ kind: "device", id: deviceId, label: "View device", icon: MonitorSmartphone });
   return pivots;
 }
 
-type SearchResult = { entityType: SearchEntityType; occurredAt: string; data: Record<string, unknown> };
+type SearchResult = {
+  entityType: SearchEntityType;
+  occurredAt: string;
+  data: Record<string, unknown>;
+};
 
 /**
  * Investigate: the core analytical workspace, full width now instead of a squeezed 2/3 column.
@@ -93,7 +104,8 @@ export function StageInvestigate({
     }, {}),
   ).sort((a, b) => b[1] - a[1]) as [SearchEntityType, number][];
 
-  const visibleResults = typeFilter === "all" ? results : results.filter((r) => r.entityType === typeFilter);
+  const visibleResults =
+    typeFilter === "all" ? results : results.filter((r) => r.entityType === typeFilter);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -160,13 +172,17 @@ export function StageInvestigate({
             <li
               key={key}
               className={`px-4 py-3 ${
-                isPinned ? "border-l-2 border-[color:var(--success)] bg-[color:var(--success)]/[0.04]" : ""
+                isPinned
+                  ? "border-l-2 border-[color:var(--success)] bg-[color:var(--success)]/[0.04]"
+                  : ""
               }`}
             >
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[12.5px] font-medium">{labelForResult(r.entityType, r.data)}</span>
+                    <span className="text-[12.5px] font-medium">
+                      {labelForResult(r.entityType, r.data)}
+                    </span>
                     <SeverityBadge level={severityForEntity(r.entityType)} />
                     {isPinned && (
                       <span className="inline-flex items-center gap-1 rounded border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--success)]">
@@ -204,7 +220,9 @@ export function StageInvestigate({
                 <div className="flex shrink-0 flex-col gap-1.5">
                   <button
                     disabled={locked}
-                    onClick={() => (isPinned ? onUnpin(eventTable, eventId) : onPin(eventTable, eventId))}
+                    onClick={() =>
+                      isPinned ? onUnpin(eventTable, eventId) : onPin(eventTable, eventId)
+                    }
                     title={isPinned ? "Remove from evidence" : "Pin as evidence"}
                     className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] disabled:opacity-40 ${
                       isPinned
@@ -217,7 +235,9 @@ export function StageInvestigate({
                   <button
                     disabled={locked}
                     onClick={() =>
-                      onTimeline ? onRemoveFromTimeline(eventTable, eventId) : onAddToTimeline(eventTable, eventId)
+                      onTimeline
+                        ? onRemoveFromTimeline(eventTable, eventId)
+                        : onAddToTimeline(eventTable, eventId)
                     }
                     className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] disabled:opacity-40 ${
                       onTimeline

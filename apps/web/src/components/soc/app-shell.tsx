@@ -219,13 +219,7 @@ function NavGroup({
   );
 }
 
-function SidebarBody({
-  onNavigate,
-  collapsed,
-}: {
-  onNavigate?: () => void;
-  collapsed?: boolean;
-}) {
+function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const user = useAuthUser();
   // "Organization" nav (instructor tools, org settings) now gates on the real role SOCVerse
   // issued at signup/login, not the old accountType mock flag — org_admin included for when a
@@ -263,9 +257,15 @@ function SidebarBody({
 
       <nav className="flex-1 overflow-y-auto pb-4" onClick={onNavigate}>
         <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
-        <NavGroup label="Investigation Centers" items={investigationCenters} collapsed={collapsed} />
+        <NavGroup
+          label="Investigation Centers"
+          items={investigationCenters}
+          collapsed={collapsed}
+        />
         <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
-        {isOrg && <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />}
+        {isOrg && (
+          <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
+        )}
         {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
         {isPlatformAdmin && (
           <NavGroup label="Platform Admin" items={platformAdminTools} collapsed={collapsed} />

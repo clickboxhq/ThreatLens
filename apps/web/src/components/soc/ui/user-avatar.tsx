@@ -38,9 +38,7 @@ export function UserAvatar({
     );
   }
   if (user.avatarType === "preset" && user.avatarPresetKey) {
-    return (
-      <AvatarPresetBadge presetKey={user.avatarPresetKey} size={size} className={className} />
-    );
+    return <AvatarPresetBadge presetKey={user.avatarPresetKey} size={size} className={className} />;
   }
   return (
     <span

@@ -33,8 +33,12 @@ type DirectionFilter = "all" | "inbound" | "outbound";
  * per-device tab already does, just across the whole investigation instead of one machine.
  */
 function NetworkCenter() {
-  const { isLoading: sessionsLoading, activeSessions, selectedSessionId, setSelectedSessionId } =
-    useActiveSession();
+  const {
+    isLoading: sessionsLoading,
+    activeSessions,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useActiveSession();
 
   if (sessionsLoading) {
     return (
@@ -133,11 +137,15 @@ function NetworkCenterInner({
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Panel>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Connections</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Connections
+          </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums">{filtered.length}</div>
         </Panel>
         <Panel>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Destinations</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Destinations
+          </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums">{uniqueDestinations}</div>
         </Panel>
         <Panel>
@@ -151,7 +159,9 @@ function NetworkCenterInner({
           </div>
         </Panel>
         <Panel>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Sent / Received</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Sent / Received
+          </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums">
             {formatBytes(totalSent)} <span className="text-muted-foreground">/</span>{" "}
             {formatBytes(totalReceived)}
@@ -273,7 +283,8 @@ function NetworkCenterInner({
             </table>
             {filtered.length > 300 && (
               <p className="border-t border-border px-4 py-2 text-center text-[11px] text-muted-foreground">
-                Showing the first 300 of {filtered.length} connections — narrow the filter to see more.
+                Showing the first 300 of {filtered.length} connections — narrow the filter to see
+                more.
               </p>
             )}
           </div>

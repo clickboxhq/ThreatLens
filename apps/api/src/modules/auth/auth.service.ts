@@ -625,7 +625,9 @@ export class AuthService {
       data: {
         ...(dto.firstName !== undefined && { firstName: dto.firstName }),
         ...(dto.lastName !== undefined && { lastName: dto.lastName }),
-        ...(dto.professionalRole !== undefined && { professionalRole: dto.professionalRole }),
+        ...(dto.professionalRole !== undefined && {
+          professionalRole: dto.professionalRole,
+        }),
         ...(dto.bio !== undefined && { bio: dto.bio }),
         ...(dto.careerGoal !== undefined && { careerGoal: dto.careerGoal }),
         ...(dto.experienceLevel !== undefined && {
@@ -641,8 +643,16 @@ export class AuthService {
     await this.prisma.user.update({
       where: { id: userId },
       data: presetKey
-        ? { avatarType: 'preset', avatarPresetKey: presetKey, avatarDataUrl: null }
-        : { avatarType: 'initials', avatarPresetKey: null, avatarDataUrl: null },
+        ? {
+            avatarType: 'preset',
+            avatarPresetKey: presetKey,
+            avatarDataUrl: null,
+          }
+        : {
+            avatarType: 'initials',
+            avatarPresetKey: null,
+            avatarDataUrl: null,
+          },
     });
     return this.getMe(userId);
   }
@@ -652,7 +662,11 @@ export class AuthService {
   async setAvatarUpload(userId: string, dataUrl: string) {
     await this.prisma.user.update({
       where: { id: userId },
-      data: { avatarType: 'upload', avatarDataUrl: dataUrl, avatarPresetKey: null },
+      data: {
+        avatarType: 'upload',
+        avatarDataUrl: dataUrl,
+        avatarPresetKey: null,
+      },
     });
     return this.getMe(userId);
   }

@@ -88,42 +88,42 @@ function ScenarioLib() {
                   : undefined
               }
             >
-            <Panel>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="rounded border border-border bg-background px-1.5 py-0.5">
-                  {s.category}
-                </span>
-              </div>
-              <h3 className="mt-2 text-[14.5px] font-medium leading-snug">{s.title}</h3>
-              <p className="mt-1.5 line-clamp-2 text-[12px] text-secondary">{s.summary}</p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <div className="text-muted-foreground">Difficulty</div>
-                  <div className="mt-0.5 font-medium capitalize">{s.difficulty}</div>
+              <Panel>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="rounded border border-border bg-background px-1.5 py-0.5">
+                    {s.category}
+                  </span>
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Duration</div>
-                  <div className="mt-0.5 flex items-center gap-1 font-medium">
-                    <Clock className="size-3" /> ~{s.estimatedMinutes} min
+                <h3 className="mt-2 text-[14.5px] font-medium leading-snug">{s.title}</h3>
+                <p className="mt-1.5 line-clamp-2 text-[12px] text-secondary">{s.summary}</p>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <div className="text-muted-foreground">Difficulty</div>
+                    <div className="mt-0.5 font-medium capitalize">{s.difficulty}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Duration</div>
+                    <div className="mt-0.5 flex items-center gap-1 font-medium">
+                      <Clock className="size-3" /> ~{s.estimatedMinutes} min
+                    </div>
                   </div>
                 </div>
-              </div>
-              <button
-                disabled={launchingId === s.id}
-                onClick={() => handleLaunch(s.id)}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-2 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
-              >
-                {launchingId === s.id ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" /> Starting…
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="size-4" /> Launch investigation
-                  </>
-                )}
-              </button>
-            </Panel>
+                <button
+                  disabled={launchingId === s.id}
+                  onClick={() => handleLaunch(s.id)}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-2 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+                >
+                  {launchingId === s.id ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Starting…
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="size-4" /> Launch investigation
+                    </>
+                  )}
+                </button>
+              </Panel>
             </div>
           ))}
         </div>

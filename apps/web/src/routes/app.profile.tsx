@@ -66,7 +66,10 @@ function AboutYouPanel() {
       <div className="flex items-start gap-4">
         <div className="flex flex-col items-center gap-2">
           <UserAvatar user={user} size={72} />
-          <button className="t-meta text-[color:var(--info)] hover:underline" onClick={() => setAvatarOpen(true)}>
+          <button
+            className="t-meta text-[color:var(--info)] hover:underline"
+            onClick={() => setAvatarOpen(true)}
+          >
             Change avatar
           </button>
         </div>
@@ -116,7 +119,11 @@ function AboutYouPanel() {
                   {saving && <Loader2 className="size-3.5 animate-spin" />}
                   Save
                 </button>
-                <button className="btn-app-ghost" disabled={saving} onClick={() => setEditing(false)}>
+                <button
+                  className="btn-app-ghost"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
                   Cancel
                 </button>
               </div>
@@ -170,9 +177,7 @@ function ProfilePage() {
                 </div>
               ))}
             </div>
-            <div className="mt-3 font-mono text-[11px] text-muted-foreground">
-              {summary?.email}
-            </div>
+            <div className="mt-3 font-mono text-[11px] text-muted-foreground">{summary?.email}</div>
           </Panel>
         </div>
 

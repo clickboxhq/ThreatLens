@@ -22,7 +22,8 @@ const RESPONSE_ACTIONS: {
     label: "Isolate device",
     target: "device",
     targetLabel: "This device (the one you're currently investigating)",
-    impact: "Disconnects the endpoint from the corporate network while preserving management access.",
+    impact:
+      "Disconnects the endpoint from the corporate network while preserving management access.",
   },
   {
     id: "disable_account",
@@ -76,7 +77,9 @@ export function StageResponse({
   locked: boolean;
   onLogAction: (actionType: ResponseActionType, targetType: string) => Promise<void>;
 }) {
-  const [pendingAction, setPendingAction] = useState<(typeof RESPONSE_ACTIONS)[number] | null>(null);
+  const [pendingAction, setPendingAction] = useState<(typeof RESPONSE_ACTIONS)[number] | null>(
+    null,
+  );
 
   return (
     <Panel title="Response actions">
@@ -100,9 +103,7 @@ export function StageResponse({
             >
               {taken ? <CheckCircle2 className="size-3.5" /> : <Zap className="size-3.5" />}
               <span className="flex-1 text-left">{a.label}</span>
-              {taken && (
-                <span className="text-[10.5px] text-[color:var(--success)]">Taken</span>
-              )}
+              {taken && <span className="text-[10.5px] text-[color:var(--success)]">Taken</span>}
             </button>
           );
         })}

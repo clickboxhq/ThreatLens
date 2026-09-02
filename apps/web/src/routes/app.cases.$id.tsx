@@ -8,7 +8,11 @@ import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { ScenarioBriefing } from "@/components/soc/investigation/scenario-briefing";
 import { InvestigationTransition } from "@/components/soc/investigation/investigation-transition";
-import { InvestigationStepper, STAGES, type Stage } from "@/components/soc/investigation/investigation-stepper";
+import {
+  InvestigationStepper,
+  STAGES,
+  type Stage,
+} from "@/components/soc/investigation/investigation-stepper";
 import { StageInvestigate } from "@/components/soc/investigation/stage-investigate";
 import { StageEvidence } from "@/components/soc/investigation/stage-evidence";
 import { StageResponse } from "@/components/soc/investigation/stage-response";
@@ -60,9 +64,14 @@ function CaseWorkspace() {
     return (
       <div className="px-4 py-10 md:px-8">
         <p className="text-sm text-secondary">
-          {readiness.error instanceof ApiError ? readiness.error.message : "Could not load this session."}
+          {readiness.error instanceof ApiError
+            ? readiness.error.message
+            : "Could not load this session."}
         </p>
-        <Link to="/app/scenarios" className="mt-3 inline-block text-[13px] text-[color:var(--info)]">
+        <Link
+          to="/app/scenarios"
+          className="mt-3 inline-block text-[13px] text-[color:var(--info)]"
+        >
           Back to Scenario Library
         </Link>
       </div>
@@ -100,7 +109,10 @@ function IncidentResolver({ sessionId }: { sessionId: string }) {
     return (
       <div className="px-4 py-10 md:px-8">
         <p className="text-sm text-secondary">This session has no investigation open yet.</p>
-        <Link to="/app/scenarios" className="mt-3 inline-block text-[13px] text-[color:var(--info)]">
+        <Link
+          to="/app/scenarios"
+          className="mt-3 inline-block text-[13px] text-[color:var(--info)]"
+        >
           Back to Scenario Library
         </Link>
       </div>
@@ -265,13 +277,19 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           pinnedIds={pinnedIds}
           timelineIds={timelineIds}
           locked={locked}
-          onPin={(eventTable, eventId) => pinEvidence({ eventTable, eventId, justification: "Pinned during triage" })}
+          onPin={(eventTable, eventId) =>
+            pinEvidence({ eventTable, eventId, justification: "Pinned during triage" })
+          }
           onUnpin={(eventTable, eventId) => {
-            const existing = evidence.find((e) => e.eventTable === eventTable && e.eventId === eventId);
+            const existing = evidence.find(
+              (e) => e.eventTable === eventTable && e.eventId === eventId,
+            );
             if (existing) removeEvidence(existing.id);
           }}
           onAddToTimeline={(eventTable, eventId) => addToTimeline({ eventTable, eventId })}
-          onRemoveFromTimeline={(eventTable, eventId) => removeFromTimeline({ eventTable, eventId })}
+          onRemoveFromTimeline={(eventTable, eventId) =>
+            removeFromTimeline({ eventTable, eventId })
+          }
           onOpenEmail={setOpenEmailId}
           onOpenIdentity={setOpenIdentityId}
           onOpenDevice={setOpenDeviceId}
@@ -345,7 +363,9 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
                 await handleSubmit(input);
                 toast.success("Investigation submitted and scored.");
               } catch (err) {
-                toast.error(err instanceof ApiError ? err.message : "Could not submit this incident.");
+                toast.error(
+                  err instanceof ApiError ? err.message : "Could not submit this incident.",
+                );
                 throw err;
               }
             }}
@@ -360,7 +380,9 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           onPin={(input) => pinEvidence(input)}
           isPinned={pinnedIds.has(`email_messages:${openEmailId}`)}
           onUnpin={() => {
-            const pinned = evidence.find((e) => e.eventTable === "email_messages" && e.eventId === openEmailId);
+            const pinned = evidence.find(
+              (e) => e.eventTable === "email_messages" && e.eventId === openEmailId,
+            );
             if (pinned) removeEvidence(pinned.id);
           }}
           locked={locked}
@@ -400,7 +422,13 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   );
 }
 
-function ScoreResult({ sessionId, incidentId }: { sessionId: string; incidentId: string | undefined }) {
+function ScoreResult({
+  sessionId,
+  incidentId,
+}: {
+  sessionId: string;
+  incidentId: string | undefined;
+}) {
   const { data: score } = useSessionScore(sessionId);
   const { data: feedback } = useIncidentFeedback(sessionId, incidentId, true);
 

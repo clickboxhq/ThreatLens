@@ -5,10 +5,7 @@ import { apiClient, getAccessToken, onTokensChanged, setTokens, tryRefresh } fro
 
 export type AuthRole = "student" | "instructor" | "org_admin" | "platform_admin";
 export type ExperienceLevel =
-  | "new_to_security"
-  | "early_career"
-  | "experienced"
-  | "career_switcher";
+  "new_to_security" | "early_career" | "experienced" | "career_switcher";
 export type AvatarType = "initials" | "preset" | "upload";
 export type CareerLevel = "l1" | "l2" | "senior";
 
@@ -30,7 +27,10 @@ export type AuthUser = {
 };
 
 export type ProfileUpdateInput = Partial<
-  Pick<AuthUser, "firstName" | "lastName" | "professionalRole" | "bio" | "careerGoal" | "experienceLevel">
+  Pick<
+    AuthUser,
+    "firstName" | "lastName" | "professionalRole" | "bio" | "careerGoal" | "experienceLevel"
+  >
 >;
 
 type Session = { accessToken: string; refreshToken: string; expiresIn: number; user: AuthUser };

@@ -289,7 +289,7 @@ const doc = new Document({
       },
       headers: {
         default: new Header({
-          children: [new Paragraph({ children: [new TextRun({ text: "SOCVerse — Software Architecture & Technical Design Specification", size: 16, color: "888888", font: FONT_BODY })], alignment: AlignmentType.CENTER })]
+          children: [new Paragraph({ children: [new TextRun({ text: "ThreatLens — Software Architecture & Technical Design Specification", size: 16, color: "888888", font: FONT_BODY })], alignment: AlignmentType.CENTER })]
         })
       },
       footers: {

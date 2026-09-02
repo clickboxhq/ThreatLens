@@ -83,7 +83,21 @@ function useOnboardingStep() {
     }
   };
 
-  return { isOrg, submitting, save, orgName, setOrgName, teamSize, setTeamSize, industry, setIndustry, careerGoal, setCareerGoal, experienceLevel, setExperienceLevel };
+  return {
+    isOrg,
+    submitting,
+    save,
+    orgName,
+    setOrgName,
+    teamSize,
+    setTeamSize,
+    industry,
+    setIndustry,
+    careerGoal,
+    setCareerGoal,
+    experienceLevel,
+    setExperienceLevel,
+  };
 }
 
 function WelcomePage() {
@@ -216,9 +230,8 @@ function WelcomePage() {
               <div className="mt-4 flex items-start gap-2.5 border-t border-white/8 pt-4">
                 <Laptop className="mt-0.5 size-3.5 shrink-0 text-white/40" />
                 <p className="text-[11.5px] leading-[1.6] text-white/40">
-                  Recommended: desktop or laptop — ThreatLens is built around detailed
-                  investigation workflows and analyst workspaces that are responsive but shine on
-                  a larger screen.
+                  Recommended: desktop or laptop — ThreatLens is built around detailed investigation
+                  workflows and analyst workspaces that are responsive but shine on a larger screen.
                 </p>
               </div>
             </div>

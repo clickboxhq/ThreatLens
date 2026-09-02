@@ -69,8 +69,12 @@ const TIME_RANGE_MS: Record<Exclude<TimeRange, "all">, number> = {
  * parameter to be exact.
  */
 function LogExplorer() {
-  const { isLoading: sessionsLoading, activeSessions, selectedSessionId, setSelectedSessionId } =
-    useActiveSession();
+  const {
+    isLoading: sessionsLoading,
+    activeSessions,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useActiveSession();
 
   if (sessionsLoading) {
     return (
@@ -133,14 +137,14 @@ function LogExplorerInner({
     setFilters((prev) => [...prev, { field, value: fieldValue.trim() }]);
     setFieldValue("");
   };
-  const removeFilter = (index: number) =>
-    setFilters((prev) => prev.filter((_, i) => i !== index));
+  const removeFilter = (index: number) => setFilters((prev) => prev.filter((_, i) => i !== index));
 
   // Debounced, same pattern as the case workspace's own search panel — every keystroke in the
   // freetext box would otherwise fire a real query.
   useEffect(() => {
     const handle = setTimeout(() => {
-      search.mutateAsync({ filters, freetext: freetext.trim() || undefined })
+      search
+        .mutateAsync({ filters, freetext: freetext.trim() || undefined })
         .then(setResults)
         .catch(() => setResults([]));
     }, 400);
@@ -158,7 +162,8 @@ function LogExplorerInner({
   const typeCounts = new Map<SearchEntityType, number>();
   for (const r of windowed) typeCounts.set(r.entityType, (typeCounts.get(r.entityType) ?? 0) + 1);
 
-  const visible = entityFilter === "all" ? windowed : windowed.filter((r) => r.entityType === entityFilter);
+  const visible =
+    entityFilter === "all" ? windowed : windowed.filter((r) => r.entityType === entityFilter);
 
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
@@ -234,7 +239,9 @@ function LogExplorerInner({
             placeholder="…or search free text across subjects, commands, URLs"
             className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          {search.isPending && <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />}
+          {search.isPending && (
+            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          )}
         </div>
       </Panel>
 
@@ -247,7 +254,10 @@ function LogExplorerInner({
               : "border-border bg-background text-secondary hover:text-foreground"
           }`}
         >
-          All <span className="rounded bg-card px-1 text-[10px] text-muted-foreground">{windowed.length}</span>
+          All{" "}
+          <span className="rounded bg-card px-1 text-[10px] text-muted-foreground">
+            {windowed.length}
+          </span>
         </button>
         {(Object.keys(ENTITY_TYPE_META) as SearchEntityType[])
           .filter((t) => (typeCounts.get(t) ?? 0) > 0)

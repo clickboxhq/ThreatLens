@@ -8,8 +8,16 @@ import type { MitreTechniqueDto } from "@/types/threatlens-investigation";
 
 const VERDICTS: { id: IncidentVerdict; label: string; hint: string }[] = [
   { id: "true_positive", label: "True positive", hint: "Malicious activity confirmed with impact" },
-  { id: "false_positive", label: "False positive", hint: "Detection fired on non-malicious activity" },
-  { id: "benign_positive", label: "Benign positive", hint: "Real malicious signal, no impact realised" },
+  {
+    id: "false_positive",
+    label: "False positive",
+    hint: "Detection fired on non-malicious activity",
+  },
+  {
+    id: "benign_positive",
+    label: "Benign positive",
+    hint: "Real malicious signal, no impact realised",
+  },
 ];
 
 /**
@@ -30,7 +38,11 @@ export function StageSubmit({
   setSelectedTechniqueIds,
 }: {
   mitreTechniques: MitreTechniqueDto[];
-  onSubmit: (input: { verdict: IncidentVerdict; summary: string; mitreTechniqueIds: string[] }) => Promise<void>;
+  onSubmit: (input: {
+    verdict: IncidentVerdict;
+    summary: string;
+    mitreTechniqueIds: string[];
+  }) => Promise<void>;
   submitting: boolean;
   // Lifted to the parent rather than kept local: this stage unmounts every time the analyst
   // navigates to a different stage in the stepper (each stage is only rendered while active),
@@ -83,7 +95,9 @@ export function StageSubmit({
               <button
                 key={t.id}
                 onClick={() =>
-                  setSelectedTechniqueIds((prev) => (on ? prev.filter((id) => id !== t.id) : [...prev, t.id]))
+                  setSelectedTechniqueIds((prev) =>
+                    on ? prev.filter((id) => id !== t.id) : [...prev, t.id],
+                  )
                 }
                 title={`${t.name} · ${t.tactic}`}
                 className={`rounded border px-1.5 py-0.5 font-mono text-[11px] ${
@@ -127,7 +141,11 @@ export function StageSubmit({
         disabled={submitting}
         className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary text-[13px] font-medium text-primary-foreground disabled:opacity-60"
       >
-        {submitting ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+        {submitting ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <ShieldCheck className="size-4" />
+        )}
         Submit investigation
       </button>
 
@@ -142,9 +160,15 @@ export function StageSubmit({
         onConfirm={async () => {
           if (!verdict) return;
           try {
-            await onSubmit({ verdict, summary: summary.trim(), mitreTechniqueIds: selectedTechniqueIds });
+            await onSubmit({
+              verdict,
+              summary: summary.trim(),
+              mitreTechniqueIds: selectedTechniqueIds,
+            });
           } catch (err) {
-            setFormError(err instanceof ApiError ? err.message : "Could not submit this incident. Try again.");
+            setFormError(
+              err instanceof ApiError ? err.message : "Could not submit this incident. Try again.",
+            );
             throw err;
           }
         }}

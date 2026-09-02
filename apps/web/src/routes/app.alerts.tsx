@@ -88,7 +88,9 @@ function AlertsPage() {
     const all = alertsQuery.data ?? [];
     return [
       ...new Map(
-        all.filter((a) => a.mitreTechnique).map((a) => [a.mitreTechnique!.techniqueId, a.mitreTechnique!]),
+        all
+          .filter((a) => a.mitreTechnique)
+          .map((a) => [a.mitreTechnique!.techniqueId, a.mitreTechnique!]),
       ).values(),
     ];
   }, [alertsQuery.data]);
@@ -117,8 +119,11 @@ function AlertsPage() {
       (mitreFilter === "all" || a.mitreTechnique?.techniqueId === mitreFilter),
   );
 
-  const selectableIds = alerts.filter((a) => a.status === "new" || a.status === "in_progress").map((a) => a.id);
-  const allSelectableChecked = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const selectableIds = alerts
+    .filter((a) => a.status === "new" || a.status === "in_progress")
+    .map((a) => a.id);
+  const allSelectableChecked =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
 
   const toggleAll = () => {
     setSelected(allSelectableChecked ? new Set() : new Set(selectableIds));
@@ -237,9 +242,7 @@ function AlertsPage() {
 
       {selected.size > 0 && (
         <div className="mb-3 flex items-center gap-3 rounded-md border border-[color:var(--info)]/40 bg-[color:var(--info)]/10 px-3 py-2 text-[12px]">
-          <span className="font-medium text-[color:var(--info)]">
-            {selected.size} selected
-          </span>
+          <span className="font-medium text-[color:var(--info)]">{selected.size} selected</span>
           <button
             onClick={bulkResolve}
             disabled={updateStatus.isPending}

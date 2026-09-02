@@ -12,14 +12,14 @@ export const ENTITY_TYPE_META: Record<
   SearchEntityType,
   { label: string; icon: SearchCategory["icon"] }
 > = {
-    sign_in_event: { label: "Sign-ins", icon: UserRound },
-    email_message: { label: "Emails", icon: Mail },
-    cloud_event: { label: "Cloud", icon: Globe },
-    process_event: { label: "Processes", icon: Cpu },
-    file_event: { label: "Files", icon: FileText },
-    network_event: { label: "Network", icon: Network },
-    http_request: { label: "Web requests", icon: LinkIcon },
-  };
+  sign_in_event: { label: "Sign-ins", icon: UserRound },
+  email_message: { label: "Emails", icon: Mail },
+  cloud_event: { label: "Cloud", icon: Globe },
+  process_event: { label: "Processes", icon: Cpu },
+  file_event: { label: "Files", icon: FileText },
+  network_event: { label: "Network", icon: Network },
+  http_request: { label: "Web requests", icon: LinkIcon },
+};
 
 export function useSearch() {
   const [query, setQuery] = useState("");

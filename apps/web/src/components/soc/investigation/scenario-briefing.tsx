@@ -4,9 +4,12 @@ import { ArrowLeft, ArrowRight, Clock3, FileText, Layers, ShieldAlert } from "lu
 import type { SessionDto } from "@/types/threatlens-investigation";
 
 const DIFFICULTY_TONE: Record<string, string> = {
-  beginner: "text-[color:var(--success)] border-[color:var(--success)]/30 bg-[color:var(--success)]/10",
-  intermediate: "text-[color:var(--warning)] border-[color:var(--warning)]/30 bg-[color:var(--warning)]/10",
-  advanced: "text-[color:var(--critical)] border-[color:var(--critical)]/30 bg-[color:var(--critical)]/10",
+  beginner:
+    "text-[color:var(--success)] border-[color:var(--success)]/30 bg-[color:var(--success)]/10",
+  intermediate:
+    "text-[color:var(--warning)] border-[color:var(--warning)]/30 bg-[color:var(--warning)]/10",
+  advanced:
+    "text-[color:var(--critical)] border-[color:var(--critical)]/30 bg-[color:var(--critical)]/10",
 };
 
 /**
@@ -81,10 +84,10 @@ export function ScenarioBriefing({
               Your objective
             </div>
             <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
-              Work the telemetry, pin what actually proves your conclusion, and take any
-              containment the evidence calls for. You'll research indicators, document your
-              reasoning, and close with a verdict you can defend — evidence precision and
-              technique accuracy are both scored, so noise costs you as much as a missed signal.
+              Work the telemetry, pin what actually proves your conclusion, and take any containment
+              the evidence calls for. You'll research indicators, document your reasoning, and close
+              with a verdict you can defend — evidence precision and technique accuracy are both
+              scored, so noise costs you as much as a missed signal.
             </p>
           </div>
         </div>
@@ -101,9 +104,9 @@ export function ScenarioBriefing({
             </div>
             <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
               You'll move through this incident one stage at a time — investigate the telemetry,
-              build your evidence, take response action if warranted, research indicators,
-              document what you found, then review and submit a verdict. You can move back and
-              forth between stages freely until you submit; nothing here is a timed quiz.
+              build your evidence, take response action if warranted, research indicators, document
+              what you found, then review and submit a verdict. You can move back and forth between
+              stages freely until you submit; nothing here is a timed quiz.
             </p>
           </div>
         </div>

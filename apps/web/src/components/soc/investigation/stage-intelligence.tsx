@@ -43,7 +43,11 @@ export function StageIntelligence({
       const r = await lookupThreatIntel({ type, value: value.trim() });
       setResult(r);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "That lookup failed — check the value and try again.");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "That lookup failed — check the value and try again.",
+      );
     }
   };
 
@@ -72,8 +76,16 @@ export function StageIntelligence({
             placeholder="e.g. 185.220.101.44"
             className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-[12.5px] font-mono outline-none placeholder:font-sans focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <button onClick={runLookup} disabled={lookingUp || !value.trim()} className="btn-app-primary">
-            {lookingUp ? <Loader2 className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
+          <button
+            onClick={runLookup}
+            disabled={lookingUp || !value.trim()}
+            className="btn-app-primary"
+          >
+            {lookingUp ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Radar className="size-3.5" />
+            )}
             Look up
           </button>
         </div>
@@ -96,7 +108,9 @@ export function StageIntelligence({
                     : "No match in this investigation's threat data"}
               {result.actorAttribution && ` · attributed to ${result.actorAttribution}`}
             </p>
-            {result.context && <p className="mt-1 text-[11.5px] text-muted-foreground">{result.context}</p>}
+            {result.context && (
+              <p className="mt-1 text-[11.5px] text-muted-foreground">{result.context}</p>
+            )}
 
             {!locked && (
               <button
