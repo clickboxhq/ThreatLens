@@ -40,6 +40,7 @@ import { Pathways, Schematic } from "@/components/soc/marketing/art";
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { OPEN_COOKIE_SETTINGS_EVENT } from "@/components/soc/marketing/cookie-consent";
 import { CountUp } from "@/components/soc/ui/count-up";
+import { useAuthUser } from "@/lib/auth-store";
 import {
   Bloom,
   GridField,
@@ -92,6 +93,7 @@ const NAV_LINKS: [string, string][] = [
 ];
 
 export function Nav() {
+  const user = useAuthUser();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -156,15 +158,23 @@ export function Nav() {
           })}
         </nav>
         <div className="hidden items-center gap-1.5 md:flex">
-          <Link
-            to="/signup"
-            className="rounded-md px-3 py-1.5 text-[13px] text-white/60 transition-colors hover:text-white"
-          >
-            Get Started
-          </Link>
-          <Link to="/login" className="btn-primary text-[13px]">
-            Login <ArrowRight className="size-3.5" />
-          </Link>
+          {user ? (
+            <Link to="/app" className="btn-primary text-[13px]">
+              <LayoutDashboard className="size-3.5" /> Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/signup"
+                className="rounded-md px-3 py-1.5 text-[13px] text-white/60 transition-colors hover:text-white"
+              >
+                Get Started
+              </Link>
+              <Link to="/login" className="btn-primary text-[13px]">
+                Login <ArrowRight className="size-3.5" />
+              </Link>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1.5 md:hidden">
           <button
@@ -206,20 +216,32 @@ export function Nav() {
             })}
           </nav>
           <div className="mt-3 flex flex-col gap-2 border-t border-white/8 pt-4">
-            <Link
-              to="/login"
-              onClick={() => setMenuOpen(false)}
-              className="btn-primary w-full justify-center"
-            >
-              Login <ArrowRight className="size-3.5" />
-            </Link>
-            <Link
-              to="/signup"
-              onClick={() => setMenuOpen(false)}
-              className="btn-ghost w-full justify-center"
-            >
-              Get Started
-            </Link>
+            {user ? (
+              <Link
+                to="/app"
+                onClick={() => setMenuOpen(false)}
+                className="btn-primary w-full justify-center"
+              >
+                <LayoutDashboard className="size-3.5" /> Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="btn-primary w-full justify-center"
+                >
+                  Login <ArrowRight className="size-3.5" />
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setMenuOpen(false)}
+                  className="btn-ghost w-full justify-center"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

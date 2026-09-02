@@ -3,6 +3,7 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { SessionPicker } from "@/components/soc/session-picker";
 import { NoActiveSession } from "@/components/soc/no-active-session";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
+import { EndpointIconField } from "@/components/soc/ui/endpoint-icon-field";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useEndpoints, useIsolateDevice } from "@/hooks/use-endpoints";
 import { formatRelativeTime } from "@/lib/format-relative-time";
@@ -53,7 +54,8 @@ function EndpointCenter() {
   const atRisk = devices.filter((d) => d.riskLevel !== "none").length;
 
   return (
-    <div className="px-4 py-6 md:px-8 md:py-8">
+    <div className="relative px-4 py-6 md:px-8 md:py-8">
+      <EndpointIconField />
       <SectionHeader
         title="Endpoint Center"
         description="Device posture and containment within this investigation."
