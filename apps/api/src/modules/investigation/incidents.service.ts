@@ -111,7 +111,19 @@ export class IncidentsService {
     dto: UpdateIncidentStatusDto,
   ) {
     await this.sessionAccess.getOwnedSession(sessionId, user);
-    await this.getIncidentOrThrow(sessionId, incidentId);
+    const incident = await this.getIncidentOrThrow(sessionId, incidentId);
+    // Without this, a learner could PATCH a closed incident's status back to 'open' and
+    // reopen every other write path (evidence, timeline, notes, response actions, checklist)
+    // that all correctly refuse writes once status is 'closed' — the one gap in that
+    // otherwise-consistent boundary. The real reopen path is instructor-only and goes through
+    // instructor.service.ts's own role-gated flow, not this endpoint.
+    if (incident.status === 'closed') {
+      throw new AppException(
+        409,
+        'INCIDENT_CLOSED',
+        'This incident is closed. Ask an instructor to reopen it to change its status.',
+      );
+    }
     await this.prisma.incident.update({
       where: { id: incidentId },
       data: { status: dto.status },

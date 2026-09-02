@@ -1,16 +1,21 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Panel, SectionHeader, SeverityBadge } from "@/components/soc/primitives";
-import { IconTile } from "@/components/soc/ui/icon-tile";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { SectionHeader } from "@/components/soc/primitives";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
-import { EventTypeIcon, eventTypeLabel } from "@/components/soc/ui/event-icon";
-import { ActivityLogPanel } from "@/components/soc/activity-log-panel";
-import { InvestigationChecklist } from "@/components/soc/investigation-checklist";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
-import { InvestigationGraph } from "@/components/soc/investigation-graph";
+import { ScenarioBriefing } from "@/components/soc/investigation/scenario-briefing";
+import { InvestigationTransition } from "@/components/soc/investigation/investigation-transition";
+import { InvestigationStepper, STAGES, type Stage } from "@/components/soc/investigation/investigation-stepper";
+import { StageInvestigate } from "@/components/soc/investigation/stage-investigate";
+import { StageEvidence } from "@/components/soc/investigation/stage-evidence";
+import { StageResponse } from "@/components/soc/investigation/stage-response";
+import { StageIntelligence } from "@/components/soc/investigation/stage-intelligence";
+import { StageNotes } from "@/components/soc/investigation/stage-notes";
+import { StageReview } from "@/components/soc/investigation/stage-review";
+import { StageSubmit } from "@/components/soc/investigation/stage-submit";
 import {
   useInvestigation,
   useSessionIncident,
@@ -19,148 +24,33 @@ import {
   useIncidentFeedback,
 } from "@/hooks/use-investigations";
 import { ApiError } from "@/lib/api-client";
-import { labelForResult, detailForResult } from "@/lib/search-result-format";
 import { useIdentities } from "@/hooks/use-identities";
 import { useEndpoints } from "@/hooks/use-endpoints";
-import { useAuthUser, type CareerLevel } from "@/lib/auth-store";
-import {
-  RESPONSE_ACTION_TYPES,
-  type IncidentVerdict,
-  type ResponseActionType,
-  type SearchEntityType,
-} from "@/types/socverse-investigation";
-import { REPUTATION_SEVERITY } from "@/types/threat-intel-page";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  FileText,
-  Lightbulb,
-  ListTree,
-  Lock,
-  Loader2,
-  Mail,
-  MonitorSmartphone,
-  Pin,
-  PinOff,
-  Radar,
-  Search,
-  ShieldCheck,
-  Trash2,
-  UserRound,
-  Zap,
-} from "lucide-react";
+import { toast } from "sonner";
+import type { IncidentVerdict, ResponseActionType } from "@/types/socverse-investigation";
+import { ArrowLeft, Loader2, Lock } from "lucide-react";
+
+const STAGE_IDS = new Set(STAGES.map((s) => s.id));
 
 export const Route = createFileRoute("/app/cases/$id")({
   component: CaseWorkspace,
+  validateSearch: (search: Record<string, unknown>): { stage?: Stage } => ({
+    stage: STAGE_IDS.has(search.stage as Stage) ? (search.stage as Stage) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Case Management — ThreatLens" },
       {
         name: "description",
         content:
-          "Work a single incident end to end: evidence locker, timeline, analyst notes, response actions, and scored verdict submission.",
+          "Work a single incident end to end: a staged investigation from briefing through evidence, response, intelligence, notes, and a scored verdict submission.",
       },
     ],
   }),
 });
 
-const VERDICTS: { id: IncidentVerdict; label: string; hint: string }[] = [
-  { id: "true_positive", label: "True positive", hint: "Malicious activity confirmed with impact" },
-  {
-    id: "false_positive",
-    label: "False positive",
-    hint: "Detection fired on non-malicious activity",
-  },
-  {
-    id: "benign_positive",
-    label: "Benign positive",
-    hint: "Real malicious signal, no impact realised",
-  },
-];
-
-// ThreatLens's response-actions panel has no entity picker — see
-// apps/api/.../dto/incident.dto.ts's LogResponseActionDto for why these are generic,
-// audit-only actions rather than per-device/identity/email mutations.
-const RESPONSE_ACTIONS: { id: ResponseActionType; label: string; target: string }[] = [
-  { id: "isolate_device", label: "Isolate device", target: "device" },
-  { id: "disable_account", label: "Disable account", target: "identity" },
-  { id: "force_password_reset", label: "Force password reset", target: "identity" },
-  { id: "revoke_tokens", label: "Revoke sessions & tokens", target: "identity" },
-  { id: "block_sender", label: "Block sender / domain", target: "mailbox" },
-  { id: "block_ip", label: "Block IP at egress", target: "device" },
-];
-
-// Readable names for the telemetry type filter chips. Singular entity types here, distinct
-// from the plural event-table names the evidence and timeline endpoints are keyed by.
-const ENTITY_TYPE_LABEL: Record<string, string> = {
-  sign_in_event: "Sign-ins",
-  email_message: "Emails",
-  cloud_event: "Cloud",
-  process_event: "Processes",
-  file_event: "Files",
-  network_event: "Network",
-  http_request: "Web",
-};
-
-// Maps a search result's entityType to the eventTable string the evidence/timeline endpoints
-// expect (apps/api's EvidenceCollection/TimelineItem rows are keyed by this table name).
-const EVENT_TABLE_BY_ENTITY_TYPE: Record<SearchEntityType, string> = {
-  sign_in_event: "sign_in_events",
-  email_message: "email_messages",
-  cloud_event: "cloud_events",
-  process_event: "process_events",
-  file_event: "file_events",
-  network_event: "network_events",
-  http_request: "http_requests",
-};
-
-function severityForEntity(
-  entityType: SearchEntityType,
-): "critical" | "high" | "medium" | "low" | "info" {
-  // Search results don't carry a severity (only alerts do) — this is a display-only heuristic
-  // so results don't all render identically, not a scoring signal.
-  if (entityType === "process_event" || entityType === "network_event") return "high";
-  if (entityType === "email_message" || entityType === "cloud_event") return "medium";
-  return "info";
-}
-
-type Pivot = {
-  kind: "email" | "identity" | "device";
-  id: string;
-  label: string;
-  icon: typeof Mail;
-};
-
-/**
- * What an analyst can follow from a given event. Every telemetry row carries the ids of the
- * entities it belongs to (see apps/api's toStudent*Dto mappers), so each event type opens onto
- * the entity view that actually explains it: a sign-in onto the account, a process/file/network
- * event onto the machine, an email onto the message itself.
- */
-function pivotsFor(entityType: SearchEntityType, data: Record<string, unknown>): Pivot[] {
-  const pivots: Pivot[] = [];
-  const identityId = typeof data.identityId === "string" ? data.identityId : null;
-  const deviceId = typeof data.deviceId === "string" ? data.deviceId : null;
-
-  if (entityType === "email_message") {
-    pivots.push({ kind: "email", id: String(data.id), label: "Open message", icon: Mail });
-  }
-  if (identityId) {
-    pivots.push({ kind: "identity", id: identityId, label: "View account", icon: UserRound });
-  }
-  if (deviceId) {
-    pivots.push({
-      kind: "device",
-      id: deviceId,
-      label: "View device",
-      icon: MonitorSmartphone,
-    });
-  }
-  return pivots;
-}
-
 function CaseWorkspace() {
-  const { id: sessionId } = useParams({ from: "/app/cases/$id" });
+  const { id: sessionId } = Route.useParams();
   const readiness = useSessionReadiness(sessionId);
 
   if (readiness.isPending) {
@@ -170,14 +60,9 @@ function CaseWorkspace() {
     return (
       <div className="px-4 py-10 md:px-8">
         <p className="text-sm text-secondary">
-          {readiness.error instanceof ApiError
-            ? readiness.error.message
-            : "Could not load this session."}
+          {readiness.error instanceof ApiError ? readiness.error.message : "Could not load this session."}
         </p>
-        <Link
-          to="/app/scenarios"
-          className="mt-3 inline-block text-[13px] text-[color:var(--info)]"
-        >
+        <Link to="/app/scenarios" className="mt-3 inline-block text-[13px] text-[color:var(--info)]">
           Back to Scenario Library
         </Link>
       </div>
@@ -215,10 +100,7 @@ function IncidentResolver({ sessionId }: { sessionId: string }) {
     return (
       <div className="px-4 py-10 md:px-8">
         <p className="text-sm text-secondary">This session has no investigation open yet.</p>
-        <Link
-          to="/app/scenarios"
-          className="mt-3 inline-block text-[13px] text-[color:var(--info)]"
-        >
+        <Link to="/app/scenarios" className="mt-3 inline-block text-[13px] text-[color:var(--info)]">
           Back to Scenario Library
         </Link>
       </div>
@@ -228,10 +110,9 @@ function IncidentResolver({ sessionId }: { sessionId: string }) {
   return <CaseWorkspaceInner sessionId={sessionId} incidentId={incidentSummary.id} />;
 }
 
+const BEGUN_KEY = (incidentId: string) => `threatlens:case:${incidentId}:begun`;
+
 function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; incidentId: string }) {
-  // Names for the telemetry feed. Both lists are small and per-session, and the case workspace
-  // is going to need them for the drawers anyway — so this is a client-side join rather than
-  // widening every search result server-side.
   const { data: sessionIdentities } = useIdentities(sessionId);
   const { data: sessionDevices } = useEndpoints(sessionId);
   const nameFor = useMemo(() => {
@@ -240,6 +121,12 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     for (const d of sessionDevices ?? []) byId.set(d.id, d.hostname);
     return (id: string) => byId.get(id);
   }, [sessionIdentities, sessionDevices]);
+
+  // useInvestigation's queries all fire unconditionally from here, regardless of whether the
+  // briefing or the workspace is on screen — so by the time an analyst has read the briefing
+  // and clicked Begin Investigation, evidence/timeline/notes/hints are already warm in the
+  // React Query cache. The transition screen isn't a fake delay hiding a fetch; the fetch
+  // already started on mount.
   const {
     incident,
     incidentLoading,
@@ -257,689 +144,213 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     logResponseAction,
     closeIncident,
     closingIncident,
-    closeIncidentError,
     submitSession,
+    submittingSession,
     search,
     searching,
     lookupThreatIntel,
     lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
+  const { data: session } = useSessionReadiness(sessionId);
 
-  // Guided vs. independent investigation mode, driven by the analyst's own SOC career level.
-  // careerLevel currently only ever changes by hand (the automatic-promotion system that
-  // once computed it was removed) — see investigation-checklist.tsx's GuidanceLevel doc comment.
-  const authUser = useAuthUser();
-  const guidanceLevel: "full" | "reduced" | "independent" =
-    ({ l1: "full", l2: "reduced", senior: "independent" } satisfies Record<
-      CareerLevel,
-      "full" | "reduced" | "independent"
-    >)[authUser?.careerLevel ?? "l1"];
+  const { stage } = Route.useSearch();
+  const navigate = useNavigate();
+  const setStage = (next: Stage) => navigate({ to: ".", search: { stage: next } });
+
+  const [begun, setBegun] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(BEGUN_KEY(incidentId)) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [transitioning, setTransitioning] = useState(false);
 
   const [pendingRemoveEvidenceId, setPendingRemoveEvidenceId] = useState<string | null>(null);
-  const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
-
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<SearchEntityType | "all">("all");
-  const [results, setResults] = useState<
-    { entityType: SearchEntityType; occurredAt: string; data: Record<string, unknown> }[]
-  >([]);
-
-  // Counts come from the unfiltered set so the chips stay stable as you switch between them —
-  // a filter whose own label changes the moment you apply it is disorienting.
-  const typeCounts = Object.entries(
-    results.reduce<Record<string, number>>((acc, r) => {
-      acc[r.entityType] = (acc[r.entityType] ?? 0) + 1;
-      return acc;
-    }, {}),
-  ).sort((a, b) => b[1] - a[1]) as [SearchEntityType, number][];
-
-  const visibleResults =
-    typeFilter === "all" ? results : results.filter((r) => r.entityType === typeFilter);
-
-  const [note, setNote] = useState("");
-  const [verdict, setVerdict] = useState<IncidentVerdict | undefined>(undefined);
-  const [summary, setSummary] = useState("");
-  const [selectedTechniqueIds, setSelectedTechniqueIds] = useState<string[]>([]);
   const [takenActions, setTakenActions] = useState<ResponseActionType[]>([]);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [tiType, setTiType] = useState<"hash" | "ip" | "domain" | "url">("ip");
-  const [tiValue, setTiValue] = useState("");
-  const [tiResult, setTiResult] = useState<Awaited<ReturnType<typeof lookupThreatIntel>> | null>(
-    null,
-  );
-  const [tiError, setTiError] = useState<string | null>(null);
-  // Which email the analyst has opened, if any — the case workspace's read-the-actual-message
-  // pivot (see EmailDetailDrawer).
   const [openEmailId, setOpenEmailId] = useState<string | null>(null);
   const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
-  // Already fetched by CaseWorkspace's readiness gate — react-query dedupes on the same key,
-  // so this is a cache read, not a second request.
-  const { data: session } = useSessionReadiness(sessionId);
 
-  // Debounced — every keystroke would otherwise fire a real network call, unlike the old
-  // Identities now carry a month of routine sign-ins, which is what makes "unusual for this
-  // account" a judgement an investigator can actually make — but it also means the raw feed is
-  // mostly baseline. Filtering by type is how you get from that to the handful of events a
-  // scenario turns on, without having to guess a freetext term first.
-  // mock's instant client-side filter over a static array.
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      search(query.trim() ? { freetext: query.trim() } : {})
-        .then(setResults)
-        .catch(() => setResults([]));
-    }, 400);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `search` is a stable mutateAsync ref
-  }, [query]);
+  // Submit-stage draft, owned here rather than inside StageSubmit — that stage unmounts every
+  // time the analyst navigates elsewhere in the stepper, and a draft the brief promises
+  // survives free back-and-forth navigation can't live in state that disappears with it.
+  const [verdict, setVerdict] = useState<IncidentVerdict | undefined>(undefined);
+  const [summary, setSummary] = useState("");
+  const [selectedTechniqueIds, setSelectedTechniqueIds] = useState<string[]>([]);
 
-  const locked = incident?.status === "closed";
-  const pinnedIds = new Set(evidence.map((e) => `${e.eventTable}:${e.eventId}`));
-  const timelineIds = new Set(timeline.map((t) => `${t.eventTable}:${t.id}`));
-  const nextHint = hints.find((h) => !h.unlocked);
-
-  if (incidentLoading || !incident) {
+  if (incidentLoading || !incident || !session) {
     return <GeneratingScenario />;
   }
 
-  async function handleClose() {
-    setFormError(null);
-    if (!verdict) return setFormError("Select a verdict before submitting.");
-    if (summary.trim().length < 20) {
-      return setFormError("The written summary must be at least 20 characters.");
-    }
-    if (selectedTechniqueIds.length === 0) {
-      return setFormError("Tag at least one MITRE technique.");
-    }
-    try {
-      await closeIncident({
-        verdict,
-        summary: summary.trim(),
-        mitreTechniqueIds: selectedTechniqueIds,
-      });
-      await submitSession();
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : "Could not submit this incident. Try again.",
-      );
-    }
+  const locked = incident.status === "closed";
+  const pinnedIds = new Set(evidence.map((e) => `${e.eventTable}:${e.eventId}`));
+  const timelineIds = new Set(timeline.map((t) => `${t.eventTable}:${t.id}`));
+  const nextHint = hints.find((h) => !h.unlocked);
+  const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
+  const activeStage: Stage = stage ?? (locked ? "submit" : "investigate");
+
+  function handleBegin() {
+    setTransitioning(true);
+    window.setTimeout(() => {
+      try {
+        localStorage.setItem(BEGUN_KEY(incidentId), "1");
+      } catch {
+        // localStorage unavailable — this is a convenience flag only, not a security boundary,
+        // so worst case the briefing shows again next visit.
+      }
+      setBegun(true);
+      setTransitioning(false);
+    }, 1200);
+  }
+
+  async function handleSubmit(input: {
+    verdict: IncidentVerdict;
+    summary: string;
+    mitreTechniqueIds: string[];
+  }) {
+    await closeIncident(input);
+    await submitSession();
+  }
+
+  // Closed incidents skip straight to the (read-only) workspace — never the briefing or
+  // transition, matching the brief's own "the user can review, not modify" rule.
+  if (!locked && !begun) {
+    return <ScenarioBriefing session={session} onBegin={handleBegin} />;
+  }
+  if (transitioning) {
+    return <InvestigationTransition />;
   }
 
   return (
-    <div className="px-4 py-6 md:px-8 md:py-8">
-      <Link
-        to="/app/scenarios"
-        className="mb-4 inline-flex items-center gap-1.5 text-[12px] text-secondary hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> Scenario Library
-      </Link>
+    <div className="px-4 py-4 md:px-8">
+      <div className="mb-3 flex items-center justify-between">
+        <Link
+          to="/app/scenarios"
+          className="inline-flex items-center gap-1.5 text-[12px] text-secondary hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> Scenario Library
+        </Link>
+        {locked && (
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] text-secondary">
+            <Lock className="size-3" /> Submitted — read only
+          </span>
+        )}
+      </div>
 
       <SectionHeader
-        title={session?.scenarioTitle ?? incident.title}
+        title={session.scenarioTitle}
         description={`${incident.linkedAlertIds.length} linked alerts`}
-        actions={
-          locked ? (
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] text-secondary">
-              <Lock className="size-3" /> Locked
-            </span>
-          ) : undefined
-        }
       />
 
-      {/* Case briefing — what you're being asked to look into. Deliberately only the public
-       * scenario summary; the ground truth's own narrative of what actually happened never
-       * reaches the client. */}
-      {session && (
-        <Panel className="mb-4">
-          <div className="flex items-start gap-3">
-            <IconTile tone="info" size="md">
-              <FileText className="size-4" />
-            </IconTile>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Case briefing
-              </div>
-              <p className="mt-1 text-[13px] leading-relaxed text-secondary">
-                {session.scenarioSummary}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
-                <span className="rounded border border-border bg-background px-1.5 py-0.5 capitalize text-muted-foreground">
-                  {session.scenarioCategory}
-                </span>
-                <span className="rounded border border-border bg-background px-1.5 py-0.5 capitalize text-muted-foreground">
-                  {session.scenarioDifficulty}
-                </span>
-                <span className="rounded border border-border bg-background px-1.5 py-0.5 text-muted-foreground">
-                  ~{session.estimatedMinutes} min
-                </span>
-              </div>
-              <p className="mt-2.5 text-[11.5px] text-muted-foreground">
-                Work the evidence below, pin what matters, build your timeline, then close the
-                incident with a verdict. Open any email to read it in full and trace who else
-                received it.
-              </p>
-            </div>
-          </div>
-        </Panel>
+      <InvestigationStepper
+        active={activeStage}
+        done={{
+          evidence: evidence.length > 0,
+          notes: notes.length > 0,
+          response: takenActions.length > 0,
+        }}
+        onNavigate={setStage}
+        locked={locked}
+        hints={hints}
+        nextHintCost={nextHint?.unlockCostPercent ?? null}
+        onUnlockHint={() => nextHint && unlockHint(nextHint.index)}
+      />
+
+      {activeStage === "investigate" && (
+        <StageInvestigate
+          search={search}
+          searching={searching}
+          nameFor={nameFor}
+          pinnedIds={pinnedIds}
+          timelineIds={timelineIds}
+          locked={locked}
+          onPin={(eventTable, eventId) => pinEvidence({ eventTable, eventId, justification: "Pinned during triage" })}
+          onUnpin={(eventTable, eventId) => {
+            const existing = evidence.find((e) => e.eventTable === eventTable && e.eventId === eventId);
+            if (existing) removeEvidence(existing.id);
+          }}
+          onAddToTimeline={(eventTable, eventId) => addToTimeline({ eventTable, eventId })}
+          onRemoveFromTimeline={(eventTable, eventId) => removeFromTimeline({ eventTable, eventId })}
+          onOpenEmail={setOpenEmailId}
+          onOpenIdentity={setOpenIdentityId}
+          onOpenDevice={setOpenDeviceId}
+        />
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-4">
-          {/* Search */}
-          <Panel
-            title="Session telemetry"
-            actions={
-              <span className="text-[11px] text-muted-foreground">
-                {searching
-                  ? "Searching…"
-                  : typeFilter === "all"
-                    ? `${results.length} events`
-                    : `${visibleResults.length} of ${results.length} events`}
-              </span>
-            }
-            padded={false}
-          >
-            <div className="border-b border-border p-3">
-              <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-[12px]">
-                <Search className="size-3.5 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="flex-1 bg-transparent focus:outline-none"
-                  placeholder="Freetext search across identity, endpoint, email, and cloud telemetry…"
-                />
-              </div>
+      {activeStage === "evidence" && (
+        <StageEvidence
+          evidence={evidence}
+          timeline={timeline}
+          locked={locked}
+          onRemove={setPendingRemoveEvidenceId}
+        />
+      )}
 
-              {typeCounts.length > 1 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {([["all", `All ${results.length}`]] as [SearchEntityType | "all", string][])
-                    .concat(typeCounts.map(([t, n]) => [t, `${ENTITY_TYPE_LABEL[t] ?? t} ${n}`]))
-                    .map(([value, label]) => (
-                      <button
-                        key={value}
-                        onClick={() => setTypeFilter(value)}
-                        className={`rounded-full border px-2.5 py-1 text-[10.5px] transition-colors ${
-                          typeFilter === value
-                            ? "border-[color:var(--info)] bg-[color:var(--info)]/12 text-[color:var(--info)]"
-                            : "border-border text-secondary hover:text-foreground"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-            <ul className="max-h-[520px] divide-y divide-border overflow-y-auto">
-              {visibleResults.map((r) => {
-                const eventTable = EVENT_TABLE_BY_ENTITY_TYPE[r.entityType];
-                const eventId = String(r.data.id);
-                const key = `${eventTable}:${eventId}`;
-                const isPinned = pinnedIds.has(key);
-                const onTimeline = timelineIds.has(key);
-                return (
-                  <li
-                    key={key}
-                    className={`px-4 py-3 ${
-                      isPinned
-                        ? "border-l-2 border-[color:var(--success)] bg-[color:var(--success)]/[0.04]"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12.5px] font-medium">
-                            {labelForResult(r.entityType, r.data)}
-                          </span>
-                          <SeverityBadge level={severityForEntity(r.entityType)} />
-                          {isPinned && (
-                            <span className="inline-flex items-center gap-1 rounded border border-[color:var(--success)]/40 bg-[color:var(--success)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--success)]">
-                              <Pin className="size-2.5" /> Evidence
-                            </span>
-                          )}
-                          {onTimeline && (
-                            <span className="inline-flex items-center gap-1 rounded border border-[color:var(--info)]/40 bg-[color:var(--info)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--info)]">
-                              <ListTree className="size-2.5" /> On timeline
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-[12px] leading-relaxed text-secondary">
-                          {detailForResult(r.entityType, r.data, nameFor)}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10.5px] text-muted-foreground">
-                          <span>{new Date(r.occurredAt).toUTCString().slice(5, 22)} UTC</span>
-                          {pivotsFor(r.entityType, r.data).map((p) => (
-                            <button
-                              key={p.label}
-                              onClick={() =>
-                                p.kind === "email"
-                                  ? setOpenEmailId(p.id)
-                                  : p.kind === "identity"
-                                    ? setOpenIdentityId(p.id)
-                                    : setOpenDeviceId(p.id)
-                              }
-                              className="inline-flex items-center gap-1 rounded border border-[color:var(--info)]/40 px-1.5 py-0.5 text-[10.5px] text-[color:var(--info)] hover:bg-[color:var(--info)]/10"
-                            >
-                              <p.icon className="size-3" /> {p.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-col gap-1.5">
-                        <button
-                          disabled={locked}
-                          onClick={() =>
-                            isPinned
-                              ? (() => {
-                                  // Pinning is a toggle, not a one-way action — an analyst
-                                  // narrowing down a case needs to drop evidence they pinned
-                                  // during triage, and evidence precision is scored.
-                                  const existing = evidence.find(
-                                    (e) => e.eventTable === eventTable && e.eventId === eventId,
-                                  );
-                                  if (existing) removeEvidence(existing.id);
-                                })()
-                              : pinEvidence({
-                                  eventTable,
-                                  eventId,
-                                  justification: "Pinned during triage",
-                                })
-                          }
-                          title={isPinned ? "Remove from evidence" : "Pin as evidence"}
-                          className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] disabled:opacity-40 ${
-                            isPinned
-                              ? "border-[color:var(--success)]/50 bg-[color:var(--success)]/10 text-[color:var(--success)] hover:border-[color:var(--critical)]/50 hover:text-[color:var(--critical)]"
-                              : "border-border bg-background text-secondary hover:text-foreground"
-                          }`}
-                        >
-                          {isPinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
-                          {isPinned ? "Pinned" : "Pin"}
-                        </button>
-                        <button
-                          disabled={locked}
-                          onClick={() =>
-                            onTimeline
-                              ? removeFromTimeline({ eventTable, eventId })
-                              : addToTimeline({ eventTable, eventId })
-                          }
-                          className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] disabled:opacity-40 ${
-                            onTimeline
-                              ? "border-[color:var(--success)]/50 bg-[color:var(--success)]/10"
-                              : "border-border bg-background text-secondary hover:text-foreground"
-                          }`}
-                        >
-                          <ListTree className="size-3" /> {onTimeline ? "On timeline" : "Timeline"}
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-              {results.length === 0 && !searching && (
-                <li className="px-4 py-8 text-center text-[12px] text-muted-foreground">
-                  {query.trim()
-                    ? "No matching telemetry."
-                    : "Type to search this session's telemetry."}
-                </li>
-              )}
-            </ul>
-          </Panel>
+      {activeStage === "response" && (
+        <StageResponse
+          takenActions={takenActions}
+          locked={locked}
+          onLogAction={async (actionType, targetType) => {
+            await logResponseAction({ actionType, targetType });
+            setTakenActions((prev) => [...prev, actionType]);
+          }}
+        />
+      )}
 
-          {/* Evidence locker */}
-          <Panel
-            title="Evidence collection"
-            actions={
-              <span className="text-[11px] text-muted-foreground">{evidence.length} pinned</span>
-            }
-            padded={false}
-          >
-            {evidence.length === 0 ? (
-              <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
-                Nothing pinned yet. Pin the events that prove your conclusion — precision is scored,
-                so noise costs you.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {evidence.map((item) => (
-                  <li key={item.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <EventTypeIcon eventTable={item.eventTable} />
-                          <span className="text-[12.5px] font-medium">
-                            {item.display?.title ?? "(details not loaded — found via search)"}
-                          </span>
-                          <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {eventTypeLabel(item.eventTable)}
-                          </span>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-[11.5px] text-secondary">
-                          {item.display?.summary}
-                        </p>
-                      </div>
-                      <button
-                        disabled={locked}
-                        onClick={() => setPendingRemoveEvidenceId(item.id)}
-                        className="grid size-7 shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground hover:text-foreground disabled:opacity-40"
-                      >
-                        <Trash2 className="size-3" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
+      {activeStage === "intelligence" && (
+        <StageIntelligence
+          lookupThreatIntel={lookupThreatIntel}
+          lookingUp={lookingUpThreatIntel}
+          locked={locked}
+          onAddFindingNote={(body) => addNote(body)}
+        />
+      )}
 
-          {/* Timeline */}
-          <Panel title="Incident timeline" padded={false}>
-            {timeline.length === 0 ? (
-              <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
-                Add events to reconstruct the attack chain in order.
-              </div>
-            ) : (
-              <ol className="relative ml-6 border-l border-border py-3 pr-4">
-                {timeline.map((t) => (
-                  <li key={t.id} className="relative py-2 pl-5">
-                    <span className="absolute -left-[5px] top-4 size-2 rounded-full bg-[color:var(--info)]" />
-                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
-                      <EventTypeIcon eventTable={t.eventTable} />
-                      <span className="font-mono text-[10.5px] text-muted-foreground">
-                        {new Date(t.occurredAt).toISOString().slice(11, 16)} UTC
-                      </span>
-                      <span className="text-[10.5px] text-muted-foreground">
-                        {eventTypeLabel(t.eventTable)}
-                      </span>
-                      <span className="font-medium">{t.entityLabel}</span>
-                    </div>
-                    <p className="mt-0.5 text-[11.5px] text-secondary">{t.summary}</p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Panel>
+      {activeStage === "notes" && (
+        <StageNotes notes={notes} locked={locked} onAddNote={(body) => addNote(body)} />
+      )}
 
-          {/* Investigation graph */}
-          <Panel title="Investigation graph">
-            <InvestigationGraph timeline={timeline} evidence={evidence} />
-          </Panel>
-        </div>
+      {activeStage === "review" && (
+        <StageReview
+          sessionId={sessionId}
+          incidentId={incident.id}
+          locked={locked}
+          evidenceCount={evidence.length}
+          timelineCount={timeline.length}
+          actionsCount={takenActions.length}
+          notesCount={notes.length}
+          hintsUsed={hints.filter((h) => h.unlocked).length}
+          onNavigate={setStage}
+        />
+      )}
 
-        {/* Right rail */}
-        <div className="flex flex-col gap-4">
-          {/* Response actions */}
-          <Panel title="Response actions">
-            <p className="mb-3 text-[11.5px] text-secondary">
-              Containment is scored. Taking the wrong action — or the right one too late — affects
-              your rubric.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {RESPONSE_ACTIONS.map((a) => {
-                const taken = takenActions.includes(a.id);
-                return (
-                  <button
-                    key={a.id}
-                    disabled={locked || taken}
-                    onClick={async () => {
-                      await logResponseAction({ actionType: a.id, targetType: a.target });
-                      setTakenActions((prev) => [...prev, a.id]);
-                    }}
-                    className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] transition-colors disabled:opacity-60 ${
-                      taken
-                        ? "border-[color:var(--success)]/40 bg-[color:var(--success)]/10"
-                        : "border-border bg-background hover:border-[color:var(--info)]/50"
-                    }`}
-                  >
-                    {taken ? <CheckCircle2 className="size-3.5" /> : <Zap className="size-3.5" />}
-                    <span className="flex-1 text-left">{a.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </Panel>
-
-          {/* Threat intel lookup */}
-          <Panel title="Threat intelligence lookup">
-            <p className="mb-3 text-[11.5px] text-secondary">
-              Check whether an IP, domain, hash, or URL you found is a known indicator in this
-              investigation.
-            </p>
-            <div className="flex gap-2">
-              <select
-                value={tiType}
-                onChange={(e) => setTiType(e.target.value as typeof tiType)}
-                className="h-9 rounded-md border border-border bg-background px-2 text-[12px]"
-              >
-                <option value="ip">IP</option>
-                <option value="domain">Domain</option>
-                <option value="hash">Hash</option>
-                <option value="url">URL</option>
-              </select>
-              <input
-                value={tiValue}
-                onChange={(e) => setTiValue(e.target.value)}
-                placeholder="e.g. 185.220.101.44"
-                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 text-[12px]"
-              />
-            </div>
-            <button
-              disabled={!tiValue.trim() || lookingUpThreatIntel}
-              onClick={async () => {
-                setTiError(null);
-                try {
-                  const result = await lookupThreatIntel({
-                    type: tiType,
-                    value: tiValue.trim(),
-                  });
-                  setTiResult(result);
-                } catch (err) {
-                  setTiError(err instanceof ApiError ? err.message : "Lookup failed.");
-                }
-              }}
-              className="mt-2 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-[12px] hover:border-[color:var(--info)]/50 disabled:opacity-60"
-            >
-              {lookingUpThreatIntel ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Radar className="size-3.5" />
-              )}
-              Look up
-            </button>
-            {tiResult && (
-              <div className="mt-3 rounded-md border border-border bg-background p-3 text-[12px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono">{tiResult.value}</span>
-                  <SeverityBadge level={REPUTATION_SEVERITY[tiResult.reputation]} />
-                </div>
-                {tiResult.actorAttribution && (
-                  <div className="mt-1 text-secondary">
-                    Attributed to {tiResult.actorAttribution}
-                  </div>
-                )}
-                {tiResult.context && (
-                  <div className="mt-1 text-muted-foreground">{tiResult.context}</div>
-                )}
-              </div>
-            )}
-            {tiError && (
-              <p className="mt-2 text-[11.5px] text-[color:var(--critical)]">{tiError}</p>
-            )}
-          </Panel>
-
-          {/* Notes */}
-          <Panel title="Analyst notes" padded={false}>
-            <div className="max-h-56 overflow-y-auto px-4 py-3">
-              {notes.length === 0 ? (
-                <p className="text-[11.5px] text-muted-foreground">
-                  Your working memory. Not graded, but retained for review.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {notes.map((n) => (
-                    <li key={n.id}>
-                      <div className="text-[10.5px] text-muted-foreground">
-                        {new Date(n.createdAt).toLocaleTimeString()}
-                      </div>
-                      <p className="mt-0.5 whitespace-pre-wrap text-[12px] text-secondary">
-                        {n.body}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="border-t border-border p-3">
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                disabled={locked}
-                placeholder="Add a note…"
-                className="w-full resize-none rounded-md border border-border bg-background p-2 text-[12px] focus:outline-none disabled:opacity-40"
-              />
-              <button
-                disabled={locked || !note.trim()}
-                onClick={() => {
-                  addNote(note.trim());
-                  setNote("");
-                }}
-                className="mt-2 h-8 w-full rounded-md bg-primary text-[12px] font-medium text-primary-foreground disabled:opacity-40"
-              >
-                Save note
-              </button>
-            </div>
-          </Panel>
-
-          {/* Hints */}
-          <ActivityLogPanel sessionId={sessionId} />
-
-          <InvestigationChecklist
-            sessionId={sessionId}
-            incidentId={incident?.id}
-            locked={locked}
-            guidance={guidanceLevel}
+      {activeStage === "submit" &&
+        (locked ? (
+          <div className="mx-auto max-w-2xl">
+            <ScoreResult sessionId={sessionId} incidentId={incident.id} />
+          </div>
+        ) : (
+          <StageSubmit
+            mitreTechniques={mitreTechniques}
+            submitting={closingIncident || submittingSession}
+            verdict={verdict}
+            setVerdict={setVerdict}
+            summary={summary}
+            setSummary={setSummary}
+            selectedTechniqueIds={selectedTechniqueIds}
+            setSelectedTechniqueIds={setSelectedTechniqueIds}
+            onSubmit={async (input) => {
+              try {
+                await handleSubmit(input);
+                toast.success("Investigation submitted and scored.");
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Could not submit this incident.");
+                throw err;
+              }
+            }}
           />
-
-          <Panel title="Hints">
-            <p className="text-[11.5px] text-secondary">
-              Each hint costs points. Unlocked:{" "}
-              <span className="tabular-nums">{hints.filter((h) => h.unlocked).length}</span> /{" "}
-              {hints.length}
-            </p>
-            <button
-              disabled={locked || !nextHint}
-              onClick={() => nextHint && unlockHint(nextHint.index)}
-              className="mt-2 inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-[12px] text-secondary hover:text-foreground disabled:opacity-40"
-            >
-              <Lightbulb className="size-3.5" />
-              {nextHint ? `Reveal hint (−${nextHint.unlockCostPercent}%)` : "All hints revealed"}
-            </button>
-            {hints
-              .filter((h) => h.unlocked)
-              .map((h) => (
-                <p
-                  key={h.index}
-                  className="mt-2 rounded-md border border-border bg-background p-2 text-[11.5px] text-secondary"
-                >
-                  {h.text}
-                </p>
-              ))}
-          </Panel>
-
-          {/* Closure */}
-          <Panel title="Submit verdict">
-            {locked ? (
-              <ScoreResult sessionId={sessionId} incidentId={incident?.id} />
-            ) : (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  {VERDICTS.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setVerdict(v.id)}
-                      className={`rounded-md border px-3 py-2 text-left transition-colors ${
-                        verdict === v.id
-                          ? "border-[color:var(--info)]/60 bg-[color:var(--info)]/10"
-                          : "border-border bg-background hover:border-border/80"
-                      }`}
-                    >
-                      <div className="text-[12.5px] font-medium">{v.label}</div>
-                      <div className="text-[10.5px] text-muted-foreground">{v.hint}</div>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-3">
-                  <div className="t-label mb-1.5">MITRE techniques</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {mitreTechniques.map((t) => {
-                      const on = selectedTechniqueIds.includes(t.id);
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() =>
-                            setSelectedTechniqueIds((prev) =>
-                              on ? prev.filter((id) => id !== t.id) : [...prev, t.id],
-                            )
-                          }
-                          title={`${t.name} · ${t.tactic}`}
-                          className={`rounded border px-1.5 py-0.5 font-mono text-[10.5px] ${
-                            on
-                              ? "border-[color:var(--info)]/60 bg-[color:var(--info)]/10 text-[color:var(--info)]"
-                              : "border-border bg-background text-secondary"
-                          }`}
-                        >
-                          {t.techniqueId}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <div className="t-label mb-1.5">Written summary</div>
-                  <textarea
-                    value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
-                    rows={5}
-                    placeholder="What happened, how you know, and what you did about it…"
-                    className="w-full resize-none rounded-md border border-border bg-background p-2 text-[12px] focus:outline-none"
-                  />
-                  <div className="mt-1 text-right text-[10.5px] text-muted-foreground">
-                    {summary.trim().length}/20 min
-                  </div>
-                </div>
-
-                {(formError || closeIncidentError) && (
-                  <p className="mt-2 rounded-md border border-[color:var(--critical)]/40 bg-[color:var(--critical)]/10 p-2 text-[11.5px]">
-                    {formError ??
-                      (closeIncidentError instanceof ApiError
-                        ? closeIncidentError.message
-                        : "Could not submit.")}
-                  </p>
-                )}
-
-                <button
-                  onClick={handleClose}
-                  disabled={closingIncident}
-                  className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary text-[12.5px] font-medium text-primary-foreground disabled:opacity-60"
-                >
-                  {closingIncident ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <ShieldCheck className="size-4" />
-                  )}
-                  Submit and score
-                </button>
-                <p className="mt-2 text-[10.5px] text-muted-foreground">
-                  Submitting locks the case. Only an instructor can reopen it.
-                </p>
-              </>
-            )}
-          </Panel>
-        </div>
-      </div>
+        ))}
 
       {openEmailId && (
         <EmailDetailDrawer
@@ -949,9 +360,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           onPin={(input) => pinEvidence(input)}
           isPinned={pinnedIds.has(`email_messages:${openEmailId}`)}
           onUnpin={() => {
-            const pinned = evidence.find(
-              (e) => e.eventTable === "email_messages" && e.eventId === openEmailId,
-            );
+            const pinned = evidence.find((e) => e.eventTable === "email_messages" && e.eventId === openEmailId);
             if (pinned) removeEvidence(pinned.id);
           }}
           locked={locked}
@@ -991,13 +400,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   );
 }
 
-function ScoreResult({
-  sessionId,
-  incidentId,
-}: {
-  sessionId: string;
-  incidentId: string | undefined;
-}) {
+function ScoreResult({ sessionId, incidentId }: { sessionId: string; incidentId: string | undefined }) {
   const { data: score } = useSessionScore(sessionId);
   const { data: feedback } = useIncidentFeedback(sessionId, incidentId, true);
 
@@ -1017,7 +420,7 @@ function ScoreResult({
   ];
 
   return (
-    <div>
+    <div className="glass-card p-5">
       <div className="flex items-end gap-3">
         <div className="t-metric">{Math.round(score.overallPercent)}</div>
         <div className="pb-1 text-[11.5px] text-muted-foreground">
@@ -1045,9 +448,6 @@ function ScoreResult({
         ))}
       </ul>
 
-      {/* Instructor review, kept visually distinct from the automated rubric above — §2.15
-       * asks for the two to be distinctly attributed, and a human's comment carries different
-       * weight to a computed percentage. */}
       {feedback && feedback.length > 0 && (
         <div className="mt-4 rounded-md border border-[color:var(--info)]/40 bg-[color:var(--info)]/5 p-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--info)]">

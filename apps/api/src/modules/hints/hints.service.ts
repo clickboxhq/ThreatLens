@@ -39,6 +39,17 @@ export class HintsService {
 
   async unlock(sessionId: string, index: number, user: AuthenticatedUser) {
     const session = await this.sessionAccess.getOwnedSession(sessionId, user);
+    // Mirrors every other write path's closed-incident guard (see incidents.service.ts's
+    // assertIncidentEditable and timeline.service.ts's copy of the same check) — hints are
+    // session-scoped rather than incident-scoped, but the intent is identical: once the
+    // session is no longer 'active', nothing should still be able to move the score.
+    if (session.status !== 'active') {
+      throw new AppException(
+        409,
+        'SESSION_NOT_ACTIVE',
+        'This investigation has already been submitted — hints can no longer be unlocked.',
+      );
+    }
     const hints = await this.getAuthoredHints(session.scenarioVersionId);
     const hint = hints[index];
     if (!hint) {
