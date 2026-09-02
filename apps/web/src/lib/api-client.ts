@@ -103,22 +103,28 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
 // GET /auth/me to re-fetch the *user* object this way, hence auth-store.ts's updateRole()
 // patching the cached copy directly alongside this.
 export async function tryRefresh(): Promise<boolean> {
+  let response: Response;
   try {
-    const response = await rawRequest("/auth/refresh", {
+    response = await rawRequest("/auth/refresh", {
       method: "POST",
       body: JSON.stringify({ refreshToken }),
     });
-    if (!response.ok) {
-      setTokens(null);
-      return false;
-    }
-    const tokens = await response.json();
-    setTokens(tokens);
-    return true;
   } catch {
+    // The request never reached the server at all — a network blip, or the API mid-restart
+    // (routine in dev; a rolling deploy could do the same in prod). Not evidence the refresh
+    // token itself is invalid, so don't destroy an otherwise-good session over it: fail this
+    // one attempt and let the next request's 401 try again.
+    return false;
+  }
+  if (!response.ok) {
+    // The server actually answered and said no — the refresh token is genuinely expired,
+    // revoked, or reused. This is the only case that should end the session client-side.
     setTokens(null);
     return false;
   }
+  const tokens = await response.json();
+  setTokens(tokens);
+  return true;
 }
 
 export const apiClient = {
