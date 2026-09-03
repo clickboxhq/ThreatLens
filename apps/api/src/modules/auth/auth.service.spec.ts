@@ -183,6 +183,29 @@ function buildService(users: Map<string, User>) {
           return updated;
         },
       ),
+      // Honours the emailVerifiedAt: null guard rather than always reporting a hit — the
+      // whole point of the real query is that a second verification matches nothing.
+      updateMany: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string; emailVerifiedAt?: null };
+          data: Record<string, unknown>;
+        }) => {
+          const existing = users.get(where.id);
+          if (!existing) return { count: 0 };
+          if (
+            Object.prototype.hasOwnProperty.call(where, 'emailVerifiedAt') &&
+            where.emailVerifiedAt === null &&
+            existing.emailVerifiedAt !== null
+          ) {
+            return { count: 0 };
+          }
+          users.set(where.id, { ...existing, ...data } as User);
+          return { count: 1 };
+        },
+      ),
     },
     refreshToken: {
       create: jest.fn(async () => ({ id: randomUUID() })),
@@ -637,6 +660,49 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     await service.confirmEmailVerification(token);
 
     expect(users.get(target.id)!.emailVerifiedAt).not.toBeNull();
+  });
+
+  it('confirmEmailVerification() sends the welcome email on first verification', async () => {
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens, emailService } =
+      buildService(users);
+
+    const token = await emailVerificationTokens.create(target.id);
+    emailService.send.mockClear();
+    await service.confirmEmailVerification(token);
+
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: target.email,
+        subject: 'Welcome to ThreatLens',
+      }),
+    );
+  });
+
+  it('confirmEmailVerification() sends the welcome email only once', async () => {
+    // Requesting a second link before using the first leaves two valid tokens, and both
+    // consume successfully. Guarding on the row rather than on the token is what stops the
+    // second one sending a duplicate welcome.
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens, emailService } =
+      buildService(users);
+
+    const first = await emailVerificationTokens.create(target.id);
+    const second = await emailVerificationTokens.create(target.id);
+    emailService.send.mockClear();
+
+    await service.confirmEmailVerification(first);
+    await service.confirmEmailVerification(second);
+
+    const calls = emailService.send.mock.calls as unknown as [
+      { subject: string },
+    ][];
+    const welcomes = calls.filter(
+      (c) => c[0].subject === 'Welcome to ThreatLens',
+    );
+    expect(welcomes).toHaveLength(1);
   });
 
   it('confirmEmailVerification() rejects an invalid or unknown token', async () => {

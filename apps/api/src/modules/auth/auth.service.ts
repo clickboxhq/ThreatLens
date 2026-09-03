@@ -11,6 +11,11 @@ import * as QRCode from 'qrcode';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import {
+  verificationEmail,
+  welcomeEmail,
+  passwordResetEmail,
+} from '../../common/email/email-templates';
 import { MfaChallengeStore } from './mfa-challenge.store';
 import { PasswordResetTokenStore } from './password-reset-token.store';
 import { EmailVerificationTokenStore } from './email-verification-token.store';
@@ -127,15 +132,7 @@ export class AuthService {
     const verifyUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/verify-email/${token}`;
     await this.emailService.send({
       to: email,
-      subject: 'Verify your ThreatLens email address',
-      html: [
-        '<p>Welcome to ThreatLens.</p>',
-        '<p>Confirm your email address to unlock scored investigations:</p>',
-        `<p><a href="${verifyUrl}">Verify my email address</a></p>`,
-        '<p>This link expires in 24 hours.</p>',
-        '<p>— The ThreatLens team</p>',
-        `<p style="color:#888;font-size:12px">If the link above doesn't work, paste this into your browser:<br>${verifyUrl}</p>`,
-      ].join(''),
+      ...verificationEmail(verifyUrl),
     });
   }
 
@@ -168,10 +165,15 @@ export class AuthService {
       );
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
+    // updateMany with emailVerifiedAt: null in the where clause, rather than update by id,
+    // so the row itself decides whether this is the first verification. A user who requested
+    // a second link before using the first holds two valid tokens, and both would otherwise
+    // consume successfully and send two welcome emails.
+    const { count } = await this.prisma.user.updateMany({
+      where: { id: userId, emailVerifiedAt: null },
       data: { emailVerifiedAt: new Date() },
     });
+
     await this.auditLog.record({
       actorUserId: userId,
       actorIp: sourceIp,
@@ -180,6 +182,20 @@ export class AuthService {
       targetId: userId,
       correlationId,
     });
+
+    if (count === 1) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, displayName: true },
+      });
+      if (user) {
+        const appUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/app/scenarios`;
+        await this.emailService.send({
+          to: user.email,
+          ...welcomeEmail({ displayName: user.displayName, appUrl }),
+        });
+      }
+    }
   }
 
   async login(
@@ -699,20 +715,7 @@ export class AuthService {
     const resetUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/reset-password/${token}`;
     await this.emailService.send({
       to: user.email,
-      subject: 'Reset your ThreatLens password',
-      html: [
-        '<p>Hi,</p>',
-        '<p>We received a request to reset the password for your ThreatLens account. Choose a new password using the link below:</p>',
-        `<p><a href="${resetUrl}">Reset my password</a></p>`,
-        '<p>This link can only be used once, and expires in 1 hour.</p>',
-        // Named explicitly because this reset is also the recovery path for a lost
-        // authenticator (see confirmPasswordReset) — someone locked out of 2FA needs to know
-        // this link is what clears it, not just that it changes their password.
-        '<p>If two-factor authentication is switched on for your account, completing this reset will also turn it off, so you can sign in again if you have lost your authenticator app.</p>',
-        "<p>If you didn't request this, you can safely ignore this email — nothing changes unless you open the link and set a new password.</p>",
-        '<p>— The ThreatLens team</p>',
-        `<p style="color:#888;font-size:12px">If the link above doesn't work, paste this into your browser:<br>${resetUrl}</p>`,
-      ].join(''),
+      ...passwordResetEmail(resetUrl),
     });
   }
 
