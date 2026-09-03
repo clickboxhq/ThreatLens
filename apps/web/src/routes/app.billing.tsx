@@ -1,27 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle } from "lucide-react";
-import { WorkspacePage } from "@/components/soc/workspace-page";
-import { useBilling } from "@/hooks/use-billing";
-import type { SubscriptionStatus } from "@/types/billing";
-
-const statusBanner: Partial<Record<SubscriptionStatus, { tone: string; message: string }>> = {
-  trial: {
-    tone: "info",
-    message: "You're on a trial plan. Add a payment method before it ends to avoid interruption.",
-  },
-  past_due: {
-    tone: "critical",
-    message: "Your last payment failed. Update your payment method to avoid service interruption.",
-  },
-  cancelled: {
-    tone: "high",
-    message: "Your subscription is cancelled and will not renew at the end of the current period.",
-  },
-  expired: {
-    tone: "critical",
-    message: "Your subscription has expired. Renew to restore access for your organization.",
-  },
-};
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { CreditCard } from "lucide-react";
+import { Panel, SectionHeader } from "@/components/soc/primitives";
 
 export const Route = createFileRoute("/app/billing")({
   component: Billing,
@@ -30,81 +9,56 @@ export const Route = createFileRoute("/app/billing")({
       { title: "ThreatLens · Billing" },
       {
         name: "description",
-        content: "Seat allocation, scenario usage, and invoices for your ThreatLens tenant.",
+        content: "Billing and invoicing for your ThreatLens account.",
       },
       { property: "og:title", content: "ThreatLens · Billing" },
       {
         property: "og:description",
-        content: "Seats, usage, and invoices for the ThreatLens platform.",
+        content: "Billing and invoicing for your ThreatLens account.",
       },
     ],
   }),
 });
 
+/**
+ * Billing is not built yet, so this page says so.
+ *
+ * It previously rendered a mock service: an Enterprise plan, 128 of 150 seats, a "Visa ••••
+ * 4242" nobody had added, and four invoices totalling roughly $68,000 with one marked Open.
+ * Every instructor and org_admin saw it, whatever their actual account. Placeholder copy reads
+ * as unfinished; placeholder invoices read as money owed, and there is no way for someone
+ * looking at that screen to tell it is not real.
+ *
+ * The route is kept rather than deleted so an existing link lands somewhere truthful instead of
+ * on a 404.
+ */
 function Billing() {
-  const { summary, invoices, seatUtilization, state } = useBilling();
-  const banner = summary ? statusBanner[summary.subscriptionStatus] : undefined;
   return (
-    <WorkspacePage
-      title="Billing"
-      description="Enterprise plan — billed per active analyst seat with unlimited scenario launches."
-      state={state}
-      banner={
-        banner && (
-          <div
-            className="flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-[12.5px]"
-            style={{
-              borderColor: `color-mix(in oklab, var(--${banner.tone}) 35%, var(--border))`,
-              background: `color-mix(in oklab, var(--${banner.tone}) 8%, var(--card))`,
-              color: `var(--${banner.tone})`,
-            }}
-          >
-            <AlertTriangle className="size-4 shrink-0" />
-            {banner.message}
+    <div className="px-4 py-6 md:px-8 md:py-8">
+      <SectionHeader
+        title="Billing"
+        description="Plans, seats, and invoices for your ThreatLens account."
+      />
+
+      <Panel>
+        <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+          <div className="grid size-10 place-items-center rounded-full border border-border bg-background text-muted-foreground">
+            <CreditCard className="size-4" />
           </div>
-        )
-      }
-      stats={[
-        {
-          label: "Plan",
-          value: summary?.plan ?? "—",
-          delta: summary ? `${summary.billingCycle} · ${summary.paymentMethod}` : undefined,
-        },
-        {
-          label: "Active seats",
-          value: summary ? String(summary.activeSeats) : "—",
-          delta: summary ? `of ${summary.licensedSeats} licensed` : undefined,
-        },
-        {
-          label: "Scenario launches",
-          value: summary ? summary.scenarioLaunches.toLocaleString() : "—",
-          delta: "this month",
-          tone: "info",
-        },
-        {
-          label: "Next invoice",
-          value: summary?.nextInvoiceAmount ?? "—",
-          delta: summary ? `due ${summary.nextInvoiceDue}` : undefined,
-          tone: "high",
-        },
-      ]}
-      table={{
-        title: "Invoices",
-        columns: ["Invoice", "Period", "Seats", "Amount", "Status"],
-        rows: invoices.map((i) => [
-          <span className="font-mono text-[11px] text-muted-foreground">{i.id}</span>,
-          i.period,
-          <span className="tabular-nums">{i.seats}</span>,
-          <span className="tabular-nums">{i.amount}</span>,
-          <span
-            className="text-[11px] font-medium"
-            style={{ color: i.status === "Paid" ? "var(--success)" : "var(--warning)" }}
-          >
-            {i.status}
-          </span>,
-        ]),
-      }}
-      asides={[{ title: "Seat utilization", items: seatUtilization }]}
-    />
+          <h2 className="text-[15px] font-medium text-foreground">Billing isn't available yet</h2>
+          <p className="max-w-md text-[13px] leading-relaxed text-muted-foreground">
+            There is nothing to pay and no invoices to show. Your account has full access to every
+            scenario, cohort, and report while we finish this.
+          </p>
+          <p className="max-w-md text-[13px] leading-relaxed text-muted-foreground">
+            If you need a quote, an invoice, or seats for a team,{" "}
+            <Link to="/contact" className="text-[color:var(--info)] underline underline-offset-2">
+              get in touch
+            </Link>{" "}
+            and we'll sort it out directly.
+          </p>
+        </div>
+      </Panel>
+    </div>
   );
 }

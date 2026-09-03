@@ -131,7 +131,6 @@ const organization: NavItem[] = [
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
-  { to: "/app/billing", label: "Billing", icon: CreditCard },
 ];
 
 // Separate from `organization` — the backend gates GET /admin/audit-logs to platform_admin
@@ -292,22 +291,15 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
               >
                 <LifeBuoy className="size-3.5" /> Support
               </a>
-              {isOrg ? (
-                <Link
-                  to="/app/billing"
-                  className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
-                >
-                  <CreditCard className="size-3.5" /> Billing
-                </Link>
-              ) : (
-                <Link
-                  to="/"
-                  hash="pricing"
-                  className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
-                >
-                  <CreditCard className="size-3.5" /> Upgrade
-                </Link>
-              )}
+              {/* Everyone gets Pricing rather than org users getting Billing: billing is not
+               * built, so that link led to a page saying so. */}
+              <Link
+                to="/"
+                hash="pricing"
+                className="ml-auto inline-flex items-center gap-1 hover:text-foreground"
+              >
+                <CreditCard className="size-3.5" /> Pricing
+              </Link>
             </div>
           </div>
         </div>
