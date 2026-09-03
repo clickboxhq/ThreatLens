@@ -205,8 +205,7 @@ export function verificationEmail(verifyUrl: string): {
         'Confirm your address to start scored investigations — the link is good for 24 hours.',
       heading: 'Confirm your email address',
       paragraphs: [
-        'Your ThreatLens account is ready. Confirming your address unlocks scored investigations, so your work counts towards your skill profile, the leaderboard, and any certificates you earn.',
-        'You can look around without confirming — you just cannot start a scored scenario until you do.',
+        'Confirm your address to unlock scored investigations, so your work counts towards your skill profile and any certificates you earn.',
       ],
       cta: { label: 'Verify my email address', url: verifyUrl },
       meta: 'This link expires in 24 hours.',
@@ -227,19 +226,14 @@ export function welcomeEmail(input: { displayName: string; appUrl: string }): {
   return {
     subject: 'Welcome to ThreatLens',
     html: renderEmail({
-      preheader:
-        'Your email is verified. Here is how to get your first investigation scored.',
+      preheader: 'Your email is verified — pick a scenario and start.',
       heading: `Welcome to ThreatLens, ${name}`,
       paragraphs: [
         'Your email is confirmed, so scored investigations are open to you.',
-        'ThreatLens drops you into a realistic security incident and asks you to work it the way an analyst would: read the telemetry, pin the evidence that actually matters, tag the MITRE techniques you can support, take a response action, and commit to a verdict.',
-        'You are graded on the investigation, not just the answer — which evidence you pinned, which you missed, the techniques you identified, the actions you took, and how many hints you used getting there.',
-        '<strong style="color:inherit;">Start with a scenario tagged Beginner.</strong> They are shorter and the ground truth is easier to see once you find it, which makes the scoring feedback far more useful on your first pass.',
+        'Pick a scenario, work the incident, and commit to a verdict. You get a scored breakdown when you submit.',
       ],
       cta: { label: 'Start your first investigation', url: input.appUrl },
-      meta: 'Nothing is timed. You can leave an investigation and come back to it.',
-      footnote:
-        'A tip that saves people the most time: work the evidence before the verdict. Pinning as you go builds the timeline for you, and a verdict without pinned evidence behind it scores poorly even when it is correct.',
+      meta: 'New to this? Start with a scenario tagged Beginner.',
     }),
   };
 }
