@@ -1,4 +1,4 @@
-// SOCVerse — Prisma schema (walking-skeleton subset of docs/ThreatLens-Architecture.md §6)
+// ThreatLens — Prisma schema (walking-skeleton subset of docs/ThreatLens-Architecture.md §6)
 // Only the tables needed for the "Phishing -> Stolen Credentials -> Risky Sign-in" skeleton
 // scenario are modeled here. Breadth (Device Portal event tables, Instructor Mode, Learning
 // Platform, etc.) is added incrementally following the same conventions (§6.1).

@@ -221,7 +221,7 @@ function NavGroup({
 
 function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const user = useAuthUser();
-  // "Organization" nav (instructor tools, org settings) now gates on the real role SOCVerse
+  // "Organization" nav (instructor tools, org settings) now gates on the real role ThreatLens
   // issued at signup/login, not the old accountType mock flag — org_admin included for when a
   // real admin-provisioned account (no self-serve path) logs in.
   const isOrg = user?.role === "instructor" || user?.role === "org_admin";

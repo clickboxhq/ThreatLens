@@ -102,7 +102,7 @@ export class ThreatIntelService {
 
     // Grouped by the attributed actor across every indicator the Student has personally
     // looked up and found — "campaigns" is the count of distinct scenarios that actor showed
-    // up in for this Student, not a global campaign registry (SOCVerse has no such entity).
+    // up in for this Student, not a global campaign registry (ThreatLens has no such entity).
     const byActor = new Map<
       string,
       {
