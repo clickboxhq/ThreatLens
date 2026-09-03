@@ -277,6 +277,107 @@ describe('AuthService.getMe', () => {
   });
 });
 
+describe('AuthService profile persistence', () => {
+  const PROFILE = {
+    firstName: 'Danielle',
+    lastName: 'Okonkwo',
+    avatarType: 'upload',
+    avatarDataUrl: 'data:image/png;base64,AAAA',
+    professionalRole: 'SOC Analyst',
+  } as unknown as Partial<User>;
+
+  async function loginWith(overrides: Partial<Record<string, unknown>>) {
+    const argon2 = await import('argon2');
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    const u = user({ passwordHash, ...overrides });
+    const { service } = buildService(new Map([[u.id, u]]));
+    return service.login(
+      { email: u.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
+  }
+
+  // The client caches whatever login returns. When that was a four-field subset, a signed-in
+  // user had no avatar and no first/last name, so the app rendered initials and the signup
+  // displayName — a profile that looked saved until you signed out and back in.
+  it('login() returns the avatar and profile fields, not just id/name/role', async () => {
+    const result = await loginWith(PROFILE);
+    expect('user' in result && result.user).toMatchObject({
+      firstName: 'Danielle',
+      lastName: 'Okonkwo',
+      avatarType: 'upload',
+      avatarDataUrl: 'data:image/png;base64,AAAA',
+      professionalRole: 'SOC Analyst',
+    });
+  });
+
+  it('login() and getMe() agree on the shape they return', async () => {
+    // They drifted apart once already; asserting the key sets match is what stops it silently
+    // happening again.
+    const argon2 = await import('argon2');
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    const u = user({ passwordHash, ...PROFILE });
+    const { service } = buildService(new Map([[u.id, u]]));
+
+    const result = await service.login(
+      { email: u.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
+    const me = await service.getMe(u.id);
+
+    expect('user' in result && Object.keys(result.user).sort()).toEqual(
+      Object.keys(me).sort(),
+    );
+  });
+
+  describe('updateProfile keeps displayName in step with the name fields', () => {
+    it('derives displayName from first and last name', async () => {
+      const u = user({ displayName: 'Old Signup Name' });
+      const users = new Map([[u.id, u]]);
+      const { service } = buildService(users);
+
+      const updated = await service.updateProfile(u.id, {
+        firstName: 'Danielle',
+        lastName: 'Okonkwo',
+      });
+      expect(updated.displayName).toBe('Danielle Okonkwo');
+    });
+
+    it('uses whichever name is present when only one is set', async () => {
+      const u = user({ displayName: 'Old Signup Name' });
+      const { service } = buildService(new Map([[u.id, u]]));
+      const updated = await service.updateProfile(u.id, { firstName: 'Dana' });
+      expect(updated.displayName).toBe('Dana');
+    });
+
+    it('leaves displayName alone when the update carries no name at all', async () => {
+      // Editing only a bio must not blank out the name shown on every other screen.
+      const u = user({ displayName: 'Old Signup Name' });
+      const { service } = buildService(new Map([[u.id, u]]));
+      const updated = await service.updateProfile(u.id, { bio: 'Just a bio.' });
+      expect(updated.displayName).toBe('Old Signup Name');
+    });
+
+    it('does not blank displayName when both names are cleared', async () => {
+      const u = user({
+        displayName: 'Danielle Okonkwo',
+        firstName: 'Danielle',
+        lastName: 'Okonkwo',
+      } as never);
+      const { service } = buildService(new Map([[u.id, u]]));
+      const updated = await service.updateProfile(u.id, {
+        firstName: '',
+        lastName: '',
+      });
+      expect(updated.displayName).toBe('Danielle Okonkwo');
+    });
+  });
+});
+
 describe('AuthService MFA (§15.1, §16.2)', () => {
   it('login() does not issue tokens for an MFA-enrolled account, returning a challenge instead', async () => {
     const argon2 = await import('argon2');

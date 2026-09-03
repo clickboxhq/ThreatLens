@@ -32,15 +32,76 @@ export interface TokenPair {
   expiresIn: number;
 }
 
+/**
+ * The signed-in user, as every route that returns one must return it.
+ *
+ * Login used to return a four-field subset — id, displayName, role, emailVerified — while
+ * GET /auth/me returned the profile as well. The client caches whatever login hands back, so
+ * after signing in it held a user with no avatar and no first/last name, and rendered the
+ * defaults for both: initials instead of the uploaded picture, and the signup displayName
+ * instead of the name the person had set. Editing a profile appeared to work and then appeared
+ * to forget, because nothing re-read the profile after login.
+ */
+export interface AuthUserDto {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  emailVerified: boolean;
+  createdAt: Date;
+  firstName: string | null;
+  lastName: string | null;
+  professionalRole: string | null;
+  bio: string | null;
+  careerGoal: string | null;
+  experienceLevel: string | null;
+  avatarType: string;
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
+  careerLevel: string;
+}
+
+/** The one place the signed-in user's shape is defined, so login and GET /auth/me cannot drift. */
+function toAuthUserDto(user: {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  emailVerifiedAt: Date | null;
+  createdAt: Date;
+  firstName: string | null;
+  lastName: string | null;
+  professionalRole: string | null;
+  bio: string | null;
+  careerGoal: string | null;
+  experienceLevel: string | null;
+  avatarType: string;
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
+  careerLevel: string;
+}): AuthUserDto {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+    emailVerified: user.emailVerifiedAt !== null,
+    createdAt: user.createdAt,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    professionalRole: user.professionalRole,
+    bio: user.bio,
+    careerGoal: user.careerGoal,
+    experienceLevel: user.experienceLevel,
+    avatarType: user.avatarType,
+    avatarPresetKey: user.avatarPresetKey,
+    avatarDataUrl: user.avatarDataUrl,
+    careerLevel: user.careerLevel,
+  };
+}
+
 export type LoginResult =
-  | (TokenPair & {
-      user: {
-        id: string;
-        displayName: string;
-        role: string;
-        emailVerified: boolean;
-      };
-    })
+  | (TokenPair & { user: AuthUserDto })
   | { mfaRequired: true; mfaChallengeId: string }
   // A privileged account that has not enrolled MFA yet. Distinct from mfaRequired: nothing to
   // verify against, so the client must take the caller through enrolment before login can
@@ -290,12 +351,7 @@ export class AuthService {
     const tokens = await this.issueTokenPair(user);
     return {
       ...tokens,
-      user: {
-        id: user.id,
-        displayName: user.displayName,
-        role: user.role,
-        emailVerified: Boolean(user.emailVerifiedAt),
-      },
+      user: toAuthUserDto(user),
     };
   }
 
@@ -345,16 +401,7 @@ export class AuthService {
     code: string,
     sourceIp?: string,
     correlationId?: string,
-  ): Promise<
-    TokenPair & {
-      user: {
-        id: string;
-        displayName: string;
-        role: string;
-        emailVerified: boolean;
-      };
-    }
-  > {
+  ): Promise<TokenPair & { user: AuthUserDto }> {
     const userId = await this.mfaChallenges.consume(mfaChallengeId);
     if (!userId) {
       throw new AppException(
@@ -404,12 +451,7 @@ export class AuthService {
     const tokens = await this.issueTokenPair(user);
     return {
       ...tokens,
-      user: {
-        id: user.id,
-        displayName: user.displayName,
-        role: user.role,
-        emailVerified: Boolean(user.emailVerifiedAt),
-      },
+      user: toAuthUserDto(user),
     };
   }
 
@@ -605,24 +647,7 @@ export class AuthService {
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
-    return {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      role: user.role,
-      emailVerified: user.emailVerifiedAt !== null,
-      createdAt: user.createdAt,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      professionalRole: user.professionalRole,
-      bio: user.bio,
-      careerGoal: user.careerGoal,
-      experienceLevel: user.experienceLevel,
-      avatarType: user.avatarType,
-      avatarPresetKey: user.avatarPresetKey,
-      avatarDataUrl: user.avatarDataUrl,
-      careerLevel: user.careerLevel,
-    };
+    return toAuthUserDto(user);
   }
 
   async updateProfile(
@@ -636,9 +661,29 @@ export class AuthService {
       experienceLevel?: string;
     },
   ) {
+    // displayName is what the app shows in the header, the roster, the leaderboard and every
+    // instructor view. The profile form only edits firstName/lastName, so without this someone
+    // changes their name, sees the profile page update, and finds the old name still on every
+    // other screen — the "it forgot my name" half of the same bug.
+    const existing = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true },
+    });
+    const firstName =
+      dto.firstName !== undefined ? dto.firstName : (existing?.firstName ?? '');
+    const lastName =
+      dto.lastName !== undefined ? dto.lastName : (existing?.lastName ?? '');
+    const derivedName = [firstName, lastName]
+      .map((part) => part?.trim() ?? '')
+      .filter(Boolean)
+      .join(' ');
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
+        // Only when there is a real name to use — clearing both fields must not leave somebody
+        // rendered as an empty string everywhere.
+        ...(derivedName ? { displayName: derivedName } : {}),
         ...(dto.firstName !== undefined && { firstName: dto.firstName }),
         ...(dto.lastName !== undefined && { lastName: dto.lastName }),
         ...(dto.professionalRole !== undefined && {
