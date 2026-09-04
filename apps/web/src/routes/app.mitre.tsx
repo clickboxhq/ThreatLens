@@ -40,9 +40,14 @@ function MitreExplorer() {
       {state === "empty" ? (
         <Panel className="mt-6">
           <div className="py-12 text-center">
-            <p className="text-[13px] font-medium">No graded investigations yet</p>
+            {/* This state cannot tell "you have not been graded yet" from "you have been
+             * graded, but on a scenario with no techniques to tag" — the three non-attack
+             * scenarios require none. Saying the first out loud is wrong for anyone whose
+             * only submission was one of those, so the copy asserts neither. */}
+            <p className="text-[13px] font-medium">No technique mastery to show yet</p>
             <p className="mx-auto mt-1 max-w-md text-[12px] text-secondary">
-              Complete and submit a scenario to see your ATT&CK tactic and technique mastery here.
+              Mastery appears once you have submitted a scenario that involves tagging ATT&CK
+              techniques.
             </p>
           </div>
         </Panel>
