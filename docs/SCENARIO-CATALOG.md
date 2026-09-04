@@ -47,6 +47,8 @@ that happens to be authorised. Grading treats them as different answers.
 
 ## The catalogue
 
+<!-- BEGIN GENERATED: scenario-tables -->
+
 ### Identity (7)
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
@@ -63,7 +65,7 @@ that happens to be authorised. Grading treats them as different answers.
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
-| **Email — SPF Failure on a Genuine Vendor Notification**<br>`vendor-mail-spf-failure-after-migration` | beginner | 20 | Benign positive |  |
+| **Email — SPF Failure on a Genuine Vendor Notification**<br>`vendor-mail-spf-failure-after-migration` | beginner | 20 | Benign positive | — *(no attack to tag)* |
 | **Phishing → Stolen Credentials → Risky Sign-in**<br>`phishing-stolen-credentials` | beginner | 30 | True positive | `T1566.002`, `T1078` |
 | **Business Email Compromise — Executive Wire Transfer Fraud**<br>`bec-wire-transfer-fraud` | intermediate | 20 | True positive | `T1656` |
 
@@ -94,20 +96,20 @@ that happens to be authorised. Grading treats them as different answers.
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
-| **Cloud Account Takeover — Malicious Access Key Creation**<br>`cloud-account-takeover-access-key` | intermediate | 25 | True positive | `T1098.001`, `T1530` |
 | **Cloud — Storage Bucket Exposed to Public Access**<br>`cloud-storage-bucket-public-exposure` | intermediate | 20 | True positive | `T1530` |
+| **Cloud Account Takeover — Malicious Access Key Creation**<br>`cloud-account-takeover-access-key` | intermediate | 25 | True positive | `T1098.001`, `T1530` |
 | **Cloud — OAuth Illicit Consent Grant via Phishing**<br>`oauth-illicit-consent-grant-phishing` | advanced | 30 | True positive | `T1566.002`, `T1528`, `T1114.002` |
 
 ### Web application (6)
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
-| **Web — Uptime Monitor Flagged as a Web Shell**<br>`monitoring-agent-flagged-as-webshell` | beginner | 15 | False positive |  |
+| **Web — Uptime Monitor Flagged as a Web Shell**<br>`monitoring-agent-flagged-as-webshell` | beginner | 15 | False positive | — *(no attack to tag)* |
 | **Web — Customer Records Reached by Changing an ID**<br>`idor-invoice-enumeration` | intermediate | 25 | True positive | `T1213` |
-| **Web — Reporting Job Flagged as Record Enumeration**<br>`batch-export-mistaken-for-enumeration` | intermediate | 20 | False positive |  |
-| **Web Shell Access on Public-Facing Server**<br>`web-shell-public-facing-server` | advanced | 25 | True positive | `T1505.003` |
+| **Web — Reporting Job Flagged as Record Enumeration**<br>`batch-export-mistaken-for-enumeration` | intermediate | 20 | False positive | — *(no attack to tag)* |
 | **Web — SQL Injection Data Exfiltration**<br>`web-sql-injection-data-exfiltration` | advanced | 25 | True positive | `T1190` |
 | **Web — SQL Injection Escalated to a Web Shell**<br>`sql-injection-to-webshell-chain` | advanced | 35 | True positive | `T1190`, `T1505.003` |
+| **Web Shell Access on Public-Facing Server**<br>`web-shell-public-facing-server` | advanced | 25 | True positive | `T1505.003` |
 
 ### Insider threat (3)
 
@@ -116,6 +118,9 @@ that happens to be authorised. Grading treats them as different answers.
 | **Insider Threat — Data Exfiltration to Personal Email**<br>`insider-data-exfiltration` | beginner | 15 | True positive | `T1048` |
 | **Insider Threat — Bulk File Copy to Removable Media**<br>`insider-bulk-usb-copy-resignation` | intermediate | 20 | True positive | `T1052.001`, `T1070.004` |
 | **Insider Threat — Departing Engineer Bulk-Downloads Cloud Storage**<br>`departing-engineer-bulk-cloud-download` | advanced | 25 | True positive | `T1530`, `T1070.004` |
+
+<!-- END GENERATED: scenario-tables -->
+
 ## MITRE coverage
 
 31 distinct ATT&CK techniques are required across the catalogue. Technique tagging is graded on

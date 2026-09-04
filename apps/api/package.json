@@ -25,7 +25,8 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "admin:grant": "ts-node prisma/grant-admin.ts",
-    "admin:reset-mfa": "ts-node prisma/reset-mfa.ts"
+    "admin:reset-mfa": "ts-node prisma/reset-mfa.ts",
+    "docs:sync": "ts-node prisma/sync-docs.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

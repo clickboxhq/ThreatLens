@@ -12,6 +12,18 @@ Derived from the code. Keep these current when behaviour changes.
 | **[EVENT-CATALOG.md](EVENT-CATALOG.md)** | The eight telemetry tables, 52 event templates, 20 detection rules |
 | **[SCENARIO-CATALOG.md](SCENARIO-CATALOG.md)** | All 30 scenarios — category, difficulty, techniques, correct verdict |
 
+These are checked against the code by `apps/api/src/common/docs/docs-in-sync.spec.ts`, which
+runs in the normal API test job. It fails when the counts quoted here — scenarios, templates,
+rules, telemetry tables, scoring weights — stop matching source, and when the scenario tables
+drift from `seed.ts`. After changing a scenario, run:
+
+```bash
+npm run docs:sync --workspace=apps/api
+```
+
+The catalogue tables are generated, so edit `seed.ts` rather than the table. Prose is written
+by hand; the check only pins the numbers in it, not the wording.
+
 Operational runbooks sit outside this folder: [`infra/RAILWAY.md`](../infra/RAILWAY.md) and
 [`infra/DEPLOY.md`](../infra/DEPLOY.md).
 
