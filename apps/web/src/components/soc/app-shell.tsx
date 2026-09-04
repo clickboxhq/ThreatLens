@@ -3,6 +3,7 @@ import {
   LayoutGrid,
   ShieldAlert,
   Bell,
+  BookOpen,
   Inbox,
   ListTree,
   UserRound,
@@ -130,6 +131,7 @@ const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
+  { to: "/app/docs", label: "Documentation", icon: BookOpen },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -271,10 +273,10 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
         )}
       </nav>
 
-      {/* Footer: plan + support — hidden in collapsed mode, not worth
-          the icon-only treatment. Storage and Docs were dropped (§1.6 "no fake UI"):
-          Storage was a hardcoded number with no backing quota, Docs had nowhere real
-          to link. Support now points at a real mailbox instead of href="#". */}
+      {/* Footer: plan + docs + support — hidden in collapsed mode, not worth the icon-only
+          treatment. Storage stays dropped (§1.6 "no fake UI"): it was a hardcoded number with
+          no backing quota. Docs is back, because there is now a real guide to send people to
+          rather than the href="#" it used to be. */}
       {!collapsed && (
         <div className="border-t border-sidebar-border p-3">
           <div className="rounded-lg border border-[color:var(--card-border-tint)] bg-background/40 p-3">
@@ -285,6 +287,9 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
               </span>
             </div>
             <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+              <Link to="/app/docs" className="inline-flex items-center gap-1 hover:text-foreground">
+                <BookOpen className="size-3.5" /> Docs
+              </Link>
               <a
                 href="mailto:info@useclickbox.com"
                 className="inline-flex items-center gap-1 hover:text-foreground"

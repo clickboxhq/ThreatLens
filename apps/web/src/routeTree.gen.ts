@@ -39,6 +39,7 @@ import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppCertificatesRouteImport } from './routes/app.certificates'
 import { Route as AppClosedRouteImport } from './routes/app.closed'
 import { Route as AppCohortsRouteImport } from './routes/app.cohorts'
+import { Route as AppDocsRouteImport } from './routes/app.docs'
 import { Route as AppEvidenceRouteImport } from './routes/app.evidence'
 import { Route as AppFeedbackRouteImport } from './routes/app.feedback'
 import { Route as AppGraphRouteImport } from './routes/app.graph'
@@ -220,6 +221,11 @@ const AppClosedRoute = AppClosedRouteImport.update({
 const AppCohortsRoute = AppCohortsRouteImport.update({
   id: '/cohorts',
   path: '/cohorts',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDocsRoute = AppDocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => AppRoute,
 } as any)
 const AppEvidenceRoute = AppEvidenceRouteImport.update({
@@ -417,6 +423,7 @@ export interface FileRoutesByFullPath {
   '/app/certificates': typeof AppCertificatesRoute
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
+  '/app/docs': typeof AppDocsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
   '/app/graph': typeof AppGraphRoute
@@ -480,6 +487,7 @@ export interface FileRoutesByTo {
   '/app/certificates': typeof AppCertificatesRoute
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
+  '/app/docs': typeof AppDocsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
   '/app/graph': typeof AppGraphRoute
@@ -545,6 +553,7 @@ export interface FileRoutesById {
   '/app/certificates': typeof AppCertificatesRoute
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
+  '/app/docs': typeof AppDocsRoute
   '/app/evidence': typeof AppEvidenceRoute
   '/app/feedback': typeof AppFeedbackRoute
   '/app/graph': typeof AppGraphRoute
@@ -611,6 +620,7 @@ export interface FileRouteTypes {
     | '/app/certificates'
     | '/app/closed'
     | '/app/cohorts'
+    | '/app/docs'
     | '/app/evidence'
     | '/app/feedback'
     | '/app/graph'
@@ -674,6 +684,7 @@ export interface FileRouteTypes {
     | '/app/certificates'
     | '/app/closed'
     | '/app/cohorts'
+    | '/app/docs'
     | '/app/evidence'
     | '/app/feedback'
     | '/app/graph'
@@ -738,6 +749,7 @@ export interface FileRouteTypes {
     | '/app/certificates'
     | '/app/closed'
     | '/app/cohorts'
+    | '/app/docs'
     | '/app/evidence'
     | '/app/feedback'
     | '/app/graph'
@@ -1011,6 +1023,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCohortsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/docs': {
+      id: '/app/docs'
+      path: '/docs'
+      fullPath: '/app/docs'
+      preLoaderRoute: typeof AppDocsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/evidence': {
       id: '/app/evidence'
       path: '/evidence'
@@ -1248,6 +1267,7 @@ interface AppRouteChildren {
   AppCertificatesRoute: typeof AppCertificatesRoute
   AppClosedRoute: typeof AppClosedRoute
   AppCohortsRoute: typeof AppCohortsRoute
+  AppDocsRoute: typeof AppDocsRoute
   AppEvidenceRoute: typeof AppEvidenceRoute
   AppFeedbackRoute: typeof AppFeedbackRoute
   AppGraphRoute: typeof AppGraphRoute
@@ -1290,6 +1310,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCertificatesRoute: AppCertificatesRoute,
   AppClosedRoute: AppClosedRoute,
   AppCohortsRoute: AppCohortsRoute,
+  AppDocsRoute: AppDocsRoute,
   AppEvidenceRoute: AppEvidenceRoute,
   AppFeedbackRoute: AppFeedbackRoute,
   AppGraphRoute: AppGraphRoute,
