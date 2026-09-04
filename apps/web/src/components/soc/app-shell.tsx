@@ -112,6 +112,9 @@ const learning: NavItem[] = [
   { to: "/app/achievements", label: "Achievements", icon: Medal },
   { to: "/app/certificates", label: "Certificates", icon: Award },
   { to: "/app/leaderboard", label: "Leaderboard", icon: Trophy },
+  // Everyone needs the guide, so it sits in a group that is not role-gated. It was briefly
+  // in Organization, which only renders for org accounts — individual users saw nothing.
+  { to: "/app/docs", label: "Documentation", icon: BookOpen },
 ];
 
 // Organization accounts only — instructors, cohorts, and org-scoped admin.
@@ -131,7 +134,6 @@ const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
-  { to: "/app/docs", label: "Documentation", icon: BookOpen },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
 ];
 
