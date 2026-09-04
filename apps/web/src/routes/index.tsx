@@ -1037,9 +1037,15 @@ export function Footer() {
             >
               <XIcon />
             </a>
-            <span aria-hidden className="cursor-default opacity-40" title="LinkedIn — coming soon">
+            <a
+              href="https://www.linkedin.com/company/threatlensapp/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="ThreatLens on LinkedIn"
+              className="transition-colors hover:text-white"
+            >
               <Linkedin className="size-4" />
-            </span>
+            </a>
           </div>
           <div className="flex items-center gap-2.5">
             <span className="inline-flex h-5 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-black">
