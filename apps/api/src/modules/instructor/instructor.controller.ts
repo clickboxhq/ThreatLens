@@ -13,6 +13,7 @@ import {
 import type { Response } from 'express';
 import { InstructorService } from './instructor.service';
 import { CohortStaffService } from './cohort-staff.service';
+import { CohortInviteService } from './cohort-invite.service';
 import {
   AddCohortStaffDto,
   AssignGroupTutorDto,
@@ -22,6 +23,7 @@ import {
   PlaceStudentInGroupDto,
   SubmitInstructorFeedbackDto,
   UpdateCohortStaffRoleDto,
+  CreateCohortInviteDto,
 } from './dto/instructor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -47,6 +49,7 @@ export class InstructorController {
   constructor(
     private readonly instructorService: InstructorService,
     private readonly cohortStaff: CohortStaffService,
+    private readonly cohortInvites: CohortInviteService,
   ) {}
 
   // ---------------------------------------------------------------- staff
@@ -88,6 +91,34 @@ export class InstructorController {
   }
 
   // ---------------------------------------------------------------- groups
+
+  // Invitations. A cohort has a join code as well, but a code cannot be addressed to one
+  // person, withdrawn from them, or expire on its own.
+  @Get('cohorts/:id/invites')
+  async listInvites(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) cohortId: string,
+  ) {
+    return this.cohortInvites.list(user, cohortId);
+  }
+
+  @Post('cohorts/:id/invites')
+  async createInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) cohortId: string,
+    @Body() dto: CreateCohortInviteDto,
+  ) {
+    return this.cohortInvites.create(user, cohortId, dto.email, dto.groupId);
+  }
+
+  @Delete('cohorts/:id/invites/:inviteId')
+  async revokeInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) cohortId: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ) {
+    return this.cohortInvites.revoke(user, cohortId, inviteId);
+  }
 
   @Get('cohorts/:id/groups')
   async listGroups(

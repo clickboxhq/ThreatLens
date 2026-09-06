@@ -39,12 +39,12 @@ enum UserStatus {
 }
 
 model Organization {
-  id         String   @id @default(uuid()) @db.Uuid
-  name       String
-  teamSize   Int?     @map("team_size")
-  industry   String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  teamSize  Int?     @map("team_size")
+  industry  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   users   User[]
   invites OrganizationInvite[]
@@ -130,11 +130,11 @@ model User {
   // displayName above remains the name shown everywhere already built
   // against it; firstName/lastName are independently editable, not merely
   // a split of displayName.
-  firstName        String? @map("first_name")
-  lastName         String? @map("last_name")
-  professionalRole String? @map("professional_role")
+  firstName        String?          @map("first_name")
+  lastName         String?          @map("last_name")
+  professionalRole String?          @map("professional_role")
   bio              String?
-  careerGoal       String? @map("career_goal")
+  careerGoal       String?          @map("career_goal")
   experienceLevel  ExperienceLevel? @map("experience_level")
 
   // Avatar — three modes. `avatarDataUrl` holds an uploaded image as a
@@ -143,9 +143,9 @@ model User {
   // code anywhere touching it yet, and wiring a full bucket/policy/client
   // pipeline for a small profile image is disproportionate — this is a
   // deliberate, documented scope trade-off, not an oversight.
-  avatarType       AvatarType @default(initials) @map("avatar_type")
-  avatarPresetKey  String?    @map("avatar_preset_key")
-  avatarDataUrl    String?    @map("avatar_data_url")
+  avatarType      AvatarType @default(initials) @map("avatar_type")
+  avatarPresetKey String?    @map("avatar_preset_key")
+  avatarDataUrl   String?    @map("avatar_data_url")
 
   // Drives guided-vs-independent investigation mode. Manually set — the
   // automatic-promotion system that once computed this was removed.
@@ -165,6 +165,7 @@ model User {
   analystNotes          AnalystNote[]
   investigationActions  InvestigationAction[]
   ownedCohorts          Cohort[]                   @relation("CohortOwner")
+  cohortInvitesSent     CohortInvite[]             @relation("CohortInviteInviter")
   cohortEnrollments     CohortEnrollment[]         @relation("CohortEnrollments")
   cohortStaffRoles      CohortStaff[]              @relation("CohortStaffMember")
   cohortGroupTutorships CohortGroupTutor[]         @relation("CohortGroupTutor")
@@ -242,6 +243,7 @@ model Cohort {
   groups      CohortGroup[]
   enrollments CohortEnrollment[]
   assignments CohortScenarioAssignment[]
+  invites     CohortInvite[]
 
   @@index([orgId])
   @@map("cohorts")
@@ -258,11 +260,11 @@ enum CohortStaffRole {
 }
 
 model CohortStaff {
-  cohortId  String          @map("cohort_id") @db.Uuid
-  userId    String          @map("user_id") @db.Uuid
-  role      CohortStaffRole
-  addedAt   DateTime        @default(now()) @map("added_at")
-  addedBy   String?         @map("added_by") @db.Uuid
+  cohortId String          @map("cohort_id") @db.Uuid
+  userId   String          @map("user_id") @db.Uuid
+  role     CohortStaffRole
+  addedAt  DateTime        @default(now()) @map("added_at")
+  addedBy  String?         @map("added_by") @db.Uuid
 
   cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
   user   User   @relation("CohortStaffMember", fields: [userId], references: [id])
@@ -282,9 +284,47 @@ model CohortGroup {
   tutors      CohortGroupTutor[]
   enrollments CohortEnrollment[]
   assignments CohortScenarioAssignment[]
+  invites     CohortInvite[]
 
   @@unique([cohortId, name])
   @@map("cohort_groups")
+}
+
+enum CohortInviteStatus {
+  pending
+  accepted
+  revoked
+}
+
+/// An invitation to join one cohort, addressed to one email.
+///
+/// Distinct from the join code, which is a shared secret anyone can pass on. An invite names a
+/// person, can be revoked, expires on its own, and records who sent it — which is what makes it
+/// usable for a class roster rather than an open door.
+///
+/// It can also carry a group, so somebody arrives already placed rather than needing a second
+/// pass over the roster afterwards.
+model CohortInvite {
+  id         String             @id @default(uuid()) @db.Uuid
+  cohortId   String             @map("cohort_id") @db.Uuid
+  groupId    String?            @map("group_id") @db.Uuid
+  email      String             @db.Citext
+  token      String             @unique
+  status     CohortInviteStatus @default(pending)
+  invitedBy  String             @map("invited_by") @db.Uuid
+  createdAt  DateTime           @default(now()) @map("created_at")
+  expiresAt  DateTime           @map("expires_at")
+  acceptedAt DateTime?          @map("accepted_at")
+
+  cohort  Cohort       @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  group   CohortGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  inviter User         @relation("CohortInviteInviter", fields: [invitedBy], references: [id])
+
+  // One live invite per address per cohort — re-inviting reuses the row rather than leaving a
+  // trail of tokens that all still work.
+  @@unique([cohortId, email])
+  @@index([cohortId])
+  @@map("cohort_invites")
 }
 
 model CohortGroupTutor {
@@ -561,8 +601,8 @@ model Identity {
   signInEvents           SignInEvent[]
   processEvents          ProcessEvent[]
   conditionalAccessEvals ConditionalAccessEvaluation[]
-  directoryAuditEvents   DirectoryAuditEvent[]        @relation("AuditTarget")
-  performedAuditEvents   DirectoryAuditEvent[]        @relation("AuditActor")
+  directoryAuditEvents   DirectoryAuditEvent[]         @relation("AuditTarget")
+  performedAuditEvents   DirectoryAuditEvent[]         @relation("AuditActor")
   cloudEvents            CloudEvent[]
 
   @@index([sessionId])
@@ -1348,7 +1388,6 @@ model Achievement {
   @@map("achievements")
 }
 
-
 // §Phase 6 (merge plan): net-new. Only categories with a real backend trigger are modeled —
 // deliberately excludes ThreatLens's original mock categories with no backing event yet
 // (new-scenario, deadline, cohort-announcement, billing, security); add those only once the
@@ -1360,6 +1399,7 @@ enum NotificationCategory {
   instructor_feedback
   certificate_issued
   org_invitation
+  cohort_invitation
 }
 
 model Notification {

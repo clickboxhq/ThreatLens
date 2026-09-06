@@ -11,6 +11,7 @@ const keys = {
   cohorts: ["instructor", "cohorts"] as const,
   roster: (cohortId: string) => ["instructor", "cohorts", cohortId, "roster"] as const,
   assignments: (cohortId: string) => ["instructor", "cohorts", cohortId, "assignments"] as const,
+  invites: (cohortId: string) => ["instructor", "cohort", cohortId, "invites"] as const,
   staff: (cohortId: string) => ["instructor", "cohort", cohortId, "staff"] as const,
   groups: (cohortId: string) => ["instructor", "cohort", cohortId, "groups"] as const,
   reviewQueue: (cohortId: string) => ["instructor", "cohorts", cohortId, "review-queue"] as const,
@@ -214,4 +215,38 @@ export function useCohortGroupMutations(cohortId: string | undefined) {
   });
 
   return { createGroup, deleteGroup, assignTutor, removeTutor, placeStudent };
+}
+
+// ---------- Cohort invitations ----------
+
+export function useCohortInvites(cohortId: string | undefined) {
+  return useQuery({
+    queryKey: cohortId ? keys.invites(cohortId) : ["invites", "none"],
+    queryFn: () => instructorService.listInvites(cohortId!),
+    enabled: Boolean(cohortId),
+  });
+}
+
+export function useCohortInviteMutations(cohortId: string | undefined) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    if (cohortId) queryClient.invalidateQueries({ queryKey: keys.invites(cohortId) });
+  };
+
+  const invite = useMutation({
+    mutationFn: (input: { email: string; groupId?: string }) =>
+      instructorService.createInvite(cohortId!, input),
+    // create returns the single new invite, not the list, so this refetches rather than
+    // seeding — the list is short and an invite is not sent often enough for it to matter.
+    onSuccess: refresh,
+  });
+
+  const revoke = useMutation({
+    mutationFn: (inviteId: string) => instructorService.revokeInvite(cohortId!, inviteId),
+    onSuccess: (data) => {
+      if (cohortId) queryClient.setQueryData(keys.invites(cohortId), data);
+    },
+  });
+
+  return { invite, revoke };
 }

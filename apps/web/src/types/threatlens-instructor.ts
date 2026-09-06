@@ -97,3 +97,27 @@ export interface CohortGroupDto {
   tutors: { userId: string; displayName: string }[];
   createdAt: string;
 }
+
+export type CohortInviteStatus = "pending" | "accepted" | "revoked" | "expired";
+
+export interface CohortInviteDto {
+  id: string;
+  email: string;
+  groupId: string | null;
+  groupName: string | null;
+  status: CohortInviteStatus;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+}
+
+/** What the join page can show before the visitor has signed in. */
+export interface CohortInvitePreviewDto {
+  cohortName: string;
+  groupName: string | null;
+  inviterName: string;
+  email: string;
+  status: CohortInviteStatus;
+  /** Drives whether the page leads with "sign in" or "create an account". */
+  hasAccount: boolean;
+}

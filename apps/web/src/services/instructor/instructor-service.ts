@@ -1,5 +1,7 @@
 import type {
   AssignmentDto,
+  CohortInviteDto,
+  CohortInvitePreviewDto,
   CohortGroupDto,
   CohortStaffDto,
   CohortStaffRole,
@@ -61,4 +63,15 @@ export interface InstructorService {
     studentUserId: string,
     groupId: string | null,
   ): Promise<{ userId: string; groupId: string | null }>;
+
+  // Invitations.
+  listInvites(cohortId: string): Promise<CohortInviteDto[]>;
+  createInvite(
+    cohortId: string,
+    input: { email: string; groupId?: string },
+  ): Promise<CohortInviteDto>;
+  revokeInvite(cohortId: string, inviteId: string): Promise<CohortInviteDto[]>;
+  /** Unauthenticated — the join page runs before the visitor necessarily has an account. */
+  previewInvite(token: string): Promise<CohortInvitePreviewDto>;
+  acceptInvite(token: string): Promise<{ cohortId: string; cohortName: string }>;
 }

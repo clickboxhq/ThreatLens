@@ -59,6 +59,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppStudentAnalyticsRouteImport } from './routes/app.student-analytics'
 import { Route as AppThreatIntelRouteImport } from './routes/app.threat-intel'
 import { Route as AppTimelineRouteImport } from './routes/app.timeline'
+import { Route as JoinCohortTokenRouteImport } from './routes/join-cohort.$token'
 import { Route as ResetPasswordTokenRouteImport } from './routes/reset-password.$token'
 import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$token'
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
@@ -323,6 +324,11 @@ const AppTimelineRoute = AppTimelineRouteImport.update({
   path: '/timeline',
   getParentRoute: () => AppRoute,
 } as any)
+const JoinCohortTokenRoute = JoinCohortTokenRouteImport.update({
+  id: '/join-cohort/$token',
+  path: '/join-cohort/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordTokenRoute = ResetPasswordTokenRouteImport.update({
   id: '/reset-password/$token',
   path: '/reset-password/$token',
@@ -443,6 +449,7 @@ export interface FileRoutesByFullPath {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/join-cohort/$token': typeof JoinCohortTokenRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -507,6 +514,7 @@ export interface FileRoutesByTo {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/join-cohort/$token': typeof JoinCohortTokenRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -573,6 +581,7 @@ export interface FileRoutesById {
   '/app/student-analytics': typeof AppStudentAnalyticsRoute
   '/app/threat-intel': typeof AppThreatIntelRoute
   '/app/timeline': typeof AppTimelineRoute
+  '/join-cohort/$token': typeof JoinCohortTokenRoute
   '/reset-password/$token': typeof ResetPasswordTokenRoute
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
@@ -640,6 +649,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/join-cohort/$token'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -704,6 +714,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/join-cohort/$token'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -769,6 +780,7 @@ export interface FileRouteTypes {
     | '/app/student-analytics'
     | '/app/threat-intel'
     | '/app/timeline'
+    | '/join-cohort/$token'
     | '/reset-password/$token'
     | '/verify-email/$token'
     | '/verify/$id'
@@ -806,6 +818,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   WelcomeRoute: typeof WelcomeRoute
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
+  JoinCohortTokenRoute: typeof JoinCohortTokenRoute
   ResetPasswordTokenRoute: typeof ResetPasswordTokenRoute
   VerifyEmailTokenRoute: typeof VerifyEmailTokenRoute
   VerifyIdRoute: typeof VerifyIdRoute
@@ -1163,6 +1176,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTimelineRouteImport
       parentRoute: typeof AppRoute
     }
+    '/join-cohort/$token': {
+      id: '/join-cohort/$token'
+      path: '/join-cohort/$token'
+      fullPath: '/join-cohort/$token'
+      preLoaderRoute: typeof JoinCohortTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password/$token': {
       id: '/reset-password/$token'
       path: '/reset-password/$token'
@@ -1366,6 +1386,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   WelcomeRoute: WelcomeRoute,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
+  JoinCohortTokenRoute: JoinCohortTokenRoute,
   ResetPasswordTokenRoute: ResetPasswordTokenRoute,
   VerifyEmailTokenRoute: VerifyEmailTokenRoute,
   VerifyIdRoute: VerifyIdRoute,

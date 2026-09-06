@@ -10,6 +10,12 @@ import { useAuthStore } from "@/lib/auth-store";
 import { MfaEnrolment } from "@/components/soc/mfa-enrolment";
 
 export const Route = createFileRoute("/login")({
+  // ?next= carries where the visitor was trying to get to. Without it somebody arriving from
+  // a cohort invitation signs in, lands on the dashboard, and has to go back to their email
+  // to find the link again.
+  validateSearch: (search: Record<string, unknown>): { next?: string } => ({
+    next: typeof search.next === "string" ? search.next : undefined,
+  }),
   component: LoginPage,
   head: () => ({
     meta: [{ title: "Login — ThreatLens" }, { name: "robots", content: "noindex" }],
@@ -24,6 +30,10 @@ const TRUST_LINES = [
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  // Only same-origin paths. An open redirect here would let an attacker send a ThreatLens
+  // login link that bounces the victim to their own site with the session already warm.
+  const afterLogin = next && next.startsWith("/") && !next.startsWith("//") ? next : "/app";
   const login = useAuthStore((s) => s.login);
   const completeMfaLogin = useAuthStore((s) => s.completeMfaLogin);
   const [email, setEmail] = useState("");
@@ -59,7 +69,7 @@ function LoginPage() {
         setMfaChallengeId(result.mfaChallengeId);
         return;
       }
-      navigate({ to: "/app" });
+      navigate({ to: afterLogin });
     } catch (err) {
       setSubmitting(false);
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
@@ -73,7 +83,7 @@ function LoginPage() {
     setVerifyingMfa(true);
     try {
       await completeMfaLogin(mfaChallengeId, mfaCode.trim());
-      navigate({ to: "/app" });
+      navigate({ to: afterLogin });
     } catch (err) {
       setVerifyingMfa(false);
       setMfaChallengeId(null);

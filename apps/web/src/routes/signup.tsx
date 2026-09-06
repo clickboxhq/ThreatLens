@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/select";
 
 export const Route = createFileRoute("/signup")({
+  // Same as login: carry the destination, and prefill the address the invite was sent to so
+  // the account they create is the one the invite will accept.
+  validateSearch: (search: Record<string, unknown>): { next?: string; email?: string } => ({
+    next: typeof search.next === "string" ? search.next : undefined,
+    email: typeof search.email === "string" ? search.email : undefined,
+  }),
   component: SignupPage,
   head: () => ({
     meta: [{ title: "Get Started — ThreatLens" }, { name: "robots", content: "noindex" }],
@@ -49,7 +55,9 @@ function SignupPage() {
   const signup = useAuthStore((s) => s.signup);
   const [role, setRole] = useState<"student" | "instructor">("student");
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const { next, email: invitedEmail } = Route.useSearch();
+  const afterSignup = next && next.startsWith("/") && !next.startsWith("//") ? next : "/welcome";
+  const [email, setEmail] = useState(invitedEmail ?? "");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +68,7 @@ function SignupPage() {
     setSubmitting(true);
     try {
       await signup(email, password, displayName, role);
-      navigate({ to: "/welcome" });
+      navigate({ to: afterSignup });
     } catch (err) {
       setSubmitting(false);
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");

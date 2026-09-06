@@ -5,10 +5,19 @@ import {
   useCohortGroups,
   useCohortStaffMutations,
   useCohortGroupMutations,
+  useCohortInvites,
+  useCohortInviteMutations,
 } from "@/hooks/use-instructor";
 import { ApiError } from "@/lib/api-client";
 import type { CohortStaffRole } from "@/types/threatlens-instructor";
-import { Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Mail, Plus, Trash2, UserPlus, Users } from "lucide-react";
+
+const INVITE_TONE: Record<string, string> = {
+  pending: "var(--info)",
+  accepted: "var(--success)",
+  expired: "var(--muted-foreground)",
+  revoked: "var(--muted-foreground)",
+};
 
 const ROLE_LABEL: Record<CohortStaffRole, string> = {
   lead: "Lead",
@@ -39,7 +48,12 @@ export function CohortStaffing({ cohortId }: { cohortId: string }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CohortStaffRole>("tutor");
   const [groupName, setGroupName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteGroupId, setInviteGroupId] = useState("");
 
+  const invitesQuery = useCohortInvites(cohortId);
+  const { invite, revoke } = useCohortInviteMutations(cohortId);
+  const invites = invitesQuery.data ?? [];
   const staff = staffQuery.data ?? [];
   const groups = groupsQuery.data ?? [];
   const groupTutors = staff.filter((s) => s.role === "group_tutor");
@@ -49,6 +63,7 @@ export function CohortStaffing({ cohortId }: { cohortId: string }) {
 
   const staffError =
     errorOf(addStaff.error) ?? errorOf(updateRole.error) ?? errorOf(removeStaff.error);
+  const inviteError = errorOf(invite.error) ?? errorOf(revoke.error);
   const groupError =
     errorOf(createGroup.error) ??
     errorOf(deleteGroup.error) ??
@@ -264,6 +279,111 @@ export function CohortStaffing({ cohortId }: { cohortId: string }) {
             <li className="px-3 py-6 text-center text-[12px] text-muted-foreground">
               No groups. A cohort works fine without them — add one when you need to split students
               between tutors.
+            </li>
+          )}
+        </ul>
+      </Panel>
+
+      <Panel title="Invitations" padded={false} className="lg:col-span-2">
+        {/* The join code still exists and is still the right tool for reading out to a room.
+         * An invitation is the right tool for a list of names: it is addressed to one
+         * person, can be withdrawn from them alone, and expires on its own. */}
+        <form
+          className="flex flex-wrap items-end gap-2 border-b border-border p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!inviteEmail.trim()) return;
+            invite.mutate(
+              {
+                email: inviteEmail.trim(),
+                groupId: inviteGroupId || undefined,
+              },
+              { onSuccess: () => setInviteEmail("") },
+            );
+          }}
+        >
+          <label className="flex-1 min-w-[200px]">
+            <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-muted-foreground">
+              Invite by email
+            </span>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="analyst@example.com"
+              className="h-9 w-full rounded-md border border-border bg-background px-3 text-[13px] focus:outline-none"
+            />
+          </label>
+          {groups.length > 0 && (
+            <label>
+              <span className="mb-1 block text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                Into group
+              </span>
+              <select
+                value={inviteGroupId}
+                onChange={(e) => setInviteGroupId(e.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-2 text-[13px] focus:outline-none"
+              >
+                <option value="">No group</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            type="submit"
+            disabled={invite.isPending || !inviteEmail.trim()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+          >
+            <Mail className="size-3.5" /> {invite.isPending ? "Sending…" : "Send invite"}
+          </button>
+        </form>
+
+        {inviteError && (
+          <p className="border-b border-border px-3 py-2 text-[12px] text-[color:var(--critical)]">
+            {inviteError}
+          </p>
+        )}
+
+        <ul className="divide-y divide-border">
+          {invites.map((i) => (
+            <li key={i.id} className="flex items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px]">{i.email}</div>
+                <div className="text-[10.5px] text-muted-foreground">
+                  {i.groupName ? `${i.groupName} · ` : ""}
+                  {i.status === "pending"
+                    ? `expires ${new Date(i.expiresAt).toLocaleDateString()}`
+                    : i.status === "accepted" && i.acceptedAt
+                      ? `joined ${new Date(i.acceptedAt).toLocaleDateString()}`
+                      : i.status}
+                </div>
+              </div>
+              <span
+                className="rounded border px-1.5 py-0.5 text-[10.5px] capitalize"
+                style={{ color: INVITE_TONE[i.status], borderColor: INVITE_TONE[i.status] }}
+              >
+                {i.status}
+              </span>
+              {i.status !== "accepted" && (
+                <button
+                  onClick={() => revoke.mutate(i.id)}
+                  disabled={revoke.isPending}
+                  aria-label={`Withdraw the invitation to ${i.email}`}
+                  className="grid size-8 shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground hover:text-foreground disabled:opacity-40"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              )}
+            </li>
+          ))}
+          {invites.length === 0 && !invitesQuery.isPending && (
+            <li className="px-3 py-6 text-center text-[12px] text-muted-foreground">
+              Nobody invited yet. Invited people get an email with a link that signs them straight
+              into this cohort.
             </li>
           )}
         </ul>

@@ -2,6 +2,8 @@ import { apiClient } from "@/lib/api-client";
 import type { InstructorService } from "./instructor-service";
 import type {
   AssignmentDto,
+  CohortInviteDto,
+  CohortInvitePreviewDto,
   CohortGroupDto,
   CohortStaffDto,
   InstructorFeedbackDto,
@@ -61,6 +63,20 @@ export const apiInstructorService: InstructorService = {
     apiClient.delete<CohortGroupDto[]>(
       `/instructor/cohorts/${cohortId}/groups/${groupId}/tutors/${userId}`,
     ),
+
+  listInvites: (cohortId) =>
+    apiClient.get<CohortInviteDto[]>(`/instructor/cohorts/${cohortId}/invites`),
+
+  createInvite: (cohortId, input) =>
+    apiClient.post<CohortInviteDto>(`/instructor/cohorts/${cohortId}/invites`, input),
+
+  revokeInvite: (cohortId, inviteId) =>
+    apiClient.delete<CohortInviteDto[]>(`/instructor/cohorts/${cohortId}/invites/${inviteId}`),
+
+  previewInvite: (token) => apiClient.get<CohortInvitePreviewDto>(`/cohort-invites/${token}`),
+
+  acceptInvite: (token) =>
+    apiClient.post<{ cohortId: string; cohortName: string }>(`/cohort-invites/${token}/accept`),
 
   placeStudentInGroup: (cohortId, studentUserId, groupId) =>
     apiClient.patch<{ userId: string; groupId: string | null }>(

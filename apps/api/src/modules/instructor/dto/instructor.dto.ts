@@ -94,3 +94,13 @@ export class PlaceStudentInGroupDto {
   @IsUUID()
   groupId?: string | null;
 }
+
+export class CreateCohortInviteDto {
+  @IsEmail()
+  email!: string;
+
+  /** Omitted invites into the cohort at large; set places them in that group on arrival. */
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
+}
