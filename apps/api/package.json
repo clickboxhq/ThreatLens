@@ -36,7 +36,7 @@
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.2.0",
     "@nestjs/core": "^10.0.0",
-    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/jwt": "^12.0.1",
     "@nestjs/platform-express": "^10.0.0",
     "@prisma/client": "^5.19.0",
     "@types/sanitize-html": "^2.16.1",
