@@ -61,6 +61,7 @@ function build(
       findUniqueOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'c1', name: 'Autumn 2026' }),
+      findUnique: jest.fn().mockResolvedValue({ archivedAt: null }),
     },
     user: {
       findUnique: jest
@@ -85,7 +86,9 @@ function build(
       canWrite: true,
       canManageStaff: false,
       isPlatformAdmin: false,
+      archived: false,
     }),
+    assertNotArchived: jest.fn(),
   };
   const auditLog = { record: jest.fn().mockResolvedValue(undefined) };
   const config = { get: jest.fn(() => 'https://threatlensapp.com') };

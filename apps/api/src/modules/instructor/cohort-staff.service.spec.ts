@@ -72,7 +72,9 @@ function build(
       canWrite: true,
       canManageStaff: true,
       isPlatformAdmin: opts.isPlatformAdmin ?? false,
+      archived: false,
     }),
+    assertNotArchived: jest.fn(),
     enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
   };
   const auditLog = { record: jest.fn().mockResolvedValue(undefined) };

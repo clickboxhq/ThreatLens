@@ -234,6 +234,11 @@ model Cohort {
   joinCode  String?   @unique @map("join_code")
   startsAt  DateTime? @map("starts_at")
   endsAt    DateTime? @map("ends_at")
+  /// Set when the cohort is retired. A timestamp rather than a flag, so the audit trail can
+  /// say when. Cohorts are never deleted: enrolments and assignments reference them, and
+  /// graded sessions hang off those assignments, so removing one would take a student's
+  /// scored work with it.
+  archivedAt DateTime? @map("archived_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

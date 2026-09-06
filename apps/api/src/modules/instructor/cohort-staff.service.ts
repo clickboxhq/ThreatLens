@@ -259,7 +259,12 @@ export class CohortStaffService {
   }
 
   async createGroup(user: AuthenticatedUser, cohortId: string, name: string) {
-    await this.cohortAccess.requireAccess(cohortId, user, 'tutor');
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'tutor',
+    );
+    this.cohortAccess.assertNotArchived(access);
 
     const existing = await this.prisma.cohortGroup.findUnique({
       where: { cohortId_name: { cohortId, name } },

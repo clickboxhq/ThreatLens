@@ -295,6 +295,7 @@ export class SessionsService {
   ): Promise<void> {
     const assignment = await this.prisma.cohortScenarioAssignment.findUnique({
       where: { id: cohortAssignmentId },
+      include: { cohort: { select: { archivedAt: true } } },
     });
     if (!assignment || assignment.scenarioId !== scenarioId) {
       throw new AppException(
@@ -325,6 +326,17 @@ export class SessionsService {
         403,
         'NOT_IN_ASSIGNED_GROUP',
         'This assignment is set for a different group.',
+      );
+    }
+
+    // Starting new work for a class that has finished. Sessions already in flight are
+    // deliberately untouched — archiving a cohort should not destroy an attempt somebody is
+    // partway through, and submitting one does not come back through here.
+    if (assignment.cohort.archivedAt) {
+      throw new AppException(
+        409,
+        'COHORT_ARCHIVED',
+        'This assignment belongs to an archived cohort and can no longer be started.',
       );
     }
 

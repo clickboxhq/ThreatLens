@@ -2,8 +2,8 @@ import { Fragment, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
-import { useOwnedCohorts, useCreateCohort } from "@/hooks/use-instructor";
-import { ChevronDown, ChevronRight, Plus, Users } from "lucide-react";
+import { useOwnedCohorts, useCreateCohort, useArchiveCohort } from "@/hooks/use-instructor";
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Plus, Users } from "lucide-react";
 import { CohortStaffing } from "@/components/soc/cohort-staffing";
 
 export const Route = createFileRoute("/app/cohorts")({
@@ -25,7 +25,11 @@ export const Route = createFileRoute("/app/cohorts")({
 });
 
 function Cohorts() {
-  const cohortsQuery = useOwnedCohorts();
+  // Archived cohorts are out of the way by default but never gone — last term's grades and
+  // feedback still have to be reachable.
+  const [showArchived, setShowArchived] = useState(false);
+  const cohortsQuery = useOwnedCohorts(showArchived);
+  const archiveCohort = useArchiveCohort();
   const createCohort = useCreateCohort();
   const [name, setName] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -55,12 +59,23 @@ function Cohorts() {
         title="Cohorts"
         description="Groups of analysts enrolled by join code, each with their own assigned scenarios."
         actions={
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover"
-          >
-            <Plus className="size-3.5" /> New cohort
-          </button>
+          <div className="flex items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="size-3.5"
+              />
+              Show archived
+            </label>
+            <button
+              onClick={() => setShowForm((v) => !v)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-primary-hover"
+            >
+              <Plus className="size-3.5" /> New cohort
+            </button>
+          </div>
         }
       />
 
@@ -117,6 +132,7 @@ function Cohorts() {
                   <th className="px-4 py-2.5 text-left">Enrolled</th>
                   <th className="px-4 py-2.5 text-left">Assignments</th>
                   <th className="px-4 py-2.5 text-right">Created</th>
+                  <th className="px-4 py-2.5 text-right">&nbsp;</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -135,6 +151,11 @@ function Cohorts() {
                             <ChevronRight className="size-3.5 text-muted-foreground" />
                           )}
                           <Users className="size-3.5 text-muted-foreground" /> {c.name}
+                          {c.archivedAt && (
+                            <span className="ml-1.5 rounded border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-muted-foreground">
+                              Archived
+                            </span>
+                          )}
                         </button>
                       </td>
                       <td className="px-4 py-3 font-mono text-[12px] tracking-wider">
@@ -148,7 +169,7 @@ function Cohorts() {
                     </tr>
                     {expandedId === c.id && (
                       <tr>
-                        <td colSpan={5} className="bg-background/30 px-4 py-4">
+                        <td colSpan={6} className="bg-background/30 px-4 py-4">
                           <CohortStaffing cohortId={c.id} />
                         </td>
                       </tr>

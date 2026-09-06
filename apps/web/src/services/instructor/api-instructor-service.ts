@@ -13,7 +13,15 @@ import type {
 } from "@/types/threatlens-instructor";
 
 export const apiInstructorService: InstructorService = {
-  listCohorts: () => apiClient.get<OwnedCohortDto[]>("/instructor/cohorts"),
+  setCohortArchived: (cohortId, archived) =>
+    apiClient.post<{ id: string; name: string; archivedAt: string | null }>(
+      `/instructor/cohorts/${cohortId}/${archived ? "archive" : "restore"}`,
+    ),
+
+  listCohorts: (includeArchived) =>
+    apiClient.get<OwnedCohortDto[]>(
+      `/instructor/cohorts${includeArchived ? "?includeArchived=true" : ""}`,
+    ),
 
   createCohort: (input) => apiClient.post<OwnedCohortDto>("/instructor/cohorts", input),
 

@@ -14,7 +14,12 @@ import type {
 /** Instructor-only management surface (RolesGuard-gated on the backend) — creating and running
  * cohorts, assigning scenarios, and grading what students submit. */
 export interface InstructorService {
-  listCohorts(): Promise<OwnedCohortDto[]>;
+  listCohorts(includeArchived?: boolean): Promise<OwnedCohortDto[]>;
+  /** Cohorts are archived, never deleted — graded work references them. Reversible. */
+  setCohortArchived(
+    cohortId: string,
+    archived: boolean,
+  ): Promise<{ id: string; name: string; archivedAt: string | null }>;
   createCohort(input: {
     name: string;
     startsAt?: string;

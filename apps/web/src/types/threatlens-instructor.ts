@@ -20,6 +20,8 @@ export interface MyAssignmentDto {
 }
 
 export interface OwnedCohortDto {
+  /** Set once the cohort is retired. Hidden from the active list unless asked for. */
+  archivedAt?: string | null;
   id: string;
   name: string;
   joinCode: string;

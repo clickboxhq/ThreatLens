@@ -65,6 +65,7 @@ export class CohortInviteService {
       user,
       staffRole ? 'lead' : 'tutor',
     );
+    this.cohortAccess.assertNotArchived(access);
     const address = email.trim().toLowerCase();
 
     // A group tutor may only pull people into groups they actually run, and may not invite
@@ -258,6 +259,19 @@ export class CohortInviteService {
       include: { cohort: { select: { id: true, name: true } } },
     });
     if (!invite) throw new AppException(404, 'NOT_FOUND', 'Invite not found.');
+
+    // The cohort can be retired between sending an invitation and somebody opening it.
+    const cohort = await this.prisma.cohort.findUnique({
+      where: { id: invite.cohortId },
+      select: { archivedAt: true },
+    });
+    if (cohort?.archivedAt) {
+      throw new AppException(
+        409,
+        'COHORT_ARCHIVED',
+        'That cohort has been archived, so this invitation can no longer be accepted.',
+      );
+    }
 
     const status = this.effectiveStatus(invite);
     if (status !== 'pending') {

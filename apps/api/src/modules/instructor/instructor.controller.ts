@@ -9,6 +9,7 @@ import {
   Post,
   Res,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { InstructorService } from './instructor.service';
@@ -190,8 +191,30 @@ export class InstructorController {
   }
 
   @Get('cohorts')
-  async listCohorts(@CurrentUser() user: AuthenticatedUser) {
-    return this.instructorService.listCohorts(user);
+  async listCohorts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('includeArchived') includeArchived?: string,
+  ) {
+    return this.instructorService.listCohorts(user, includeArchived === 'true');
+  }
+
+  // Archive rather than delete: a cohort cannot be removed without taking its students'
+  // graded work with it. Restorable, because the usual reasons to archive — a typo, a
+  // finished term — are both things people undo.
+  @Post('cohorts/:id/archive')
+  async archiveCohort(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.instructorService.setArchived(user, id, true);
+  }
+
+  @Post('cohorts/:id/restore')
+  async restoreCohort(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.instructorService.setArchived(user, id, false);
   }
 
   @Get('cohorts/:id/roster')

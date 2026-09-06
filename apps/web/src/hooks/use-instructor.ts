@@ -17,10 +17,20 @@ const keys = {
   reviewQueue: (cohortId: string) => ["instructor", "cohorts", cohortId, "review-queue"] as const,
 };
 
-export function useOwnedCohorts() {
+export function useOwnedCohorts(includeArchived = false) {
   return useQuery({
-    queryKey: keys.cohorts,
-    queryFn: () => instructorService.listCohorts(),
+    queryKey: [...keys.cohorts, { includeArchived }],
+    queryFn: () => instructorService.listCohorts(includeArchived),
+  });
+}
+
+export function useArchiveCohort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { cohortId: string; archived: boolean }) =>
+      instructorService.setCohortArchived(input.cohortId, input.archived),
+    // Both listings change: the cohort leaves one and joins the other.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.cohorts }),
   });
 }
 

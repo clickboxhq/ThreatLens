@@ -19,6 +19,16 @@ export class CohortsService {
         'No cohort matches this join code.',
       );
     }
+    // A retired cohort keeps its join code, and codes get written on whiteboards and passed
+    // between years. Refusing with the reason beats silently enrolling somebody into a class
+    // that finished.
+    if (cohort.archivedAt) {
+      throw new AppException(
+        409,
+        'COHORT_ARCHIVED',
+        'That cohort has been archived and is no longer accepting new members.',
+      );
+    }
 
     const enrollment = await this.prisma.cohortEnrollment.upsert({
       where: { cohortId_userId: { cohortId: cohort.id, userId: user.id } },
@@ -35,7 +45,14 @@ export class CohortsService {
 
   async listMine(user: AuthenticatedUser) {
     const enrollments = await this.prisma.cohortEnrollment.findMany({
-      where: { userId: user.id, status: 'active' },
+      // Archived cohorts drop out of a student's active list. Their graded work is still
+      // theirs and still reachable through their own history — this is about what is running
+      // now, not what they have done.
+      where: {
+        userId: user.id,
+        status: 'active',
+        cohort: { archivedAt: null },
+      },
       include: { cohort: true },
       orderBy: { enrolledAt: 'desc' },
     });
@@ -48,7 +65,13 @@ export class CohortsService {
 
   async listMyAssignments(user: AuthenticatedUser) {
     const enrollments = await this.prisma.cohortEnrollment.findMany({
-      where: { userId: user.id, status: 'active' },
+      // Archived alongside listMine: work set by a class that has finished is no longer work
+      // to do. Anything already started stays in their own session history.
+      where: {
+        userId: user.id,
+        status: 'active',
+        cohort: { archivedAt: null },
+      },
       select: { cohortId: true, groupId: true },
     });
     const cohortIds = enrollments.map((e) => e.cohortId);

@@ -50,6 +50,8 @@ export interface CohortAccess {
    */
   canWrite: boolean;
   canManageStaff: boolean;
+  /** True once the cohort is retired. Reads still work; anything that adds new work does not. */
+  archived: boolean;
   /** True when access came from being a platform admin, so an override can be audited as one. */
   isPlatformAdmin: boolean;
 }
@@ -71,9 +73,10 @@ export class CohortAccessService {
   ): Promise<CohortAccess> {
     const cohort = await this.prisma.cohort.findUnique({
       where: { id: cohortId },
-      select: { id: true, orgId: true },
+      select: { id: true, orgId: true, archivedAt: true },
     });
     if (!cohort) throw new AppException(404, 'NOT_FOUND', 'Cohort not found.');
+    const archived = cohort.archivedAt !== null;
 
     const staff = await this.prisma.cohortStaff.findUnique({
       where: { cohortId_userId: { cohortId, userId: user.id } },
@@ -99,6 +102,7 @@ export class CohortAccessService {
           canWrite: false,
           canManageStaff: true,
           isPlatformAdmin: true,
+          archived,
         };
       }
 
@@ -128,6 +132,7 @@ export class CohortAccessService {
         canWrite: false,
         canManageStaff: false,
         isPlatformAdmin: false,
+        archived,
       };
     }
 
@@ -159,7 +164,25 @@ export class CohortAccessService {
       canWrite: RANK[staff.role] >= RANK['group_tutor'],
       canManageStaff: staff.role === 'lead',
       isPlatformAdmin: false,
+      archived,
     };
+  }
+
+  /**
+   * Refuses anything that would add new work to a retired cohort.
+   *
+   * Reading stays open — the point of archiving rather than deleting is that last term's
+   * grades, feedback and certificates remain answerable. What stops is anything that grows
+   * it: new assignments, new members, new staff, new sessions.
+   */
+  assertNotArchived(access: CohortAccess) {
+    if (access.archived) {
+      throw new AppException(
+        409,
+        'COHORT_ARCHIVED',
+        'This cohort is archived. Restore it before making changes.',
+      );
+    }
   }
 
   /**

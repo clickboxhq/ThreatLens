@@ -54,11 +54,16 @@ export class InstructorService {
     return this.toCohortDto(cohort.id);
   }
 
-  async listCohorts(user: AuthenticatedUser) {
+  async listCohorts(user: AuthenticatedUser, includeArchived = false) {
     // Everything they are staffed on, plus — for an org_admin — everything in their org.
     const ids = await this.cohortAccess.listAccessibleCohortIds(user);
     const cohorts = await this.prisma.cohort.findMany({
-      where: { id: { in: ids } },
+      // Archived cohorts are hidden unless asked for. An instructor still needs to reach last
+      // term's grades and feedback, so this is opt-in rather than gone.
+      where: {
+        id: { in: ids },
+        ...(includeArchived ? {} : { archivedAt: null }),
+      },
       include: { _count: { select: { enrollments: true, assignments: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -68,6 +73,7 @@ export class InstructorService {
       joinCode: c.joinCode,
       startsAt: c.startsAt,
       endsAt: c.endsAt,
+      archivedAt: c.archivedAt,
       enrollmentCount: c._count.enrollments,
       assignmentCount: c._count.assignments,
       createdAt: c.createdAt,
@@ -93,6 +99,44 @@ export class InstructorService {
     }));
   }
 
+  /**
+   * Retires a cohort, or brings it back.
+   *
+   * Archiving is what "delete" would have been if deleting were safe. It is not: enrolments
+   * and assignments reference the cohort, and graded sessions reference those assignments, so
+   * removing one would take its students' scored work and certificate evidence with it. A
+   * class ending should not erase what happened in it.
+   *
+   * Reversible on purpose — the usual reason to archive is a typo or a finished term, and
+   * both of those get undone.
+   */
+  async setArchived(
+    user: AuthenticatedUser,
+    cohortId: string,
+    archived: boolean,
+  ) {
+    // Lead only. Retiring a cohort hides it from everyone teaching and studying on it.
+    await this.cohortAccess.requireAccess(cohortId, user, 'lead');
+
+    const cohort = await this.prisma.cohort.update({
+      where: { id: cohortId },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: archived ? 'cohort_archived' : 'cohort_restored',
+      targetType: 'cohort',
+      targetId: cohortId,
+    });
+
+    return {
+      id: cohort.id,
+      name: cohort.name,
+      archivedAt: cohort.archivedAt,
+    };
+  }
+
   async createAssignment(
     user: AuthenticatedUser,
     cohortId: string,
@@ -115,6 +159,7 @@ export class InstructorService {
       user,
       'tutor',
     );
+    this.cohortAccess.assertNotArchived(access);
     if (access.groupScoped) {
       if (!dto.groupId) {
         throw new AppException(
