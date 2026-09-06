@@ -76,11 +76,19 @@ function build(
     enrollmentScope: (a: { cohortId: string }) => ({ cohortId: a.cohortId }),
   };
   const auditLog = { record: jest.fn().mockResolvedValue(undefined) };
+  const inviteCreate = jest.fn().mockResolvedValue({ id: 'invite-1' });
+  const invites = { create: inviteCreate };
 
   return {
-    service: new CohortStaffService(prisma, access as never, auditLog as never),
+    service: new CohortStaffService(
+      prisma,
+      access as never,
+      auditLog as never,
+      invites as never,
+    ),
     staffCreate,
     staffDelete,
+    inviteCreate,
     groupTutorDeleteMany,
     auditLog,
   };
@@ -135,11 +143,22 @@ describe('CohortStaffService', () => {
       ).rejects.toMatchObject({ code: 'NOT_AN_INSTRUCTOR' });
     });
 
-    it('refuses an email with no account', async () => {
-      const { service } = build({ invitee: null });
-      await expect(
-        service.addStaff(LEAD, 'cohort-1', 'nobody@example.com', 'tutor'),
-      ).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+    // This used to reject with USER_NOT_FOUND. It no longer should: students became invitable
+    // sight-unseen when cohort invitations landed, and leaving tutors as the only people who
+    // had to pre-register was an inconsistency with no reason a user could infer.
+    it('invites an address with no account instead of refusing it', async () => {
+      const { service, inviteCreate, staffCreate } = build({ invitee: null });
+      await service.addStaff(LEAD, 'cohort-1', 'newcomer@example.com', 'tutor');
+
+      expect(inviteCreate).toHaveBeenCalledWith(
+        LEAD,
+        'cohort-1',
+        'newcomer@example.com',
+        null,
+        'tutor',
+      );
+      // Nobody is staffed yet — that happens when they accept.
+      expect(staffCreate).not.toHaveBeenCalled();
     });
 
     it('refuses a deactivated account', async () => {

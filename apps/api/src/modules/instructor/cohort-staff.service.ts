@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { CohortAccessService } from './cohort-access.service';
+import { CohortInviteService } from './cohort-invite.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { CohortStaffRole } from '@prisma/client';
 
@@ -20,6 +21,7 @@ export class CohortStaffService {
     private readonly prisma: PrismaService,
     private readonly cohortAccess: CohortAccessService,
     private readonly auditLog: AuditLogService,
+    private readonly invites: CohortInviteService,
   ) {}
 
   /**
@@ -75,11 +77,12 @@ export class CohortStaffService {
 
     const invitee = await this.prisma.user.findUnique({ where: { email } });
     if (!invitee) {
-      throw new AppException(
-        404,
-        'USER_NOT_FOUND',
-        'No account exists for that email address.',
-      );
+      // No account yet, so there is nobody to staff — send them an invitation instead of
+      // refusing. Students became invitable sight-unseen when cohort invitations landed,
+      // which left tutors as the only people who had to pre-register before anyone could
+      // add them. Same door, now open to both.
+      await this.invites.create(user, cohortId, email, null, role);
+      return this.listStaff(user, cohortId);
     }
     if (invitee.status !== 'active') {
       throw new AppException(

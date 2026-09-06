@@ -141,7 +141,13 @@ export function useCohortStaffMutations(cohortId: string | undefined) {
   const addStaff = useMutation({
     mutationFn: (input: { email: string; role: CohortStaffRole }) =>
       instructorService.addStaff(cohortId!, input),
-    onSuccess: seedStaff,
+    onSuccess: (data) => {
+      seedStaff(data);
+      // An address with no account is invited rather than staffed, so the person appears in
+      // the invitations list and not this one. Without refreshing that too, adding a new
+      // colleague looks like it did nothing at all.
+      if (cohortId) queryClient.invalidateQueries({ queryKey: keys.invites(cohortId) });
+    },
   });
 
   const updateRole = useMutation({

@@ -308,6 +308,9 @@ model CohortInvite {
   id         String             @id @default(uuid()) @db.Uuid
   cohortId   String             @map("cohort_id") @db.Uuid
   groupId    String?            @map("group_id") @db.Uuid
+  /// Null invites them as a student. Set invites them onto the teaching staff in that role,
+  /// which is the only way to bring in a tutor who has not signed up yet.
+  staffRole  CohortStaffRole?   @map("staff_role")
   email      String             @db.Citext
   token      String             @unique
   status     CohortInviteStatus @default(pending)

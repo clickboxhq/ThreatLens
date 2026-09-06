@@ -8,6 +8,12 @@ import { Mark } from "@/components/soc/marketing/brand";
 import { displayFont } from "@/components/soc/marketing/atmos";
 import { ArrowRight, CheckCircle2, Users } from "lucide-react";
 
+const STAFF_ROLE_LABEL: Record<string, string> = {
+  lead: "a lead",
+  tutor: "a tutor",
+  group_tutor: "a group tutor",
+};
+
 export const Route = createFileRoute("/join-cohort/$token")({
   component: JoinCohortPage,
   head: () => ({ meta: [{ title: "Join a cohort · ThreatLens" }] }),
@@ -108,12 +114,17 @@ function JoinCohortPage() {
         <Users className="size-5" />
       </div>
       <h1 className="mt-5 text-[22px] font-semibold tracking-[-0.02em]">
-        Join {preview.cohortName}
+        {preview.staffRole ? "Teach" : "Join"} {preview.cohortName}
       </h1>
       <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
         <strong>{preview.inviterName}</strong> invited{" "}
         <span className="font-mono text-[13px]">{preview.email}</span>
-        {preview.groupName ? (
+        {preview.staffRole ? (
+          <>
+            {" "}
+            to teach as <strong>{STAFF_ROLE_LABEL[preview.staffRole] ?? "a tutor"}</strong>
+          </>
+        ) : preview.groupName ? (
           <>
             {" "}
             to join <strong>{preview.groupName}</strong>
@@ -121,6 +132,14 @@ function JoinCohortPage() {
         ) : null}
         .
       </p>
+      {preview.staffRole && !preview.hasAccount && (
+        // Saying this before they start matters: a student account cannot accept a teaching
+        // invitation, and finding that out after signing up wastes the trip.
+        <p className="mt-3 rounded-md bg-black/[0.03] px-3 py-2 text-[12.5px] leading-[1.55] text-black/60">
+          Choose the <strong>instructor</strong> account type when you sign up — a student account
+          cannot take a teaching role.
+        </p>
+      )}
 
       {isAuthenticated ? (
         <div className="mt-6">
@@ -166,7 +185,11 @@ function JoinCohortPage() {
             <>
               <Link
                 to="/signup"
-                search={{ next: returnTo, email: preview.email }}
+                search={{
+                  next: returnTo,
+                  email: preview.email,
+                  ...(preview.staffRole ? { role: "instructor" } : {}),
+                }}
                 className="btn-primary w-full justify-center py-3"
               >
                 Create your account <ArrowRight className="size-3.5" />

@@ -17,9 +17,14 @@ import {
 export const Route = createFileRoute("/signup")({
   // Same as login: carry the destination, and prefill the address the invite was sent to so
   // the account they create is the one the invite will accept.
-  validateSearch: (search: Record<string, unknown>): { next?: string; email?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { next?: string; email?: string; role?: string } => ({
     next: typeof search.next === "string" ? search.next : undefined,
     email: typeof search.email === "string" ? search.email : undefined,
+    // A staff invitation cannot be accepted by a student account, so the link that sent them
+    // here preselects the right one rather than letting them pick the wrong one and bounce.
+    role: search.role === "instructor" ? "instructor" : undefined,
   }),
   component: SignupPage,
   head: () => ({
@@ -53,9 +58,11 @@ const ACCOUNT_OPTIONS = [
 function SignupPage() {
   const navigate = useNavigate();
   const signup = useAuthStore((s) => s.signup);
-  const [role, setRole] = useState<"student" | "instructor">("student");
+  const { next, email: invitedEmail, role: invitedRole } = Route.useSearch();
+  const [role, setRole] = useState<"student" | "instructor">(
+    invitedRole === "instructor" ? "instructor" : "student",
+  );
   const [displayName, setDisplayName] = useState("");
-  const { next, email: invitedEmail } = Route.useSearch();
   const afterSignup = next && next.startsWith("/") && !next.startsWith("//") ? next : "/welcome";
   const [email, setEmail] = useState(invitedEmail ?? "");
   const [password, setPassword] = useState("");

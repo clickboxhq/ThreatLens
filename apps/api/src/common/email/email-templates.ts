@@ -264,6 +264,12 @@ export function passwordResetEmail(resetUrl: string): {
   };
 }
 
+const STAFF_ROLE_LABEL: Record<string, string> = {
+  lead: 'a lead',
+  tutor: 'a tutor',
+  group_tutor: 'a group tutor',
+};
+
 export function cohortInviteEmail(input: {
   cohortName: string;
   inviterName: string;
@@ -271,29 +277,52 @@ export function cohortInviteEmail(input: {
   joinUrl: string;
   /** Whether an account already exists for this address, which changes what we ask them to do. */
   hasAccount: boolean;
+  /** Set when the invitation is to teach rather than to take part. */
+  staffRole?: string | null;
 }): { subject: string; html: string } {
   const cohort = escapeHtml(input.cohortName);
   const inviter = escapeHtml(input.inviterName);
   const group = input.groupName ? escapeHtml(input.groupName) : null;
 
+  const asStaff = Boolean(input.staffRole);
+  const roleLabel = input.staffRole
+    ? (STAFF_ROLE_LABEL[input.staffRole] ?? 'a tutor')
+    : null;
+
   return {
-    subject: `${input.inviterName} invited you to ${input.cohortName} on ThreatLens`,
+    subject: asStaff
+      ? `${input.inviterName} invited you to teach ${input.cohortName} on ThreatLens`
+      : `${input.inviterName} invited you to ${input.cohortName} on ThreatLens`,
     html: renderEmail({
-      preheader: `Join ${input.cohortName} and start working investigations.`,
+      preheader: asStaff
+        ? `Join ${input.cohortName} as ${roleLabel}.`
+        : `Join ${input.cohortName} and start working investigations.`,
       heading: `You have been invited to ${input.cohortName}`,
       paragraphs: [
-        `<strong>${inviter}</strong> has invited you to join <strong>${cohort}</strong> on ThreatLens${
-          group ? `, in <strong>${group}</strong>` : ''
-        }.`,
-        'ThreatLens is hands-on security investigation training: you work a realistic incident from the alert, and get scored on how you investigated it.',
+        asStaff
+          ? `<strong>${inviter}</strong> has invited you to teach on <strong>${cohort}</strong> as ${roleLabel}${
+              group ? `, for <strong>${group}</strong>` : ''
+            }.`
+          : `<strong>${inviter}</strong> has invited you to join <strong>${cohort}</strong> on ThreatLens${
+              group ? `, in <strong>${group}</strong>` : ''
+            }.`,
+        asStaff
+          ? 'ThreatLens is hands-on security investigation training. As teaching staff you set assignments, follow how people are doing, and give feedback on the investigations they submit.'
+          : 'ThreatLens is hands-on security investigation training: you work a realistic incident from the alert, and get scored on how you investigated it.',
         // The one instruction that changes per recipient. Telling somebody with no account to
         // "sign in" is the fastest way to lose them.
         input.hasAccount
           ? 'Sign in and the invitation will be waiting for you.'
-          : 'You will be asked to create an account first — it takes a moment, and the invitation is applied as soon as you have one.',
+          : asStaff
+            ? 'You will be asked to create an account first. Choose the instructor account type — a student account cannot take a teaching role.'
+            : 'You will be asked to create an account first — it takes a moment, and the invitation is applied as soon as you have one.',
       ],
       cta: {
-        label: input.hasAccount ? 'Join the cohort' : 'Accept your invitation',
+        label: input.hasAccount
+          ? asStaff
+            ? 'Join the teaching staff'
+            : 'Join the cohort'
+          : 'Accept your invitation',
         url: input.joinUrl,
       },
       meta: 'This invitation expires in 7 days.',

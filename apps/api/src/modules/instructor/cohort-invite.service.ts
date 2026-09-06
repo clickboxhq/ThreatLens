@@ -9,7 +9,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { cohortInviteEmail } from '../../common/email/email-templates';
 import { CohortAccessService } from './cohort-access.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
-import type { CohortInvite, CohortInviteStatus } from '@prisma/client';
+import type {
+  CohortInvite,
+  CohortInviteStatus,
+  CohortStaffRole,
+} from '@prisma/client';
 
 // Long enough to survive a weekend and a missed inbox, short enough that a forwarded link does
 // not stay live for a whole term. Matches the organisation invite already in the product.
@@ -52,16 +56,20 @@ export class CohortInviteService {
     cohortId: string,
     email: string,
     groupId?: string | null,
+    staffRole?: CohortStaffRole | null,
   ) {
+    // Inviting somebody onto the teaching staff is a lead's decision, exactly as adding an
+    // existing account to the staff list is. Inviting a student needs only tutor.
     const access = await this.cohortAccess.requireAccess(
       cohortId,
       user,
-      'tutor',
+      staffRole ? 'lead' : 'tutor',
     );
     const address = email.trim().toLowerCase();
 
     // A group tutor may only pull people into groups they actually run, and may not invite
-    // into the cohort at large — the same narrowing that applies to their assignments.
+    // into the cohort at large — the same narrowing that applies to their assignments. They
+    // cannot reach here for a staff invite at all, since that requires lead.
     if (access.groupScoped) {
       if (!groupId) {
         throw new AppException(
@@ -126,6 +134,7 @@ export class CohortInviteService {
         cohortId,
         email: address,
         groupId: groupId ?? null,
+        staffRole: staffRole ?? null,
         token,
         invitedBy: user.id,
         expiresAt,
@@ -133,6 +142,7 @@ export class CohortInviteService {
       update: {
         token,
         groupId: groupId ?? null,
+        staffRole: staffRole ?? null,
         status: 'pending',
         invitedBy: user.id,
         expiresAt,
@@ -152,6 +162,7 @@ export class CohortInviteService {
         groupName: invite.group?.name ?? null,
         joinUrl: `${webOrigin}/join-cohort/${token}`,
         hasAccount: Boolean(existingUser),
+        staffRole: staffRole ?? null,
       }),
     });
 
@@ -160,7 +171,11 @@ export class CohortInviteService {
       action: 'cohort_invite_sent',
       targetType: 'cohort',
       targetId: cohortId,
-      metadata: { email: address, groupId: groupId ?? null },
+      metadata: {
+        email: address,
+        groupId: groupId ?? null,
+        staffRole: staffRole ?? null,
+      },
     });
 
     return this.toDto(invite);
@@ -229,6 +244,7 @@ export class CohortInviteService {
       groupName: invite.group?.name ?? null,
       inviterName: invite.inviter.displayName,
       email: invite.email,
+      staffRole: invite.staffRole,
       status: this.effectiveStatus(invite),
       // Lets the page offer "sign in" or "create an account" as the primary action rather
       // than showing both and making the visitor work out which one applies to them.
@@ -256,7 +272,7 @@ export class CohortInviteService {
 
     const me = await this.prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      select: { id: true, email: true, displayName: true },
+      select: { id: true, email: true, displayName: true, role: true },
     });
     if (me.email.toLowerCase() !== invite.email.toLowerCase()) {
       throw new AppException(
@@ -264,6 +280,10 @@ export class CohortInviteService {
         'EMAIL_MISMATCH',
         `This invite was sent to ${invite.email}. Sign in with that address to accept it.`,
       );
+    }
+
+    if (invite.staffRole) {
+      return this.acceptAsStaff(invite, me);
     }
 
     const already = await this.prisma.cohortEnrollment.findUnique({
@@ -312,6 +332,74 @@ export class CohortInviteService {
     return { cohortId: invite.cohortId, cohortName: invite.cohort.name };
   }
 
+  /**
+   * Accepting a staff invitation.
+   *
+   * The student check is the same one addStaff applies to an existing account, and it has to
+   * live here too: an invitation is sent to an address, and whoever signs up with that address
+   * chooses their own account type. Refusing rather than promoting keeps the rule in one
+   * place — an invite grants a role on this cohort, never a different kind of account.
+   */
+  private async acceptAsStaff(
+    invite: {
+      id: string;
+      cohortId: string;
+      staffRole: CohortStaffRole | null;
+      invitedBy: string;
+      cohort: { name: string };
+    },
+    me: { id: string; email: string; displayName: string; role: string },
+  ) {
+    if (me.role === 'student') {
+      throw new AppException(
+        403,
+        'NOT_AN_INSTRUCTOR',
+        'This invitation is for a teaching role, but your account is a student account. Ask for a student invitation instead, or sign up with an instructor account.',
+      );
+    }
+
+    const existing = await this.prisma.cohortStaff.findUnique({
+      where: { cohortId_userId: { cohortId: invite.cohortId, userId: me.id } },
+    });
+
+    await this.prisma.$transaction([
+      ...(existing
+        ? []
+        : [
+            this.prisma.cohortStaff.create({
+              data: {
+                cohortId: invite.cohortId,
+                userId: me.id,
+                role: invite.staffRole!,
+                addedBy: invite.invitedBy,
+              },
+            }),
+          ]),
+      this.prisma.cohortInvite.update({
+        where: { id: invite.id },
+        data: { status: 'accepted', acceptedAt: new Date() },
+      }),
+    ]);
+
+    await this.auditLog.record({
+      actorUserId: me.id,
+      action: 'cohort_staff_invite_accepted',
+      targetType: 'cohort',
+      targetId: invite.cohortId,
+      metadata: { role: invite.staffRole },
+    });
+
+    await this.notifications.create({
+      userId: invite.invitedBy,
+      category: 'cohort_invitation',
+      title: `${me.displayName} joined ${invite.cohort.name}`,
+      body: `${me.displayName} (${me.email}) accepted your invitation to teach as ${invite.staffRole === 'lead' ? 'a lead' : invite.staffRole === 'tutor' ? 'a tutor' : 'a group tutor'}.`,
+      link: '/app/cohorts',
+    });
+
+    return { cohortId: invite.cohortId, cohortName: invite.cohort.name };
+  }
+
   // ---------------------------------------------------------------- helpers
 
   /**
@@ -335,6 +423,7 @@ export class CohortInviteService {
       email: invite.email,
       groupId: invite.groupId,
       groupName: invite.group?.name ?? null,
+      staffRole: invite.staffRole,
       status: this.effectiveStatus(invite),
       createdAt: invite.createdAt,
       expiresAt: invite.expiresAt,

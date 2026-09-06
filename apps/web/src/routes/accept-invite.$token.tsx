@@ -151,11 +151,19 @@ function AcceptInvitePage() {
             <p className="text-[12.5px] text-black/55">
               Log in or create an account with this email to accept.
             </p>
-            <Link to="/login" className="btn-primary w-full justify-center py-3">
+            {/* Carry the invitation through authentication. Without ?next= these landed on
+             * the dashboard afterwards, and the only way back was to dig the email out
+             * again — the invite was still valid, but effectively lost. */}
+            <Link
+              to="/login"
+              search={{ next: `/accept-invite/${token}` }}
+              className="btn-primary w-full justify-center py-3"
+            >
               Log in <ArrowRight className="size-3.5" />
             </Link>
             <Link
               to="/signup"
+              search={{ next: `/accept-invite/${token}`, email: preview.email }}
               className="w-full rounded-md border border-black/10 py-3 text-center text-[13px] font-medium hover:bg-black/[0.03]"
             >
               Create an account

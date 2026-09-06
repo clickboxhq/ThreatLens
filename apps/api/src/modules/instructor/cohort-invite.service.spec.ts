@@ -13,6 +13,8 @@ function build(
     groupScoped?: boolean;
     groupIds?: string[];
     meEmail?: string;
+    meRole?: string;
+    alreadyStaff?: boolean;
   } = {},
 ) {
   const send = jest.fn().mockResolvedValue(undefined);
@@ -31,6 +33,7 @@ function build(
     }),
   );
   const enrollmentCreate = jest.fn().mockResolvedValue({});
+  const staffCreate = jest.fn().mockResolvedValue({});
   const inviteUpdate = jest.fn().mockResolvedValue({});
 
   const prisma = {
@@ -42,6 +45,12 @@ function build(
       update: inviteUpdate,
     },
     cohortGroup: { findFirst: jest.fn().mockResolvedValue({ id: 'group-1' }) },
+    cohortStaff: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(opts.alreadyStaff ? { userId: 'me-1' } : null),
+      create: staffCreate,
+    },
     cohortEnrollment: {
       findUnique: jest
         .fn()
@@ -61,6 +70,7 @@ function build(
         id: 'me-1',
         displayName: 'Dana',
         email: opts.meEmail ?? 'invitee@example.com',
+        role: opts.meRole ?? 'instructor',
       }),
     },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
@@ -94,6 +104,7 @@ function build(
     inviteUpsert,
     inviteUpdate,
     enrollmentCreate,
+    staffCreate,
     notifications,
   };
 }
@@ -226,6 +237,63 @@ describe('CohortInviteService', () => {
         service.accept({ id: 'me-1' } as AuthenticatedUser, 'tok'),
       ).resolves.toMatchObject({ cohortId: 'c1' });
       expect(enrollmentCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  // Staffing used to require the person to already have an account. Inviting them is the only
+  // way to bring in a tutor who has never used ThreatLens.
+  describe('staff invitations', () => {
+    const staffInvite = {
+      id: 'invite-1',
+      cohortId: 'c1',
+      groupId: null,
+      staffRole: 'tutor',
+      email: 'invitee@example.com',
+      status: 'pending',
+      invitedBy: 'lead-1',
+      expiresAt: new Date(Date.now() + HOUR),
+      cohort: { id: 'c1', name: 'Autumn 2026' },
+    };
+
+    it('needs lead, not tutor, to send one', async () => {
+      const { service } = build();
+      await service.create(TUTOR, 'c1', 'x@example.com', null, 'tutor');
+      // requireAccess is the gate; assert it was asked for the stronger role.
+      const access = (
+        service as unknown as { cohortAccess: { requireAccess: jest.Mock } }
+      ).cohortAccess;
+      expect(access.requireAccess).toHaveBeenCalledWith('c1', TUTOR, 'lead');
+    });
+
+    it('staffs them on the cohort rather than enrolling them', async () => {
+      const { service, staffCreate, enrollmentCreate } = build({
+        invite: staffInvite,
+      });
+      await service.accept({ id: 'me-1' } as AuthenticatedUser, 'tok');
+      expect(staffCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ role: 'tutor', userId: 'me-1' }),
+        }),
+      );
+      expect(enrollmentCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a student account, the same rule addStaff applies', async () => {
+      // The invite goes to an address; whoever signs up with it picks their own account type.
+      // An invitation grants a role on this cohort, never a different kind of account.
+      const { service } = build({ invite: staffInvite, meRole: 'student' });
+      await expect(
+        service.accept({ id: 'me-1' } as AuthenticatedUser, 'tok'),
+      ).rejects.toMatchObject({ code: 'NOT_AN_INSTRUCTOR' });
+    });
+
+    it('is idempotent when they are already staffed', async () => {
+      const { service, staffCreate } = build({
+        invite: staffInvite,
+        alreadyStaff: true,
+      });
+      await service.accept({ id: 'me-1' } as AuthenticatedUser, 'tok');
+      expect(staffCreate).not.toHaveBeenCalled();
     });
   });
 

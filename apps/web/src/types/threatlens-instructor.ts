@@ -105,6 +105,8 @@ export interface CohortInviteDto {
   email: string;
   groupId: string | null;
   groupName: string | null;
+  /** Null means they were invited as a student; set means onto the teaching staff. */
+  staffRole: CohortStaffRole | null;
   status: CohortInviteStatus;
   createdAt: string;
   expiresAt: string;
@@ -117,6 +119,7 @@ export interface CohortInvitePreviewDto {
   groupName: string | null;
   inviterName: string;
   email: string;
+  staffRole: CohortStaffRole | null;
   status: CohortInviteStatus;
   /** Drives whether the page leads with "sign in" or "create an account". */
   hasAccount: boolean;

@@ -119,7 +119,8 @@ export function CohortStaffing({ cohortId }: { cohortId: string }) {
         </form>
 
         <p className="border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
-          {ROLE_HELP[role]}
+          {ROLE_HELP[role]} Someone without a ThreatLens account is sent an invitation instead, and
+          appears below until they accept.
         </p>
 
         {staffError && (
@@ -354,6 +355,7 @@ export function CohortStaffing({ cohortId }: { cohortId: string }) {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px]">{i.email}</div>
                 <div className="text-[10.5px] text-muted-foreground">
+                  {i.staffRole ? `${ROLE_LABEL[i.staffRole]} · ` : ""}
                   {i.groupName ? `${i.groupName} · ` : ""}
                   {i.status === "pending"
                     ? `expires ${new Date(i.expiresAt).toLocaleDateString()}`
