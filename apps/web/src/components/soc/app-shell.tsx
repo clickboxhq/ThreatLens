@@ -141,6 +141,7 @@ const organization: NavItem[] = [
 // specifically (RolesGuard), a stricter, distinct role from instructor/org_admin. Every
 // instructor account seeing this link would just get a 403 the moment they clicked it.
 const platformAdminTools: NavItem[] = [
+  { to: "/app/admin", label: "Platform Analytics", icon: BarChart3 },
   { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
 

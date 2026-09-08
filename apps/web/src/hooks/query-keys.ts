@@ -14,6 +14,7 @@ export const queryKeys = {
   achievements: ["achievements"] as const,
   certificates: ["certificates"] as const,
   auditLogs: ["audit-logs"] as const,
+  adminAnalytics: ["admin-analytics"] as const,
   billing: ["billing"] as const,
   cohorts: ["cohorts"] as const,
   feedback: ["feedback"] as const,

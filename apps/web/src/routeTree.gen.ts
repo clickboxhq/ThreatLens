@@ -31,6 +31,7 @@ import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AcceptInviteTokenRouteImport } from './routes/accept-invite.$token'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAchievementsRouteImport } from './routes/app.achievements'
+import { Route as AppAdminRouteImport } from './routes/app.admin'
 import { Route as AppAlertsRouteImport } from './routes/app.alerts'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
@@ -182,6 +183,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAchievementsRoute = AppAchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAlertsRoute = AppAlertsRouteImport.update({
@@ -421,6 +427,7 @@ export interface FileRoutesByFullPath {
   '/welcome': typeof WelcomeRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/app/achievements': typeof AppAchievementsRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/assessments': typeof AppAssessmentsRoute
@@ -486,6 +493,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/app/achievements': typeof AppAchievementsRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/assessments': typeof AppAssessmentsRoute
@@ -553,6 +561,7 @@ export interface FileRoutesById {
   '/welcome': typeof WelcomeRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/app/achievements': typeof AppAchievementsRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/assessments': typeof AppAssessmentsRoute
@@ -621,6 +630,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/accept-invite/$token'
     | '/app/achievements'
+    | '/app/admin'
     | '/app/alerts'
     | '/app/analytics'
     | '/app/assessments'
@@ -686,6 +696,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/accept-invite/$token'
     | '/app/achievements'
+    | '/app/admin'
     | '/app/alerts'
     | '/app/analytics'
     | '/app/assessments'
@@ -752,6 +763,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/accept-invite/$token'
     | '/app/achievements'
+    | '/app/admin'
     | '/app/alerts'
     | '/app/analytics'
     | '/app/assessments'
@@ -978,6 +990,13 @@ declare module '@tanstack/react-router' {
       path: '/achievements'
       fullPath: '/app/achievements'
       preLoaderRoute: typeof AppAchievementsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin': {
+      id: '/app/admin'
+      path: '/admin'
+      fullPath: '/app/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/alerts': {
@@ -1279,6 +1298,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
+  AppAdminRoute: typeof AppAdminRoute
   AppAlertsRoute: typeof AppAlertsRoute
   AppAnalyticsRoute: typeof AppAnalyticsRoute
   AppAssessmentsRoute: typeof AppAssessmentsRoute
@@ -1322,6 +1342,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
+  AppAdminRoute: AppAdminRoute,
   AppAlertsRoute: AppAlertsRoute,
   AppAnalyticsRoute: AppAnalyticsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
