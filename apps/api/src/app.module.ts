@@ -34,6 +34,8 @@ import { AchievementsApiModule } from './modules/achievements/achievements-api.m
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
 import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -71,6 +73,8 @@ import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-build
     NotificationsModule,
     NotificationsApiModule,
     ScenarioBuilderModule,
+    ProfileModule,
+    BillingModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

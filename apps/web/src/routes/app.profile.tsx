@@ -1,9 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Award, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
+import { PerformanceOverview } from "@/components/soc/performance-overview";
 import { useProfile } from "@/hooks/use-profile";
+import { useAchievements } from "@/hooks/use-achievements";
+import { ACHIEVEMENT_BADGES } from "@/lib/achievement-badges";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api-client";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
@@ -149,77 +152,163 @@ function AboutYouPanel() {
   );
 }
 
-function ProfilePage() {
-  const { summary, skillMastery, certificates } = useProfile();
+function StandingStrip({
+  score,
+  solved,
+  rank,
+  email,
+}: {
+  score?: string;
+  solved?: string;
+  rank?: string;
+  email?: string;
+}) {
   return (
-    <div className="px-4 py-6 md:px-8 md:py-8">
+    <Panel>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[
+          ["Score", score],
+          ["Solved", solved],
+          ["Rank", rank],
+        ].map(([l, v]) => (
+          <div key={l} className="rounded-md border border-border bg-background/40 p-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{l}</div>
+            <div className="mt-0.5 text-[14px] font-semibold">{v ?? "—"}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 font-mono text-[11px] text-muted-foreground">{email}</div>
+    </Panel>
+  );
+}
+
+function SkillMasteryPanel({ skillMastery }: { skillMastery: { label: string; value: number }[] }) {
+  return (
+    <Panel title="Skill mastery">
+      {skillMastery.length === 0 ? (
+        <p className="py-2 text-[12px] text-muted-foreground">
+          Complete and score an investigation in each category to see your mastery here.
+        </p>
+      ) : (
+        skillMastery.map((s) => (
+          <div key={s.label} className="mb-3 last:mb-0">
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-secondary">{s.label}</span>
+              <span className="tabular-nums text-secondary">{s.value}%</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
+              <div
+                className="h-full rounded-full bg-[color:var(--info)]"
+                style={{ width: `${s.value}%` }}
+              />
+            </div>
+          </div>
+        ))
+      )}
+    </Panel>
+  );
+}
+
+function AchievementBadgesPanel() {
+  const { achievements, state } = useAchievements();
+  const earned = achievements.filter((a) => a.earnedAt !== null);
+  const lockedCount = achievements.length - earned.length;
+
+  return (
+    <Panel
+      title="Achievement badges"
+      actions={
+        <Link to="/app/achievements" className="t-meta text-[color:var(--info)] hover:underline">
+          View all
+        </Link>
+      }
+    >
+      {state === "loading" ? (
+        <div className="h-20 animate-pulse rounded-md bg-background/60" />
+      ) : earned.length === 0 ? (
+        <p className="py-2 text-[12px] text-muted-foreground">
+          No badges yet — earn them for investigation accuracy, evidence quality, and ATT&CK
+          breadth. {achievements.length > 0 && `${achievements.length} available.`}
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-4">
+            {earned.map((a) => (
+              <div key={a.key} className="flex w-[84px] flex-col items-center text-center">
+                <img
+                  src={ACHIEVEMENT_BADGES[a.key]}
+                  alt=""
+                  aria-hidden="true"
+                  className="size-16 shrink-0 mix-blend-screen"
+                />
+                <div className="mt-1 text-[11px] font-medium leading-tight">{a.title}</div>
+              </div>
+            ))}
+          </div>
+          {lockedCount > 0 && (
+            <div className="mt-3 border-t border-border pt-2 text-[11.5px] text-muted-foreground">
+              {lockedCount} more to unlock
+            </div>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+function CertificatesPanel({
+  certificates,
+}: {
+  certificates: { id: string; learningPathTitle: string }[];
+}) {
+  return (
+    <Panel title="Certificates">
+      {certificates.length === 0 ? (
+        <p className="py-1 text-[12px] text-muted-foreground">
+          Complete a learning path to earn your first certificate.
+        </p>
+      ) : (
+        certificates.map((c) => (
+          <div key={c.id} className="flex items-center gap-2 py-1 text-[12.5px]">
+            <Award className="size-3.5 text-[color:var(--info)]" />
+            {c.learningPathTitle}
+          </div>
+        ))
+      )}
+    </Panel>
+  );
+}
+
+function ProfilePage() {
+  const { summary, performance, performanceState, skillMastery, certificates } = useProfile();
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
       <SectionHeader
         title="Profile"
-        description="Your analyst identity, performance, and preferences."
+        description="Your analyst identity, performance, and progress."
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-1">
-          <AboutYouPanel />
+      <div className="space-y-4">
+        {/* 1. About you */}
+        <AboutYouPanel />
+        <StandingStrip
+          score={summary?.score}
+          solved={summary?.solved}
+          rank={summary?.rank}
+          email={summary?.email}
+        />
 
-          <Panel>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                ["Score", summary?.score],
-                ["Solved", summary?.solved],
-                ["Rank", summary?.rank],
-              ].map(([l, v]) => (
-                <div key={l} className="rounded-md border border-border bg-background/40 p-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {l}
-                  </div>
-                  <div className="mt-0.5 text-[14px] font-semibold">{v}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 font-mono text-[11px] text-muted-foreground">{summary?.email}</div>
-          </Panel>
-        </div>
+        {/* 2. Performance Overview */}
+        <PerformanceOverview performance={performance} state={performanceState} />
 
-        <Panel className="lg:col-span-2" title="Skills mastery" padded={false}>
-          <div className="p-4">
-            {skillMastery.length === 0 && (
-              <p className="py-2 text-[12px] text-muted-foreground">
-                Complete and score an investigation in each category to see your mastery here.
-              </p>
-            )}
-            {skillMastery.map((s) => (
-              <div key={s.label} className="mb-3">
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-secondary">{s.label}</span>
-                  <span className="tabular-nums text-secondary">{s.value}</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
-                  <div
-                    className="h-full rounded-full bg-[color:var(--info)]"
-                    style={{ width: `${s.value}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-border p-4">
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Certificates
-            </div>
-            {certificates.length === 0 && (
-              <p className="py-1 text-[12px] text-muted-foreground">
-                Complete a learning path to earn your first certificate.
-              </p>
-            )}
-            {certificates.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 py-1 text-[12.5px]">
-                <Award className="size-3.5 text-[color:var(--info)]" />
-                {c.learningPathTitle}
-              </div>
-            ))}
-          </div>
-        </Panel>
+        {/* 3. Skill mastery */}
+        <SkillMasteryPanel skillMastery={skillMastery} />
+
+        {/* 4. Achievement badges */}
+        <AchievementBadgesPanel />
+
+        {/* 5. Certificates */}
+        <CertificatesPanel certificates={certificates} />
       </div>
     </div>
   );
