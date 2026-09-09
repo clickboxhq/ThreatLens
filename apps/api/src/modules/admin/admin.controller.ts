@@ -37,4 +37,20 @@ export class AdminController {
   async getAnalyticsCustomers(@Query() query: CustomerAnalyticsQueryDto) {
     return this.adminAnalyticsService.getCustomers(query);
   }
+
+  // Platform Analytics tabs — real application data (no billing dependency).
+  @Get('analytics/users')
+  async getUserAnalytics() {
+    return this.adminAnalyticsService.getUserAnalytics();
+  }
+
+  @Get('analytics/product')
+  async getProductAnalytics() {
+    return this.adminAnalyticsService.getProductAnalytics();
+  }
+
+  @Get('analytics/organizations')
+  async getOrganizationAnalytics() {
+    return this.adminAnalyticsService.getOrganizationAnalytics();
+  }
 }

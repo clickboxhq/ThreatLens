@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BillingService } from '../../billing/billing.service';
+import { toNumber } from '../../../common/dto/decimal';
 import type { CustomerAnalyticsQueryDto } from '../dto/customer-analytics-query.dto';
 import type { PlatformRevenueSummary } from '../../billing/billing.types';
 
@@ -12,12 +13,17 @@ const ALL_ROLES: UserRole[] = [
   'platform_admin',
 ];
 
+// "Active" = signed in within this window. There is no per-request activity ping, so
+// last-login is the honest proxy and the label says so.
+const ACTIVE_WINDOW_DAYS = 30;
+
 export interface PlatformOverview {
   users: {
     // Every non-deleted user row, regardless of role. `byRole` breaks it down so it is clear
     // what the headline number includes — platform/org admins are counted here too, since
     // they are real accounts on the platform.
     total: number;
+    active: number;
     byRole: Record<UserRole, number>;
     newToday: number;
     newPast7Days: number;
@@ -26,6 +32,16 @@ export interface PlatformOverview {
   organizations: {
     // Actual Organization rows — not memberships, not org admins.
     total: number;
+    active: number;
+  };
+  subscriptions: {
+    // Null until a payment provider is connected — the dashboard shows "—", never 0-as-fact.
+    active: number | null;
+  };
+  investigations: {
+    // Sessions submitted for scoring (submitted or already scored).
+    submissions: number;
+    averageScorePercent: number | null;
   };
   revenue: PlatformRevenueSummary;
   generatedAt: string;
@@ -72,32 +88,47 @@ export class AdminAnalyticsService {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const activeUser: Prisma.UserWhereInput = { deletedAt: null };
+    const activeSince = new Date(
+      now.getTime() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const notDeleted: Prisma.UserWhereInput = { deletedAt: null };
 
     const [
       totalUsers,
+      activeUsers,
       roleGroups,
       newToday,
       newPast7Days,
       newPast30Days,
       totalOrganizations,
+      activeOrganizations,
+      submissions,
+      scoreAgg,
     ] = await Promise.all([
-      this.prisma.user.count({ where: activeUser }),
+      this.prisma.user.count({ where: notDeleted }),
+      this.prisma.user.count({
+        where: { ...notDeleted, lastLoginAt: { gte: activeSince } },
+      }),
       this.prisma.user.groupBy({
         by: ['role'],
-        where: activeUser,
+        where: notDeleted,
         _count: { _all: true },
       }),
       this.prisma.user.count({
-        where: { ...activeUser, createdAt: { gte: startOfToday } },
+        where: { ...notDeleted, createdAt: { gte: startOfToday } },
       }),
       this.prisma.user.count({
-        where: { ...activeUser, createdAt: { gte: sevenDaysAgo } },
+        where: { ...notDeleted, createdAt: { gte: sevenDaysAgo } },
       }),
       this.prisma.user.count({
-        where: { ...activeUser, createdAt: { gte: thirtyDaysAgo } },
+        where: { ...notDeleted, createdAt: { gte: thirtyDaysAgo } },
       }),
       this.prisma.organization.count(),
+      this.prisma.organization.count({ where: { status: 'active' } }),
+      this.prisma.investigationSession.count({
+        where: { status: { in: ['submitted', 'scored'] } },
+      }),
+      this.prisma.score.aggregate({ _avg: { overallPercent: true } }),
     ]);
 
     const byRole = ALL_ROLES.reduce(
@@ -114,13 +145,152 @@ export class AdminAnalyticsService {
     return {
       users: {
         total: totalUsers,
+        active: activeUsers,
         byRole,
         newToday,
         newPast7Days,
         newPast30Days,
       },
-      organizations: { total: totalOrganizations },
+      organizations: { total: totalOrganizations, active: activeOrganizations },
+      subscriptions: { active: this.billing.isConfigured() ? 0 : null },
+      investigations: {
+        submissions,
+        averageScorePercent: toNumber(scoreAgg._avg.overallPercent),
+      },
       revenue: this.billing.getPlatformRevenueSummary(),
+      generatedAt: now.toISOString(),
+    };
+  }
+
+  // ---- Platform Analytics tabs ---------------------------------------------
+
+  // Registrations bucketed by month for the last 12 months. Fetches only the createdAt column
+  // for a bounded window and buckets in memory — fine at this platform's scale, and it avoids
+  // a raw date_trunc query. Cumulative total is carried so the chart can show growth, not
+  // just per-month bars.
+  async getUserAnalytics() {
+    const now = new Date();
+    const since = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const activeSince = new Date(
+      now.getTime() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    const [rows, priorTotal, totalUsers, activeUsers] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { deletedAt: null, createdAt: { gte: since } },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.user.count({
+        where: { deletedAt: null, createdAt: { lt: since } },
+      }),
+      this.prisma.user.count({ where: { deletedAt: null } }),
+      this.prisma.user.count({
+        where: { deletedAt: null, lastLoginAt: { gte: activeSince } },
+      }),
+    ]);
+
+    const series = monthlySeries(
+      rows.map((r) => r.createdAt),
+      since,
+      now,
+      priorTotal,
+    );
+    return {
+      totalUsers,
+      activeUsers,
+      newThisMonth: series.at(-1)?.count ?? 0,
+      growth: series,
+      generatedAt: now.toISOString(),
+    };
+  }
+
+  async getProductAnalytics() {
+    const [
+      scenariosLaunched,
+      investigationsCompleted,
+      totalSessions,
+      scoreAgg,
+      popular,
+    ] = await Promise.all([
+      this.prisma.investigationSession.count(),
+      this.prisma.investigationSession.count({ where: { status: 'scored' } }),
+      this.prisma.investigationSession.count(),
+      this.prisma.score.aggregate({ _avg: { overallPercent: true } }),
+      this.prisma.investigationSession.groupBy({
+        by: ['scenarioId'],
+        _count: { _all: true },
+        orderBy: { _count: { scenarioId: 'desc' } },
+        take: 8,
+      }),
+    ]);
+
+    const scenarioTitles = new Map(
+      (
+        await this.prisma.attackScenario.findMany({
+          where: { id: { in: popular.map((p) => p.scenarioId) } },
+          select: { id: true, title: true, category: true },
+        })
+      ).map((s) => [s.id, s]),
+    );
+
+    return {
+      scenariosLaunched,
+      investigationsCompleted,
+      completionRatePercent:
+        totalSessions > 0
+          ? Math.round((investigationsCompleted / totalSessions) * 1000) / 10
+          : null,
+      averageScorePercent: toNumber(scoreAgg._avg.overallPercent),
+      mostPopularScenarios: popular.map((p) => ({
+        scenarioId: p.scenarioId,
+        title: scenarioTitles.get(p.scenarioId)?.title ?? 'Unknown',
+        category: scenarioTitles.get(p.scenarioId)?.category ?? null,
+        launches: p._count._all,
+      })),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getOrganizationAnalytics() {
+    const now = new Date();
+    const since = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+    const [rows, priorTotal, total, active, memberAgg] = await Promise.all([
+      this.prisma.organization.findMany({
+        where: { createdAt: { gte: since } },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.organization.count({ where: { createdAt: { lt: since } } }),
+      this.prisma.organization.count(),
+      this.prisma.organization.count({ where: { status: 'active' } }),
+      this.prisma.user.groupBy({
+        by: ['orgId'],
+        where: { deletedAt: null, orgId: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const memberCounts = memberAgg.map((g) => g._count._all);
+    const averageMembers =
+      memberCounts.length > 0
+        ? Math.round(
+            (memberCounts.reduce((s, n) => s + n, 0) / memberCounts.length) *
+              10,
+          ) / 10
+        : null;
+
+    return {
+      totalOrganizations: total,
+      activeOrganizations: active,
+      averageMembersPerOrganization: averageMembers,
+      growth: monthlySeries(
+        rows.map((r) => r.createdAt),
+        since,
+        now,
+        priorTotal,
+      ),
       generatedAt: now.toISOString(),
     };
   }
@@ -269,4 +439,44 @@ export class AdminAnalyticsService {
         return { org: { createdAt: 'desc' }, user: { createdAt: 'desc' } };
     }
   }
+}
+
+export interface MonthlyPoint {
+  month: string; // "2026-09"
+  label: string; // "Sep"
+  count: number; // new that month
+  cumulative: number; // running total, including everything before the window
+}
+
+// Buckets a list of dates into the calendar months from `since` to `now` inclusive, carrying
+// a running cumulative total seeded with `priorTotal` (everything created before the window).
+function monthlySeries(
+  dates: Date[],
+  since: Date,
+  now: Date,
+  priorTotal: number,
+): MonthlyPoint[] {
+  const key = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+  const counts = new Map<string, number>();
+  for (const d of dates) counts.set(key(d), (counts.get(key(d)) ?? 0) + 1);
+
+  const points: MonthlyPoint[] = [];
+  let cumulative = priorTotal;
+  const cursor = new Date(since.getFullYear(), since.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), 1);
+  while (cursor <= end) {
+    const k = key(cursor);
+    const count = counts.get(k) ?? 0;
+    cumulative += count;
+    points.push({
+      month: k,
+      label: cursor.toLocaleDateString('en-US', { month: 'short' }),
+      count,
+      cumulative,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return points;
 }

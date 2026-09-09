@@ -427,6 +427,16 @@ export class AuthService {
 
     const usedRecoveryCode = await this.tryConsumeRecoveryCode(user, code);
     if (!usedRecoveryCode && !(await verifyTotpCode(code, user.mfaSecret))) {
+      // Recorded for the admin Security Events view — a run of these on one account is a
+      // signal worth surfacing.
+      await this.auditLog.record({
+        actorUserId: user.id,
+        actorIp: sourceIp,
+        action: 'mfa_challenge_failed',
+        targetType: 'user',
+        targetId: user.id,
+        correlationId,
+      });
       throw new AppException(
         401,
         'INVALID_MFA_CODE',

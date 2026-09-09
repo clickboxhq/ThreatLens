@@ -45,6 +45,8 @@ import {
   Terminal,
   Network as NetworkIcon,
   Waypoints,
+  Banknote,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -137,12 +139,29 @@ const organization: NavItem[] = [
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-// Separate from `organization` — the backend gates GET /admin/audit-logs to platform_admin
-// specifically (RolesGuard), a stricter, distinct role from instructor/org_admin. Every
-// instructor account seeing this link would just get a 403 the moment they clicked it.
-const platformAdminTools: NavItem[] = [
-  { to: "/app/admin", label: "Platform Analytics", icon: BarChart3 },
+// Platform-operator surface — every route below is gated to platform_admin specifically on
+// the backend (RolesGuard); an instructor or org_admin clicking any of them gets a 403. The
+// five groups mirror the admin panel's own information architecture.
+const adminOverview: NavItem[] = [
+  { to: "/app/admin", label: "Overview", icon: LayoutGrid },
+  { to: "/app/admin/analytics", label: "Platform Analytics", icon: BarChart3 },
+];
+const adminManagement: NavItem[] = [
+  { to: "/app/admin/users", label: "Users", icon: Users },
+  { to: "/app/admin/organizations", label: "Organizations", icon: Building2 },
+  { to: "/app/admin/certificates", label: "Certificates", icon: Award },
+];
+const adminBusiness: NavItem[] = [
+  { to: "/app/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { to: "/app/admin/revenue", label: "Revenue", icon: Banknote },
+];
+const adminSecurity: NavItem[] = [
+  { to: "/app/admin/security", label: "Security Events", icon: ShieldAlert },
   { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
+  { to: "/app/admin/administrators", label: "Administrators", icon: ShieldCheck },
+];
+const adminSystem: NavItem[] = [
+  { to: "/app/admin/settings", label: "Platform Settings", icon: SettingsIcon },
 ];
 
 function NavGroup({
@@ -165,7 +184,10 @@ function NavGroup({
       {label && collapsed && <div className="pt-4" aria-hidden />}
       <ul className="flex flex-col gap-0.5">
         {items.map((it) => {
-          const active = it.to === "/app" ? path === "/app" : path.startsWith(it.to);
+          // "/app" and "/app/admin" are exact-match — otherwise "/app/admin" would light up
+          // for every /app/admin/* sub-route alongside the actual page.
+          const active =
+            it.to === "/app" || it.to === "/app/admin" ? path === it.to : path.startsWith(it.to);
           const Icon = it.icon;
           const link = (
             <Link
@@ -272,7 +294,13 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
         )}
         {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
         {isPlatformAdmin && (
-          <NavGroup label="Platform Admin" items={platformAdminTools} collapsed={collapsed} />
+          <>
+            <NavGroup label="Overview" items={adminOverview} collapsed={collapsed} />
+            <NavGroup label="Management" items={adminManagement} collapsed={collapsed} />
+            <NavGroup label="Business" items={adminBusiness} collapsed={collapsed} />
+            <NavGroup label="Security" items={adminSecurity} collapsed={collapsed} />
+            <NavGroup label="System" items={adminSystem} collapsed={collapsed} />
+          </>
         )}
       </nav>
 
