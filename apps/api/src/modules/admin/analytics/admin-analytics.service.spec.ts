@@ -9,18 +9,37 @@ function query(
   return { page: 1, limit: 25, sort: 'newest', ...overrides };
 }
 
+function overviewPrisma(overrides: {
+  userGroupBy?: unknown[];
+  userCount?: number;
+  orgCount?: number;
+}) {
+  return {
+    user: {
+      count: jest.fn().mockResolvedValue(overrides.userCount ?? 0),
+      groupBy: jest.fn().mockResolvedValue(overrides.userGroupBy ?? []),
+    },
+    organization: {
+      count: jest.fn().mockResolvedValue(overrides.orgCount ?? 0),
+    },
+    investigationSession: { count: jest.fn().mockResolvedValue(0) },
+    score: {
+      aggregate: jest
+        .fn()
+        .mockResolvedValue({ _avg: { overallPercent: null } }),
+    },
+  } as unknown as PrismaService;
+}
+
 describe('AdminAnalyticsService.getOverview', () => {
   it('maps grouped role counts onto every role, zero-filling the absent ones', async () => {
-    const prisma = {
-      user: {
-        count: jest.fn().mockResolvedValue(0),
-        groupBy: jest.fn().mockResolvedValue([
-          { role: 'student', _count: { _all: 7 } },
-          { role: 'platform_admin', _count: { _all: 1 } },
-        ]),
-      },
-      organization: { count: jest.fn().mockResolvedValue(3) },
-    } as unknown as PrismaService;
+    const prisma = overviewPrisma({
+      orgCount: 3,
+      userGroupBy: [
+        { role: 'student', _count: { _all: 7 } },
+        { role: 'platform_admin', _count: { _all: 1 } },
+      ],
+    });
 
     const service = new AdminAnalyticsService(prisma, new BillingService());
     const overview = await service.getOverview();
@@ -34,20 +53,16 @@ describe('AdminAnalyticsService.getOverview', () => {
     expect(overview.organizations.total).toBe(3);
   });
 
-  it('reports revenue as unavailable while there is no payment provider', async () => {
-    const prisma = {
-      user: {
-        count: jest.fn().mockResolvedValue(0),
-        groupBy: jest.fn().mockResolvedValue([]),
-      },
-      organization: { count: jest.fn().mockResolvedValue(0) },
-    } as unknown as PrismaService;
-
-    const service = new AdminAnalyticsService(prisma, new BillingService());
+  it('reports revenue and subscriptions as unavailable while there is no payment provider', async () => {
+    const service = new AdminAnalyticsService(
+      overviewPrisma({}),
+      new BillingService(),
+    );
     const overview = await service.getOverview();
 
     expect(overview.revenue.available).toBe(false);
     expect(overview.revenue.netRevenueCents).toBe(0);
+    expect(overview.subscriptions.active).toBeNull();
   });
 });
 

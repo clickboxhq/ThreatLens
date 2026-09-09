@@ -36,6 +36,8 @@ import { NotificationsApiModule } from './modules/notifications/notifications-ap
 import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { PlatformSettingsModule } from './modules/admin/platform-settings/platform-settings.module';
+import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
 
 @Module({
   imports: [
@@ -75,12 +77,15 @@ import { BillingModule } from './modules/billing/billing.module';
     ScenarioBuilderModule,
     ProfileModule,
     BillingModule,
+    PlatformSettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer
+      .apply(CorrelationIdMiddleware, MaintenanceMiddleware)
+      .forRoutes('*');
   }
 }

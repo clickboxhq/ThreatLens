@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { PLANS, priceDisplay, type BillingPeriod } from "@/lib/pricing";
 import {
   Award,
   ArrowRight,
@@ -653,40 +654,12 @@ function ProductEcosystem() {
 
 /* ----------------------------- PRICING ----------------------------- */
 
-const INDIVIDUAL_FEATURES = [
-  "Unlimited investigation scenarios",
-  "Identity, endpoint, email & cloud investigation",
-  "MITRE ATT&CK mapping",
-  "Evidence-based scoring",
-  "Investigation notes & timeline building",
-  "Progress dashboard & investigation history",
-  "Learning paths & certificates",
-];
-
-const ORG_FEATURES = [
-  "Multiple learner accounts",
-  "Cohort management & instructor dashboard",
-  "Assign investigations & monitor progress",
-  "Performance analytics & investigation scoring",
-  "Custom scenario packs",
-  "Reporting & instructor feedback",
-  "Organization workspace & support",
-];
-
-const ENTERPRISE_FEATURES = [
-  "SSO & advanced RBAC",
-  "Large-scale user management",
-  "Custom scenario & learning-path development",
-  "Advanced analytics",
-  "LMS & gradebook integration",
-  "Dedicated support & custom deployment",
-];
-
 function PricingCard({
   name,
-  badge,
   price,
-  priceNote,
+  unit,
+  note,
+  savings,
   body,
   features,
   cta,
@@ -695,9 +668,10 @@ function PricingCard({
   delay,
 }: {
   name: string;
-  badge?: string;
   price: string;
-  priceNote?: string;
+  unit: string;
+  note?: string;
+  savings?: string;
   body: string;
   features: string[];
   cta: string;
@@ -722,26 +696,24 @@ function PricingCard({
           <div className="text-[14px] font-semibold text-white" style={displayFont}>
             {name}
           </div>
-          {badge && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]"
-              style={{
-                background: "color-mix(in oklab, var(--primary) 18%, transparent)",
-                color: "color-mix(in oklab, var(--primary) 92%, white)",
-              }}
-            >
-              {badge}
-            </span>
-          )}
         </div>
-        <div className="mt-3 flex items-baseline gap-2">
+        <div className="mt-3 flex items-baseline gap-1.5">
           <span className="text-[24px] font-semibold text-white" style={displayFont}>
             {price}
           </span>
+          {unit && <span className="text-[13px] text-white/45">{unit}</span>}
         </div>
-        {priceNote && (
+        {note && (
           <div className="mt-1 text-[12px] text-white/45" style={monoFont}>
-            {priceNote}
+            {note}
+          </div>
+        )}
+        {savings && (
+          <div
+            className="mt-1 text-[12px] font-medium"
+            style={{ color: "color-mix(in oklab, var(--primary) 90%, white)" }}
+          >
+            {savings}
           </div>
         )}
         <p className="mt-3 text-[13px] leading-[1.6] text-white/50">{body}</p>
@@ -786,7 +758,7 @@ function PricingCard({
 }
 
 function Pricing() {
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
+  const [billing, setBilling] = useState<BillingPeriod>("monthly");
 
   return (
     <section id="pricing" style={{ background: "#000000", color: "#EDEDED" }}>
@@ -819,49 +791,25 @@ function Pricing() {
         </Reveal>
 
         <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {billing === "monthly" ? (
-            <PricingCard
-              name="Individual"
-              price="$19/month"
-              priceNote="7-day free trial"
-              body="For individuals building real SOC investigation skill."
-              features={INDIVIDUAL_FEATURES}
-              cta="Start 7-Day Trial"
-              ctaHref="/signup"
-              delay={0}
-            />
-          ) : (
-            <PricingCard
-              name="Individual"
-              price="$190/year"
-              priceNote="Save ~17% · 7-day free trial"
-              body="For individuals building real SOC investigation skill."
-              features={INDIVIDUAL_FEATURES}
-              cta="Start Annual Plan"
-              ctaHref="/signup"
-              delay={0}
-            />
-          )}
-          <PricingCard
-            name="Organizations & Institutions"
-            badge="Most cohorts"
-            featured
-            price="Starting at $199/month"
-            body="For teams, cohorts, universities, bootcamps and training programs."
-            features={ORG_FEATURES}
-            cta="Let's Talk"
-            ctaHref="/contact"
-            delay={80}
-          />
-          <PricingCard
-            name="Enterprise"
-            price="Custom"
-            body="For organizations requiring scale, integrations, custom programs and enterprise support."
-            features={ENTERPRISE_FEATURES}
-            cta="Let's Talk"
-            ctaHref="/contact"
-            delay={160}
-          />
+          {PLANS.map((plan, i) => {
+            const d = priceDisplay(plan, billing);
+            return (
+              <PricingCard
+                key={plan.id}
+                name={plan.name}
+                price={d.headline}
+                unit={d.unit}
+                note={d.note}
+                savings={d.savings}
+                body={plan.positioning}
+                features={plan.features}
+                featured={plan.id === "organization"}
+                cta={plan.cta[billing]}
+                ctaHref={plan.ctaHref}
+                delay={i * 80}
+              />
+            );
+          })}
         </div>
       </div>
     </section>

@@ -38,13 +38,22 @@ enum UserStatus {
   pending_verification
 }
 
+// §Admin: an organisation can be suspended platform-side (billing dispute, abuse) without
+// touching its members' individual accounts. Distinct from UserStatus for exactly that reason.
+enum OrgStatus {
+  active
+  suspended
+}
+
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  teamSize  Int?     @map("team_size")
-  industry  String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  teamSize    Int?      @map("team_size")
+  industry    String?
+  status      OrgStatus @default(active)
+  suspendedAt DateTime? @map("suspended_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   users   User[]
   invites OrganizationInvite[]
@@ -176,6 +185,7 @@ model User {
   auditLogs             AuditLog[]
   sentOrgInvites        OrganizationInvite[]       @relation("OrganizationInviteInviter")
   notifications         Notification[]
+  platformSettingUpdates PlatformSetting[]
 
   @@map("users")
 }
@@ -205,6 +215,24 @@ model AuditLog {
   @@index([action])
   @@index([occurredAt])
   @@map("audit_logs")
+}
+
+// ---------- Platform Settings (§Admin — Platform Settings) ----------
+
+// Global, database-backed configuration a platform admin edits from the UI — platform name,
+// maintenance mode, self-serve registration toggle, default trial length, feature flags.
+// Deliberately NOT where secrets live: API keys, signing secrets and provider credentials
+// stay in environment variables (§5.17). One row per key; `value` is JSON so a flag, a
+// number and a string all fit without a column per setting.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [id])
+
+  @@map("platform_settings")
 }
 
 // ---------- Instructor Mode (§2.15, §6.5, §6.6, §6.20) ----------
@@ -251,6 +279,9 @@ model Cohort {
   invites     CohortInvite[]
 
   @@index([orgId])
+  // Archived cohorts are filtered out of every active listing (created in
+  // 20260906220000_archive_cohorts); declared here so the schema matches the database.
+  @@index([archivedAt])
   @@map("cohorts")
 }
 
