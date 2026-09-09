@@ -295,6 +295,14 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
         {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
         {isPlatformAdmin && (
           <>
+            <div className="mx-2 mt-5 border-t border-sidebar-border pt-3">
+              {!collapsed && (
+                <div className="flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-secondary">
+                  <ShieldCheck className="size-3.5 text-[color:var(--info)]" />
+                  Admin Panel
+                </div>
+              )}
+            </div>
             <NavGroup label="Overview" items={adminOverview} collapsed={collapsed} />
             <NavGroup label="Management" items={adminManagement} collapsed={collapsed} />
             <NavGroup label="Business" items={adminBusiness} collapsed={collapsed} />
