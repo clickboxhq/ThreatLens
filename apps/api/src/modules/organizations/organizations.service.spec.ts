@@ -218,6 +218,63 @@ describe('OrganizationsService.rename', () => {
   });
 });
 
+describe('OrganizationsService logo', () => {
+  const DATA_URL = 'data:image/png;base64,AAAA';
+
+  it('setLogo rejects a caller who is not an org_admin', async () => {
+    const { service } = buildService();
+    await expect(
+      service.setLogo(buildUser({ role: 'instructor' }), DATA_URL),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('setLogo rejects an org_admin with no organization', async () => {
+    const { service } = buildService({ orgId: null });
+    await expect(
+      service.setLogo(buildUser({ role: 'org_admin' }), DATA_URL),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_IN_ORGANIZATION' });
+  });
+
+  it("setLogo writes the data URL to the caller's own org and audits it", async () => {
+    const { service, prisma, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    await service.setLogo(buildUser({ role: 'org_admin' }), DATA_URL);
+
+    expect(prisma.organization.update).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+      data: { logoDataUrl: DATA_URL },
+    });
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'organization_logo_updated',
+        targetId: 'org-1',
+      }),
+    );
+  });
+
+  it("removeLogo nulls the column on the caller's own org", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    await service.removeLogo(buildUser({ role: 'org_admin' }));
+
+    expect(prisma.organization.update).toHaveBeenCalledWith({
+      where: { id: 'org-1' },
+      data: { logoDataUrl: null },
+    });
+  });
+
+  it('removeLogo rejects a non-org_admin caller', async () => {
+    const { service } = buildService();
+    await expect(
+      service.removeLogo(buildUser({ role: 'student' })),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+});
+
 describe('OrganizationsService invite preview and acceptance', () => {
   it('previewInvite() 404s on an unknown token', async () => {
     const { service } = buildService();

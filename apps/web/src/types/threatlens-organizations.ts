@@ -7,6 +7,8 @@ export interface OrganizationDto {
   name: string;
   teamSize?: number | null;
   industry?: string | null;
+  /** Base64 data URL, or null when no logo is set. */
+  logoDataUrl?: string | null;
   memberCount: number;
   createdAt: string;
 }

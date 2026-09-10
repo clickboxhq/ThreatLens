@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
@@ -10,9 +11,15 @@ import {
   useOrganizationInvites,
   useCreateInvite,
   useRenameOrganization,
+  useSetOrgLogo,
+  useRemoveOrgLogo,
 } from "@/hooks/use-organizations";
-import { Building2, Clock, Pencil, UserPlus } from "lucide-react";
-import type { InviteRole } from "@/types/threatlens-organizations";
+import { useAuthUser } from "@/lib/auth-store";
+import { ApiError } from "@/lib/api-client";
+import { Building2, Clock, Loader2, Pencil, Trash2, Upload, UserPlus } from "lucide-react";
+import type { InviteRole, OrganizationDto } from "@/types/threatlens-organizations";
+
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 export const Route = createFileRoute("/app/organizations")({
   component: OrgsPage,
@@ -81,11 +88,93 @@ function CreateOrgPrompt() {
   );
 }
 
-function OrgRoster({
-  organization,
-}: {
-  organization: { id: string; name: string; memberCount: number };
-}) {
+function OrgLogo({ organization, canEdit }: { organization: OrganizationDto; canEdit: boolean }) {
+  const setLogo = useSetOrgLogo();
+  const removeLogo = useRemoveOrgLogo();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const busy = setLogo.isPending || removeLogo.isPending;
+
+  const onFile = (file: File) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Logo must be a JPEG, PNG, or WEBP image.");
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      toast.error("Logo must be 2MB or smaller.");
+      return;
+    }
+    setLogo.mutate(file, {
+      onSuccess: () => toast.success("Logo updated"),
+      onError: (err) =>
+        toast.error(err instanceof ApiError ? err.message : "Couldn't upload that logo."),
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {organization.logoDataUrl ? (
+        <img
+          src={organization.logoDataUrl}
+          alt={`${organization.name} logo`}
+          className="size-12 shrink-0 rounded-md border border-border object-cover"
+        />
+      ) : (
+        <IconTile tone="info" size="lg">
+          <Building2 className="size-5" />
+        </IconTile>
+      )}
+      {canEdit && (
+        <>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFile(file);
+              e.target.value = "";
+            }}
+          />
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
+            >
+              {setLogo.isPending ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Upload className="size-3" />
+              )}
+              {organization.logoDataUrl ? "Replace logo" : "Upload logo"}
+            </button>
+            {organization.logoDataUrl && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  removeLogo.mutate(undefined, {
+                    onSuccess: () => toast.success("Logo removed"),
+                    onError: () => toast.error("Couldn't remove the logo."),
+                  })
+                }
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)] disabled:opacity-50"
+              >
+                <Trash2 className="size-3" /> Remove
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function OrgRoster({ organization }: { organization: OrganizationDto }) {
+  const me = useAuthUser();
+  const isOrgAdmin = me?.role === "org_admin";
   const {
     members,
     isPending: membersPending,
@@ -139,11 +228,9 @@ function OrgRoster({
       />
 
       <Panel>
-        <div className="flex items-center gap-3">
-          <IconTile tone="info" size="lg">
-            <Building2 className="size-5" />
-          </IconTile>
-          <div className="flex-1">
+        <div className="flex flex-wrap items-start gap-4">
+          <OrgLogo organization={organization} canEdit={isOrgAdmin} />
+          <div className="min-w-[200px] flex-1">
             {editingName ? (
               <form onSubmit={submitRename} className="flex items-center gap-2">
                 <input
@@ -173,16 +260,18 @@ function OrgRoster({
             ) : (
               <div className="flex items-center gap-2">
                 <div className="text-[14px] font-medium">{organization.name}</div>
-                <button
-                  onClick={() => {
-                    setNameDraft(organization.name);
-                    setEditingName(true);
-                  }}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="Rename organization"
-                >
-                  <Pencil className="size-3.5" />
-                </button>
+                {isOrgAdmin && (
+                  <button
+                    onClick={() => {
+                      setNameDraft(organization.name);
+                      setEditingName(true);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Rename organization"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
               </div>
             )}
             <div className="text-[12px] text-muted-foreground">
