@@ -74,6 +74,14 @@ export function useAdminCertificates(params: { page: number; search?: string; st
   });
 }
 
+export function useCertificateStats() {
+  return useQuery({
+    queryKey: [...KEY, "certificate-stats"],
+    queryFn: adminService.certificateStats,
+    ...noRetry,
+  });
+}
+
 export function useAdministrators() {
   return useQuery({
     queryKey: [...KEY, "administrators"],

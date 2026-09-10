@@ -33,6 +33,11 @@ export class AdminCertificatesController {
     return this.certs.list(query);
   }
 
+  @Get('stats')
+  stats() {
+    return this.certs.stats();
+  }
+
   @Get(':id')
   getOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.certs.getDetail(id);

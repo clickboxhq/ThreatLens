@@ -5,6 +5,7 @@ import { AdminTable, StatusPill, type Column } from "@/components/soc/admin/admi
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import {
   useAdminCertificates,
+  useCertificateStats,
   useRevokeCertificate,
   useReissueCertificate,
 } from "@/hooks/use-admin";
@@ -50,8 +51,8 @@ function AdminCertificates() {
     { key: "issued", header: "Issued", cell: (c) => shortDate(c.issuedAt) },
     {
       key: "verification",
-      header: "Verification ID",
-      cell: (c) => <span className="font-mono text-[11px]">{c.verificationId.slice(0, 8)}…</span>,
+      header: "Certificate ID",
+      cell: (c) => <span className="font-mono text-[11px]">{c.verificationId}</span>,
     },
     {
       key: "status",
@@ -93,6 +94,7 @@ function AdminCertificates() {
       title="Certificates"
       description="Every certificate issued across the platform. Public verification is unaffected by actions here."
     >
+      <CertificateStatsStrip />
       <AdminTable
         title={`Certificates · ${data?.total ?? 0} issued`}
         columns={columns}
@@ -146,5 +148,40 @@ function AdminCertificates() {
         }}
       />
     </AdminPage>
+  );
+}
+
+function CertificateStatsStrip() {
+  const { data } = useCertificateStats();
+  if (!data) return null;
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {[
+        ["Issued", data.total],
+        ["Active", data.active],
+        ["Revoked", data.revoked],
+        ["Career Tracks", data.byCareerTrack.length],
+      ].map(([label, value]) => (
+        <div key={label} className="rounded-lg border border-border bg-card p-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+          <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{value}</div>
+        </div>
+      ))}
+      {data.byCareerTrack.length > 0 && (
+        <div className="col-span-2 rounded-lg border border-border bg-card p-3 sm:col-span-4">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            By Career Track
+          </div>
+          <ul className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-[12px]">
+            {data.byCareerTrack.map((t) => (
+              <li key={t.careerTrackName}>
+                <span className="text-secondary">{t.careerTrackName}</span>{" "}
+                <span className="font-semibold tabular-nums">{t.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

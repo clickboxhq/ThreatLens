@@ -172,9 +172,17 @@ export interface AdminCertificateRow {
   holder: { id: string; displayName: string; email: string };
   type: string;
   issuedAt: string;
+  /** Public credential id (TL-YYYY-XXXXXXXX). */
   verificationId: string;
   status: "active" | "revoked";
   revokedAt: string | null;
+}
+
+export interface CertificateStats {
+  total: number;
+  active: number;
+  revoked: number;
+  byCareerTrack: { careerTrackName: string; count: number }[];
 }
 
 // ---- Administrators --------------------------------------------------------

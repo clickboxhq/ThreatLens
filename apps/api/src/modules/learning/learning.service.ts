@@ -81,10 +81,11 @@ export class LearningService {
     });
 
     const completedCount = scenarios.filter((s) => s.completed).length;
-    const certificate = await this.prisma.certificate.findUnique({
-      where: {
-        userId_learningPathId: { userId: user.id, learningPathId: pathId },
-      },
+    // Certificates are now issued for a whole Career Track (Course), not a single
+    // path — surface the track certificate once every path in the course is done.
+    const certificate = await this.prisma.certificate.findFirst({
+      where: { userId: user.id, courseId: path.courseId },
+      select: { publicId: true },
     });
 
     return {
@@ -97,7 +98,7 @@ export class LearningService {
       completedCount,
       totalCount: scenarios.length,
       isComplete: completedCount === scenarios.length,
-      certificateId: certificate ? certificate.id : null,
+      certificateId: certificate ? certificate.publicId : null,
     };
   }
 }

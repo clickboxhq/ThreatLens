@@ -37,4 +37,18 @@ export class LearningController {
   async myCertificates(@CurrentUser() user: AuthenticatedUser) {
     return this.certificatesService.myCertificates(user);
   }
+
+  @Get('career-track-progress')
+  async careerTrackProgress(@CurrentUser() user: AuthenticatedUser) {
+    return this.certificatesService.careerTrackProgress(user);
+  }
+
+  // Placed last so the static routes above win — this only catches ids.
+  @Get('certificates/:publicId')
+  async myCertificate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('publicId') publicId: string,
+  ) {
+    return this.certificatesService.getMine(user, publicId);
+  }
 }
