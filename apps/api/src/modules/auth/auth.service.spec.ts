@@ -776,7 +776,8 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     expect(emailService.send).toHaveBeenCalledWith(
       expect.objectContaining({
         to: target.email,
-        subject: 'Welcome to ThreatLens',
+        subject:
+          'Welcome to ThreatLens — Your Investigation Journey Starts Here',
       }),
     );
   });
@@ -800,8 +801,8 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     const calls = emailService.send.mock.calls as unknown as [
       { subject: string },
     ][];
-    const welcomes = calls.filter(
-      (c) => c[0].subject === 'Welcome to ThreatLens',
+    const welcomes = calls.filter((c) =>
+      c[0].subject.startsWith('Welcome to ThreatLens'),
     );
     expect(welcomes).toHaveLength(1);
   });
