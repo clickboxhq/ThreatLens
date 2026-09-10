@@ -23,6 +23,14 @@ export const apiOrganizationsService: OrganizationsService = {
   rename: (name, opts) =>
     apiClient.patch<OrganizationDto>("/organizations/mine", { name, ...opts }),
 
+  setLogo: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient.upload<OrganizationDto>("/organizations/mine/logo", form);
+  },
+
+  removeLogo: () => apiClient.delete<OrganizationDto>("/organizations/mine/logo"),
+
   listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
 
   listInvites: () => apiClient.get<OrganizationInviteDto[]>("/organizations/mine/invites"),

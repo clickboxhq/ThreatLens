@@ -52,6 +52,11 @@ model Organization {
   industry    String?
   status      OrgStatus @default(active)
   suspendedAt DateTime? @map("suspended_at")
+  // Org logo as a size-capped (~2MB) base64 data URL, same trade-off as
+  // User.avatarDataUrl — object storage (MinIO) is provisioned but no app
+  // code touches it, and a bucket/policy/client pipeline for one small image
+  // per org is disproportionate.
+  logoDataUrl String?   @map("logo_data_url")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 

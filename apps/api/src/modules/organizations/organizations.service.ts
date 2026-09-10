@@ -103,6 +103,41 @@ export class OrganizationsService {
     return this.toOrgDto(orgId);
   }
 
+  /**
+   * Set or replace the organisation logo. `getOwnedOrgId` is the security
+   * boundary — it rejects anyone who is not the org_admin of an organisation,
+   * so a member or a foreign org_admin can never reach another org's row.
+   */
+  async setLogo(user: AuthenticatedUser, dataUrl: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { logoDataUrl: dataUrl },
+    });
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_logo_updated',
+      targetType: 'organization',
+      targetId: orgId,
+    });
+    return this.toOrgDto(orgId);
+  }
+
+  async removeLogo(user: AuthenticatedUser) {
+    const orgId = await this.getOwnedOrgId(user);
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { logoDataUrl: null },
+    });
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_logo_removed',
+      targetType: 'organization',
+      targetId: orgId,
+    });
+    return this.toOrgDto(orgId);
+  }
+
   async listMembers(user: AuthenticatedUser) {
     const orgId = await this.getOwnedOrgId(user);
     const members = await this.prisma.user.findMany({
@@ -294,6 +329,7 @@ export class OrganizationsService {
       name: org.name,
       teamSize: org.teamSize,
       industry: org.industry,
+      logoDataUrl: org.logoDataUrl,
       memberCount: org._count.users,
       createdAt: org.createdAt,
     };

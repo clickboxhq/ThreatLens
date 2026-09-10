@@ -147,6 +147,7 @@ export interface AdminOrgDetail {
   name: string;
   industry: string | null;
   teamSize: number | null;
+  logoDataUrl: string | null;
   status: "active" | "suspended";
   suspendedAt: string | null;
   createdAt: string;

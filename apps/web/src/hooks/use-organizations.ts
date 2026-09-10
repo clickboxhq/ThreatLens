@@ -42,6 +42,26 @@ export function useRenameOrganization() {
   });
 }
 
+export function useSetOrgLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => organizationsService.setLogo(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
+  });
+}
+
+export function useRemoveOrgLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => organizationsService.removeLogo(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
+  });
+}
+
 export function useOrganizationMembers(enabled: boolean) {
   const query = useQuery({
     queryKey: keys.members,

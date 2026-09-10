@@ -10,6 +10,8 @@ export interface OrganizationsService {
   create(name: string): Promise<OrganizationDto>;
   getMine(): Promise<OrganizationDto | null>;
   rename(name: string, opts?: { teamSize?: number; industry?: string }): Promise<OrganizationDto>;
+  setLogo(file: File): Promise<OrganizationDto>;
+  removeLogo(): Promise<OrganizationDto>;
   listMembers(): Promise<OrganizationMemberDto[]>;
   listInvites(): Promise<OrganizationInviteDto[]>;
   createInvite(email: string, role: InviteRole): Promise<OrganizationInviteDto>;

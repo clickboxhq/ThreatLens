@@ -48,9 +48,17 @@ function OrgDetail() {
           <div className="space-y-4 lg:col-span-2">
             <Panel title="Details">
               <div className="flex items-start gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-background">
-                  <Building2 className="size-4 text-muted-foreground" />
-                </div>
+                {org.logoDataUrl ? (
+                  <img
+                    src={org.logoDataUrl}
+                    alt={`${org.name} logo`}
+                    className="size-10 shrink-0 rounded-md border border-border object-cover"
+                  />
+                ) : (
+                  <div className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-background">
+                    <Building2 className="size-4 text-muted-foreground" />
+                  </div>
+                )}
                 <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3">
                   <Field label="Name" value={org.name} />
                   <Field label="Industry" value={org.industry ?? "—"} />
