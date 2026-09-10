@@ -39,6 +39,18 @@ describe('email templates', () => {
         'Welcome to ThreatLens, there',
       );
     });
+
+    it('carries the getting-started steps, the CTA and the ClickBox sign-off', () => {
+      const { html } = welcomeEmail({
+        displayName: 'Dana',
+        appUrl: 'https://threatlensapp.com/app/scenarios',
+      });
+      expect(html).toContain('<ol');
+      expect(html).toContain('Submit your verdict');
+      expect(html).toContain('Start your first investigation');
+      expect(html).toContain('https://threatlensapp.com/app/scenarios');
+      expect(html).toContain('A ClickBox product');
+    });
   });
 
   describe('structure every client depends on', () => {
@@ -69,7 +81,7 @@ describe('email templates', () => {
         'Verify your ThreatLens email address',
       );
       expect(welcomeEmail({ displayName: 'D', appUrl: 'x' }).subject).toBe(
-        'Welcome to ThreatLens',
+        'Welcome to ThreatLens — Your Investigation Journey Starts Here',
       );
       expect(passwordResetEmail(URL).subject).toBe(
         'Reset your ThreatLens password',

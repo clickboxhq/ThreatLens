@@ -55,6 +55,8 @@ export interface EmailLayoutInput {
   fallbackUrl?: string;
   /** Optional closing note above the signature. */
   footnote?: string;
+  /** Sign-off line(s). Raw HTML (a `<br>` is fine). Defaults to the team line. */
+  signoff?: string;
 }
 
 function button(label: string, url: string): string {
@@ -79,8 +81,16 @@ function button(label: string, url: string): string {
 }
 
 export function renderEmail(input: EmailLayoutInput): string {
-  const { preheader, heading, paragraphs, cta, meta, fallbackUrl, footnote } =
-    input;
+  const {
+    preheader,
+    heading,
+    paragraphs,
+    cta,
+    meta,
+    fallbackUrl,
+    footnote,
+    signoff,
+  } = input;
 
   const body = paragraphs
     .map(
@@ -173,7 +183,7 @@ export function renderEmail(input: EmailLayoutInput): string {
           <td class="tl-pad" style="padding:28px 36px 32px;">
             <div class="tl-rule" style="border-top:1px solid ${HAIRLINE};padding-top:18px;">
               <p class="tl-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:1.6;color:${MUTED};">
-                — The ThreatLens team
+                ${signoff ?? '— The ThreatLens team'}
               </p>
             </div>
           </td>
@@ -223,17 +233,34 @@ export function welcomeEmail(input: { displayName: string; appUrl: string }): {
   // Not escaped here: renderEmail escapes the heading, and escaping twice would show a
   // reader called O'Brien their own name as "O&#39;Brien".
   const name = input.displayName.trim().split(/\s+/)[0] || 'there';
+
+  // An <ol> is one of the few block elements Outlook/Word renders predictably, so the
+  // getting-started steps go in as a real list rather than four numbered paragraphs.
+  const steps = `
+    <ol style="margin:4px 0 4px;padding-left:20px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">
+      <li style="margin:0 0 10px;"><strong>Choose an investigation.</strong> Browse the scenarios and pick one that matches your experience. New to this? Start with a scenario tagged <em>Beginner</em>.</li>
+      <li style="margin:0 0 10px;"><strong>Analyze the scenario.</strong> Read the incident carefully, examine what you're given, and get a picture of what happened.</li>
+      <li style="margin:0 0 10px;"><strong>Investigate and decide.</strong> Work the evidence with the investigation tools, follow the leads, and document what you find.</li>
+      <li style="margin:0;"><strong>Submit your verdict.</strong> When you're confident, submit. Your analysis and decisions are graded, and you get a scored breakdown of how you did.</li>
+    </ol>`;
+
   return {
-    subject: 'Welcome to ThreatLens',
+    subject: 'Welcome to ThreatLens — Your Investigation Journey Starts Here',
     html: renderEmail({
-      preheader: 'Your email is verified — pick a scenario and start.',
+      preheader:
+        'Your account is ready — choose a scenario and start investigating.',
       heading: `Welcome to ThreatLens, ${name}`,
       paragraphs: [
-        'Your email is confirmed, so scored investigations are open to you.',
-        'Pick a scenario, work the incident, and commit to a verdict. You get a scored breakdown when you submit.',
+        "We're glad to have you here. Your email is confirmed and your ThreatLens account is ready.",
+        'ThreatLens builds practical cybersecurity investigation skills through realistic, interactive scenarios. Instead of reading about security incidents, you work through them — analyse the evidence, make decisions, and commit to a verdict.',
+        "<strong>Here's how to get started:</strong>",
+        steps,
+        '<strong>Learn by investigating.</strong> ThreatLens is built to take you past theory and into the practical thinking a real incident demands. Take your time. Follow the evidence. Think critically.',
+        'Your first investigation is waiting.',
       ],
       cta: { label: 'Start your first investigation', url: input.appUrl },
-      meta: 'New to this? Start with a scenario tagged Beginner.',
+      meta: 'New here? Start with a scenario tagged Beginner.',
+      signoff: '— The ThreatLens Team<br>A ClickBox product',
     }),
   };
 }
