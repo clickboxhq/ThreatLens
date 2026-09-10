@@ -3,19 +3,19 @@ import { ArrowRight, Award, BarChart3, GraduationCap, Layers } from "lucide-reac
 
 import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/students")({
   component: StudentsPage,
-  head: () => ({
-    meta: [
-      { title: "For Individuals — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Students, career switchers, SOC analysts, and independent professionals — build the investigation reps a certification alone can't teach.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/students",
+      title: "For Individuals — ThreatLens",
+      description:
+        "Students, career switchers, SOC analysts, and independent professionals — build the investigation reps a certification alone can't teach.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const SEGMENTS = [

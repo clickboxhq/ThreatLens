@@ -44,12 +44,39 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// The only host that should be indexable is the production apex. Every other
+// host that can reach this server — Vercel preview URLs (*.vercel.app), Railway
+// preview/service domains (*.up.railway.app), staging, and raw IPs — gets a
+// hard X-Robots-Tag so a stray crawl of a preview build never competes with
+// production in the index. robots.txt / meta tags can't cover non-prod hosts
+// because the same build serves all of them.
+const INDEXABLE_HOSTS = new Set(["threatlensapp.com", "www.threatlensapp.com"]);
+
+function applyNonProductionRobotsHeader(request: Request, response: Response): Response {
+  let hostname: string;
+  try {
+    hostname = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    return response;
+  }
+  if (INDEXABLE_HOSTS.has(hostname)) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("x-robots-tag", "noindex, nofollow");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      const normalized = await normalizeCatastrophicSsrResponse(response);
+      return applyNonProductionRobotsHeader(request, normalized);
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(), {

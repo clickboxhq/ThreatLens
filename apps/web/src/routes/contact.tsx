@@ -6,18 +6,18 @@ import { AlertCircle, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
 import { submitContactForm } from "@/lib/contact";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/contact")({
   component: ContactPage,
-  head: () => ({
-    meta: [
-      { title: "Let's Talk — ThreatLens" },
-      {
-        name: "description",
-        content: "Tell us about your team, cohort, or program and we'll follow up.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/contact",
+      title: "Let's Talk — ThreatLens",
+      description: "Tell us about your team, cohort, or program and we'll follow up.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 type Status = "idle" | "submitting" | "success" | "error";

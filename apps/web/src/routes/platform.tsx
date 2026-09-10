@@ -16,19 +16,19 @@ import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { CapabilityStack } from "@/components/soc/capability-stack";
 import { Signal } from "@/components/soc/marketing/narrative";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/platform")({
   component: PlatformPage,
-  head: () => ({
-    meta: [
-      { title: "Platform — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Everything a SOC analyst needs to practice, in one console — scenario engine, investigation portals, MITRE mapping, scoring, learning paths, and instructor tools.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/platform",
+      title: "Platform — ThreatLens",
+      description:
+        "Everything a SOC analyst needs to practice, in one console — scenario engine, investigation portals, MITRE mapping, scoring, learning paths, and instructor tools.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const MODULES = [

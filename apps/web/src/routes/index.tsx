@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { PLANS, priceDisplay, type BillingPeriod } from "@/lib/pricing";
+import { seo, organizationJsonLd, webApplicationJsonLd } from "@/lib/seo";
 import {
   Award,
   ArrowRight,
@@ -70,18 +71,16 @@ function InstagramIcon({ className = "size-4" }: { className?: string }) {
 
 export const Route = createFileRoute("/")({
   component: Landing,
-  head: () => ({
-    meta: [
-      {
-        title: "ThreatLens — Security Investigation & Analyst Development Platform",
-      },
-      {
-        name: "description",
-        content:
-          "ThreatLens simulates realistic SOC investigations across identity, endpoint, email, and cloud — and grades your investigation against a hidden ground truth. Not a SIEM. A cyber range for analysts.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/",
+      title: "ThreatLens | SOC & Cybersecurity Investigation Training Platform",
+      description:
+        "ThreatLens simulates realistic SOC investigations across identity, endpoint, email, and cloud — and grades your investigation against a hidden ground truth. Not a SIEM. A cyber range for analysts.",
+      jsonLd: [organizationJsonLd(), webApplicationJsonLd()],
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 /* ------------------------------- NAV ------------------------------- */
