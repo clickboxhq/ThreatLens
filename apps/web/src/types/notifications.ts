@@ -1,13 +1,15 @@
-// Matches SOCVerse's real notifications API (apps/api/src/modules/notifications) — net new in
-// Phase 6 of the merge plan. Only categories with a real backend trigger exist here —
-// deliberately excludes ThreatLens's original mock categories with no backing event yet
-// (new-scenario, deadline, cohort-announcement, billing, security).
+// Mirror of the backend `NotificationCategory` enum
+// (apps/api/prisma/schema.prisma). Every value the API can emit MUST appear
+// here and in notification-panel.tsx's icon map — an unmapped category renders
+// `undefined` as a component and crashes the whole panel. Keep this list and
+// the enum in lockstep.
 export type NotificationCategory =
   | "assignment"
   | "score_available"
   | "instructor_feedback"
   | "certificate_issued"
-  | "org_invitation";
+  | "org_invitation"
+  | "cohort_invitation";
 
 export type Notification = {
   id: string;
