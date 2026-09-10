@@ -27,6 +27,11 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     user: {
       findUniqueOrThrow: jest.fn(async () => dbUser),
       findUnique: jest.fn(async () => null),
+      findMany: jest.fn(async () => [
+        { id: 'm1' },
+        { id: 'm2' },
+        { id: 'user-1' },
+      ]),
       update: jest.fn(async (args: { data: unknown }) => ({
         ...dbUser,
         ...(args.data as object),
@@ -54,12 +59,38 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
       })),
       update: jest.fn(async () => undefined),
     },
+    cohort: {
+      findUnique: jest.fn(async () => ({ id: 'cohort-1', orgId: 'org-1' })),
+    },
+    cohortEnrollment: {
+      findMany: jest.fn(async () => [{ userId: 'm1' }, { userId: 'm2' }]),
+    },
+    announcement: {
+      create: jest.fn(async (args: { data: Record<string, unknown> }) => ({
+        id: 'ann-1',
+        ...args.data,
+      })),
+      findMany: jest.fn(async () => []),
+      findUniqueOrThrow: jest.fn(async () => ({
+        id: 'ann-1',
+        title: 'Heads up',
+        body: 'Body',
+        cohortId: null,
+        recipientCount: 2,
+        createdAt: new Date(),
+        author: { displayName: 'Ada Admin' },
+        cohort: null,
+      })),
+    },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const emailService = { send: jest.fn(async () => undefined) };
   const auditLog = { record: jest.fn(async () => undefined) };
   const config = { get: jest.fn(() => 'https://threatlensapp.com') };
-  const notificationsService = { create: jest.fn(async () => undefined) };
+  const notificationsService = {
+    create: jest.fn(async () => undefined),
+    createMany: jest.fn(async () => undefined),
+  };
 
   const service = new OrganizationsService(
     prisma as never,
@@ -271,6 +302,78 @@ describe('OrganizationsService logo', () => {
     const { service } = buildService();
     await expect(
       service.removeLogo(buildUser({ role: 'student' })),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+});
+
+describe('OrganizationsService announcements', () => {
+  const dto = { title: 'Heads up', body: 'Read this' };
+
+  it('createAnnouncement rejects a caller who is not an org_admin', async () => {
+    const { service } = buildService();
+    await expect(
+      service.createAnnouncement(buildUser({ role: 'instructor' }), dto),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('org-wide: fans out one notification per member, minus the author, and audits it', async () => {
+    const { service, prisma, notificationsService, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    await service.createAnnouncement(
+      buildUser({ id: 'user-1', role: 'org_admin' }),
+      dto,
+    );
+
+    // member mock returns m1, m2, user-1 — the author (user-1) must be dropped.
+    expect(notificationsService.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userIds: ['m1', 'm2'],
+        category: 'announcement',
+        link: '/app/announcements',
+      }),
+    );
+    expect(prisma.announcement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ recipientCount: 2, cohortId: null }),
+      }),
+    );
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'organization_announcement_sent' }),
+    );
+  });
+
+  it('rejects a cohort target that belongs to a different organisation', async () => {
+    const { service, prisma, notificationsService } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.cohort.findUnique.mockResolvedValueOnce({
+      id: 'cohort-x',
+      orgId: 'some-other-org',
+    });
+
+    await expect(
+      service.createAnnouncement(buildUser({ role: 'org_admin' }), {
+        ...dto,
+        cohortId: 'cohort-x',
+      }),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    expect(notificationsService.createMany).not.toHaveBeenCalled();
+  });
+
+  it('listMyAnnouncements returns [] for a user with no organisation', async () => {
+    const { service } = buildService({ orgId: null });
+    await expect(
+      service.listMyAnnouncements(buildUser({ role: 'student' })),
+    ).resolves.toEqual([]);
+  });
+
+  it('listSentAnnouncements rejects a non-org_admin caller', async () => {
+    const { service } = buildService();
+    await expect(
+      service.listSentAnnouncements(buildUser({ role: 'student' })),
     ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
   });
 });

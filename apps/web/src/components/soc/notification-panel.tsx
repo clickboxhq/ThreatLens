@@ -1,6 +1,14 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { Award, Bell, Building2, ClipboardCheck, MessageSquare, Target } from "lucide-react";
+import {
+  Award,
+  Bell,
+  Building2,
+  ClipboardCheck,
+  Megaphone,
+  MessageSquare,
+  Target,
+} from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -12,6 +20,7 @@ const categoryIcon: Record<NotificationCategory, typeof Bell> = {
   score_available: Target,
   instructor_feedback: MessageSquare,
   certificate_issued: Award,
+  announcement: Megaphone,
   org_invitation: Building2,
 };
 
@@ -70,7 +79,10 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
       {state === "ready" && (
         <ul className="max-h-[420px] divide-y divide-border overflow-y-auto">
           {notifications.map((n) => {
-            const Icon = categoryIcon[n.category];
+            // Fall back to a generic bell rather than rendering `undefined` (which throws
+            // "Element type is invalid" and takes the whole panel down) for any category
+            // this build doesn't recognise yet.
+            const Icon = categoryIcon[n.category] ?? Bell;
             const content = (
               <div className="flex items-start gap-2.5 px-3.5 py-3">
                 <IconTile tone={n.read ? "neutral" : "info"} size="sm">

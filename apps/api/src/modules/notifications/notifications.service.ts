@@ -34,6 +34,30 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Fan the same notification out to many users in one insert — for
+   * broadcasts (org announcements) where a per-recipient loop would be a
+   * round-trip each.
+   */
+  async createMany(params: {
+    userIds: string[];
+    category: NotificationCategory;
+    title: string;
+    body: string;
+    link?: string;
+  }): Promise<void> {
+    if (params.userIds.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: params.userIds.map((userId) => ({
+        userId,
+        category: params.category,
+        title: params.title,
+        body: params.body,
+        link: params.link ?? null,
+      })),
+    });
+  }
+
   async listMine(user: AuthenticatedUser) {
     const notifications = await this.prisma.notification.findMany({
       where: { userId: user.id },

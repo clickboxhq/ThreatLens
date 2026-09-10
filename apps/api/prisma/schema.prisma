@@ -60,9 +60,10 @@ model Organization {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  users   User[]
-  invites OrganizationInvite[]
-  cohorts Cohort[]
+  users         User[]
+  invites       OrganizationInvite[]
+  cohorts       Cohort[]
+  announcements Announcement[]
 
   @@map("organizations")
 }
@@ -169,27 +170,28 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  organization          Organization?              @relation(fields: [orgId], references: [id])
-  refreshTokens         RefreshToken[]
-  investigationSessions InvestigationSession[]
-  authoredScenarios     AttackScenario[]           @relation("ScenarioAuthor")
-  authoredVersions      ScenarioVersion[]          @relation("ScenarioVersionAuthor")
-  pinnedEvidence        EvidenceCollection[]
-  timelineItems         TimelineItem[]
-  analystNotes          AnalystNote[]
-  investigationActions  InvestigationAction[]
-  ownedCohorts          Cohort[]                   @relation("CohortOwner")
-  cohortInvitesSent     CohortInvite[]             @relation("CohortInviteInviter")
-  cohortEnrollments     CohortEnrollment[]         @relation("CohortEnrollments")
-  cohortStaffRoles      CohortStaff[]              @relation("CohortStaffMember")
-  cohortGroupTutorships CohortGroupTutor[]         @relation("CohortGroupTutor")
-  createdAssignments    CohortScenarioAssignment[] @relation("AssignmentCreator")
-  instructorFeedback    InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
-  certificates          Certificate[]
-  achievements          Achievement[]
-  auditLogs             AuditLog[]
-  sentOrgInvites        OrganizationInvite[]       @relation("OrganizationInviteInviter")
-  notifications         Notification[]
+  organization           Organization?              @relation(fields: [orgId], references: [id])
+  refreshTokens          RefreshToken[]
+  investigationSessions  InvestigationSession[]
+  authoredScenarios      AttackScenario[]           @relation("ScenarioAuthor")
+  authoredVersions       ScenarioVersion[]          @relation("ScenarioVersionAuthor")
+  pinnedEvidence         EvidenceCollection[]
+  timelineItems          TimelineItem[]
+  analystNotes           AnalystNote[]
+  investigationActions   InvestigationAction[]
+  ownedCohorts           Cohort[]                   @relation("CohortOwner")
+  cohortInvitesSent      CohortInvite[]             @relation("CohortInviteInviter")
+  cohortEnrollments      CohortEnrollment[]         @relation("CohortEnrollments")
+  cohortStaffRoles       CohortStaff[]              @relation("CohortStaffMember")
+  cohortGroupTutorships  CohortGroupTutor[]         @relation("CohortGroupTutor")
+  createdAssignments     CohortScenarioAssignment[] @relation("AssignmentCreator")
+  instructorFeedback     InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
+  certificates           Certificate[]
+  achievements           Achievement[]
+  auditLogs              AuditLog[]
+  sentOrgInvites         OrganizationInvite[]       @relation("OrganizationInviteInviter")
+  notifications          Notification[]
+  authoredAnnouncements  Announcement[]             @relation("AnnouncementAuthor")
   platformSettingUpdates PlatformSetting[]
 
   @@map("users")
@@ -258,30 +260,31 @@ enum EnrollmentStatus {
 // ownerId is retained as "who created it" and is no longer the authorization key — every
 // owner is backfilled as a `lead` staff member, and permission checks read CohortStaff.
 model Cohort {
-  id        String    @id @default(uuid()) @db.Uuid
-  ownerId   String    @map("owner_id") @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  ownerId    String    @map("owner_id") @db.Uuid
   // Backfilled from the owner's own org. Lets an org_admin see what is running under their
   // organisation without being staffed on each cohort individually.
-  orgId     String?   @map("org_id") @db.Uuid
-  name      String
-  joinCode  String?   @unique @map("join_code")
-  startsAt  DateTime? @map("starts_at")
-  endsAt    DateTime? @map("ends_at")
+  orgId      String?   @map("org_id") @db.Uuid
+  name       String
+  joinCode   String?   @unique @map("join_code")
+  startsAt   DateTime? @map("starts_at")
+  endsAt     DateTime? @map("ends_at")
   /// Set when the cohort is retired. A timestamp rather than a flag, so the audit trail can
   /// say when. Cohorts are never deleted: enrolments and assignments reference them, and
   /// graded sessions hang off those assignments, so removing one would take a student's
   /// scored work with it.
   archivedAt DateTime? @map("archived_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  owner       User                       @relation("CohortOwner", fields: [ownerId], references: [id])
-  org         Organization?              @relation(fields: [orgId], references: [id])
-  staff       CohortStaff[]
-  groups      CohortGroup[]
-  enrollments CohortEnrollment[]
-  assignments CohortScenarioAssignment[]
-  invites     CohortInvite[]
+  owner         User                       @relation("CohortOwner", fields: [ownerId], references: [id])
+  org           Organization?              @relation(fields: [orgId], references: [id])
+  staff         CohortStaff[]
+  groups        CohortGroup[]
+  enrollments   CohortEnrollment[]
+  assignments   CohortScenarioAssignment[]
+  invites       CohortInvite[]
+  announcements Announcement[]
 
   @@index([orgId])
   // Archived cohorts are filtered out of every active listing (created in
@@ -1444,6 +1447,7 @@ enum NotificationCategory {
   certificate_issued
   org_invitation
   cohort_invitation
+  announcement
 }
 
 model Notification {
@@ -1461,4 +1465,29 @@ model Notification {
   @@index([userId, read])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// An org_admin's broadcast to their organisation, or to one cohort within it.
+/// Delivery is a fan-out of Notification rows at send time (see
+/// AnnouncementsService); this row is the durable record and the source for the
+/// recipient-facing list. audience/cohortId is validated against the sender's
+/// own org server-side — an org can never target another org.
+model Announcement {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  /// Null = the whole organisation. Set = one cohort belonging to this org.
+  cohortId       String?  @map("cohort_id") @db.Uuid
+  authorId       String   @map("author_id") @db.Uuid
+  title          String
+  body           String
+  /// How many Notification rows the send fanned out to — shown in the sent list.
+  recipientCount Int      @default(0) @map("recipient_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  cohort Cohort?      @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  author User         @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@map("announcements")
 }

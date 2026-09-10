@@ -7,6 +7,7 @@ export type NotificationCategory =
   | "score_available"
   | "instructor_feedback"
   | "certificate_issued"
+  | "announcement"
   | "org_invitation";
 
 export type Notification = {
