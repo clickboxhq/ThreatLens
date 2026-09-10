@@ -45,3 +45,21 @@ export interface InvitePreviewDto {
   role: InviteRole;
   status: InviteStatus;
 }
+
+export interface AnnouncementDto {
+  id: string;
+  title: string;
+  body: string;
+  /** Who it went to. `cohortName` is set only when `scope` is "cohort". */
+  audience: { scope: "organization" | "cohort"; cohortName: string | null };
+  authorName: string;
+  recipientCount: number;
+  createdAt: string;
+}
+
+export interface CreateAnnouncementInput {
+  title: string;
+  body: string;
+  /** Omit for the whole organisation. */
+  cohortId?: string;
+}

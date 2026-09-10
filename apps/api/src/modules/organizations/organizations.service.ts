@@ -8,10 +8,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
+  CreateAnnouncementDto,
   CreateInviteDto,
   CreateOrganizationDto,
   UpdateOrganizationDto,
 } from './dto/organizations.dto';
+
+const ANNOUNCEMENT_LIST_LIMIT = 50;
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — long enough to reach someone over a
 // weekend, unlike the auth flows' much shorter security-sensitive windows.
@@ -136,6 +139,154 @@ export class OrganizationsService {
       targetId: orgId,
     });
     return this.toOrgDto(orgId);
+  }
+
+  // ---- Announcements --------------------------------------------------------
+
+  /**
+   * org_admin broadcasts to the whole org, or to one cohort within it.
+   * `getOwnedOrgId` gates this to the org_admin of an organisation; a cohort
+   * target is then re-checked to belong to that same org, so an org_admin can
+   * never address a cohort — or anyone — outside their own tenant.
+   */
+  async createAnnouncement(
+    user: AuthenticatedUser,
+    dto: CreateAnnouncementDto,
+  ) {
+    const orgId = await this.getOwnedOrgId(user);
+
+    let cohortId: string | null = null;
+    if (dto.cohortId) {
+      const cohort = await this.prisma.cohort.findUnique({
+        where: { id: dto.cohortId },
+        select: { id: true, orgId: true },
+      });
+      if (!cohort || cohort.orgId !== orgId) {
+        throw new AppException(
+          404,
+          'NOT_FOUND',
+          'That cohort is not part of your organization.',
+        );
+      }
+      cohortId = cohort.id;
+    }
+
+    const recipientIds = await this.resolveAnnouncementRecipients(
+      orgId,
+      cohortId,
+    );
+    // The author does not get notified about their own announcement.
+    const notifyIds = recipientIds.filter((id) => id !== user.id);
+
+    const announcement = await this.prisma.announcement.create({
+      data: {
+        orgId,
+        cohortId,
+        authorId: user.id,
+        title: dto.title,
+        body: dto.body,
+        recipientCount: notifyIds.length,
+      },
+    });
+
+    await this.notificationsService.createMany({
+      userIds: notifyIds,
+      category: 'announcement',
+      title: dto.title,
+      body: dto.body,
+      link: '/app/announcements',
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_announcement_sent',
+      targetType: 'organization',
+      targetId: orgId,
+      metadata: {
+        announcementId: announcement.id,
+        cohortId,
+        recipientCount: notifyIds.length,
+      },
+    });
+
+    return this.toAnnouncementDto(announcement.id);
+  }
+
+  /** The org_admin's own "sent" history. */
+  async listSentAnnouncements(user: AuthenticatedUser) {
+    const orgId = await this.getOwnedOrgId(user);
+    const rows = await this.prisma.announcement.findMany({
+      where: { orgId },
+      include: {
+        author: { select: { displayName: true } },
+        cohort: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: ANNOUNCEMENT_LIST_LIMIT,
+    });
+    return rows.map(announcementRowToDto);
+  }
+
+  /**
+   * Announcements addressed to the caller: everything sent to their whole org,
+   * plus anything sent to a cohort they are actively enrolled in. Scoped to
+   * `me.orgId`, so a user only ever sees their own tenant's announcements.
+   */
+  async listMyAnnouncements(user: AuthenticatedUser) {
+    const me = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { orgId: true },
+    });
+    if (!me.orgId) return [];
+
+    const enrollments = await this.prisma.cohortEnrollment.findMany({
+      where: { userId: user.id, status: 'active' },
+      select: { cohortId: true },
+    });
+    const cohortIds = enrollments.map((e) => e.cohortId);
+
+    const rows = await this.prisma.announcement.findMany({
+      where: {
+        orgId: me.orgId,
+        OR: [{ cohortId: null }, { cohortId: { in: cohortIds } }],
+      },
+      include: {
+        author: { select: { displayName: true } },
+        cohort: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: ANNOUNCEMENT_LIST_LIMIT,
+    });
+    return rows.map(announcementRowToDto);
+  }
+
+  private async resolveAnnouncementRecipients(
+    orgId: string,
+    cohortId: string | null,
+  ): Promise<string[]> {
+    if (cohortId) {
+      const enrollments = await this.prisma.cohortEnrollment.findMany({
+        where: { cohortId, status: 'active' },
+        select: { userId: true },
+      });
+      return enrollments.map((e) => e.userId);
+    }
+    const members = await this.prisma.user.findMany({
+      where: { orgId, deletedAt: null },
+      select: { id: true },
+    });
+    return members.map((m) => m.id);
+  }
+
+  private async toAnnouncementDto(id: string) {
+    const row = await this.prisma.announcement.findUniqueOrThrow({
+      where: { id },
+      include: {
+        author: { select: { displayName: true } },
+        cohort: { select: { name: true } },
+      },
+    });
+    return announcementRowToDto(row);
   }
 
   async listMembers(user: AuthenticatedUser) {
@@ -351,5 +502,28 @@ function toInviteDto(invite: {
     status: invite.status,
     createdAt: invite.createdAt,
     expiresAt: invite.expiresAt,
+  };
+}
+
+function announcementRowToDto(row: {
+  id: string;
+  title: string;
+  body: string;
+  cohortId: string | null;
+  recipientCount: number;
+  createdAt: Date;
+  author: { displayName: string };
+  cohort: { name: string } | null;
+}) {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    audience: row.cohort
+      ? { scope: 'cohort' as const, cohortName: row.cohort.name }
+      : { scope: 'organization' as const, cohortName: null },
+    authorName: row.author.displayName,
+    recipientCount: row.recipientCount,
+    createdAt: row.createdAt,
   };
 }

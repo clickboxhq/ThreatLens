@@ -1,6 +1,7 @@
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { OrganizationsService } from "./organizations-service";
 import type {
+  AnnouncementDto,
   InvitePreviewDto,
   InviteRole,
   OrganizationDto,
@@ -49,4 +50,12 @@ export const apiOrganizationsService: OrganizationsService = {
 
   acceptInvite: (token) =>
     apiClient.post<OrganizationDto>(`/organizations/invites/${token}/accept`),
+
+  createAnnouncement: (input) =>
+    apiClient.post<AnnouncementDto>("/organizations/mine/announcements", input),
+
+  listSentAnnouncements: () =>
+    apiClient.get<AnnouncementDto[]>("/organizations/mine/announcements"),
+
+  listMyAnnouncements: () => apiClient.get<AnnouncementDto[]>("/announcements/mine"),
 };
