@@ -4,19 +4,19 @@ import { ArrowRight } from "lucide-react";
 import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { Understanding, Response } from "@/components/soc/marketing/narrative";
 import { Reveal, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/scoring")({
   component: ScoringPage,
-  head: () => ({
-    meta: [
-      { title: "Scoring — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "How ThreatLens grades an investigation: technique accuracy, evidence recall and precision, required response actions, and verdict — against a hidden ground truth.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/scoring",
+      title: "Scoring — ThreatLens",
+      description:
+        "How ThreatLens grades an investigation: technique accuracy, evidence recall and precision, required response actions, and verdict — against a hidden ground truth.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const SCORE_WEIGHTS: [string, string][] = [

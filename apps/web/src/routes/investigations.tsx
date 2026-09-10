@@ -14,19 +14,19 @@ import { InvestigationWorkspace } from "@/components/soc/marketing/demos";
 import { MobileDemoCrop } from "@/components/soc/marketing/chrome";
 import { Schematic } from "@/components/soc/marketing/art";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/investigations")({
   component: InvestigationsPage,
-  head: () => ({
-    meta: [
-      { title: "Investigations — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Evidence review, hypotheses, notes, timeline, and findings — a walk through what actually happens when you investigate a case in ThreatLens.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/investigations",
+      title: "Investigations — ThreatLens",
+      description:
+        "Evidence review, hypotheses, notes, timeline, and findings — a walk through what actually happens when you investigate a case in ThreatLens.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const STAGES = [

@@ -1,0 +1,25 @@
+{
+  "name": "ThreatLens — SOC & Cybersecurity Investigation Training",
+  "short_name": "ThreatLens",
+  "description": "A browser-based cyber range for SOC analysts. Practice realistic identity, endpoint, email, and cloud investigations, graded against a hidden ground truth.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand-mark.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

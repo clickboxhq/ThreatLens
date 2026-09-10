@@ -25,6 +25,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ScoringRouteImport } from './routes/scoring'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudentsRouteImport } from './routes/students'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WelcomeRouteImport } from './routes/welcome'
@@ -164,6 +165,11 @@ const SecurityRoute = SecurityRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudentsRoute = StudentsRouteImport.update({
@@ -489,6 +495,7 @@ export interface FileRoutesByFullPath {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -566,6 +573,7 @@ export interface FileRoutesByTo {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -645,6 +653,7 @@ export interface FileRoutesById {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -725,6 +734,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -802,6 +812,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -880,6 +891,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -959,6 +971,7 @@ export interface RootRouteChildren {
   ScoringRoute: typeof ScoringRoute
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudentsRoute: typeof StudentsRoute
   TermsRoute: typeof TermsRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -1081,6 +1094,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/students': {
@@ -1656,6 +1676,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScoringRoute: ScoringRoute,
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudentsRoute: StudentsRoute,
   TermsRoute: TermsRoute,
   WelcomeRoute: WelcomeRoute,

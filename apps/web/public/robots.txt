@@ -1,6 +1,14 @@
 User-agent: *
 Allow: /
 Disallow: /app/
+Disallow: /login
+Disallow: /signup
+Disallow: /welcome
 Disallow: /verify/
+Disallow: /verify-email/
+Disallow: /reset-password/
+Disallow: /forgot-password
+Disallow: /accept-invite/
+Disallow: /join-cohort/
 
 Sitemap: https://threatlensapp.com/sitemap.xml

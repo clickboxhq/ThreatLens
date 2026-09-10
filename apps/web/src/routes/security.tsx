@@ -3,20 +3,19 @@ import { Fingerprint, KeyRound, Lock, ScrollText, ShieldCheck, Timer } from "luc
 
 import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/security")({
   component: SecurityPage,
-  head: () => ({
-    meta: [
-      { title: "Security — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "How ThreatLens is architected to handle authentication, authorization, tenant isolation, and data protection.",
-      },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/security",
+      title: "Security — ThreatLens",
+      description:
+        "How ThreatLens is architected to handle authentication, authorization, tenant isolation, and data protection.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const PRINCIPLES = [
