@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type {
+  CertificateStats,
   AdminOverview,
   AdminUserRow,
   AdminUserDetail,
@@ -72,6 +73,7 @@ export const adminService = {
   // Certificates
   listCertificates: (p: { page?: number; limit?: number; search?: string; status?: string }) =>
     apiClient.get<Paged<AdminCertificateRow>>(`/admin/certificates${qs(p)}`),
+  certificateStats: () => apiClient.get<CertificateStats>("/admin/certificates/stats"),
   revokeCertificate: (id: string, reason?: string) =>
     apiClient.post<{ id: string; status: string }>(`/admin/certificates/${id}/revoke`, {
       reason,

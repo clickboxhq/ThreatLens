@@ -1357,6 +1357,7 @@ model Course {
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   learningPaths LearningPath[]
+  certificates  Certificate[]
 
   @@map("courses")
 }
@@ -1395,16 +1396,26 @@ model LearningPathScenario {
 // (would need a headless-browser rendering dependency with no other use in the codebase).
 model Certificate {
   id             String    @id @default(uuid()) @db.Uuid
+  /// Public, human-shareable credential id (e.g. TL-2026-A8F4K92X). Unguessable,
+  /// permanent, and the only id ever exposed on the certificate or the /verify page.
+  publicId       String    @unique @map("public_id")
   userId         String    @map("user_id") @db.Uuid
-  learningPathId String    @map("learning_path_id") @db.Uuid
+  /// Career-track certificate: issued once every scenario in every learning path of
+  /// this course clears its pass threshold. One per (user, course).
+  courseId       String?   @map("course_id") @db.Uuid
+  /// Legacy — path-level certificates issued before the model moved to course
+  /// (career-track) granularity. Verification keeps working for these.
+  learningPathId String?   @map("learning_path_id") @db.Uuid
   issuedAt       DateTime  @default(now()) @map("issued_at")
   scoreSnapshot  Json      @map("score_snapshot")
   revokedAt      DateTime? @map("revoked_at")
 
-  user         User         @relation(fields: [userId], references: [id])
-  learningPath LearningPath @relation(fields: [learningPathId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  course       Course?       @relation(fields: [courseId], references: [id])
+  learningPath LearningPath? @relation(fields: [learningPathId], references: [id])
 
-  @@unique([userId, learningPathId])
+  @@unique([userId, courseId])
+  @@index([publicId])
   @@map("certificates")
 }
 

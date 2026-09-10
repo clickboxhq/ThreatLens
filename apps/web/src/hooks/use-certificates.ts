@@ -3,7 +3,9 @@ import { certificatesService } from "@/services/certificates";
 
 const keys = {
   mine: ["certificates", "mine"] as const,
-  one: (id: string) => ["certificates", id] as const,
+  progress: ["certificates", "career-track-progress"] as const,
+  one: (id: string) => ["certificates", "one", id] as const,
+  public: (id: string) => ["certificates", "public", id] as const,
 };
 
 export function useCertificates() {
@@ -14,11 +16,28 @@ export function useCertificates() {
   return { certificates: query.data ?? [], isPending: query.isPending, isError: query.isError };
 }
 
-/** Used by the public verify.$id.tsx page — no auth required on the backend. */
-export function useCertificate(id: string) {
+export function useCareerTrackProgress() {
   const query = useQuery({
-    queryKey: keys.one(id),
-    queryFn: () => certificatesService.getCertificate(id),
+    queryKey: keys.progress,
+    queryFn: () => certificatesService.careerTrackProgress(),
+  });
+  return { tracks: query.data ?? [], isPending: query.isPending, isError: query.isError };
+}
+
+/** The owner's own certificate (authenticated) — for /app/certificates/$id. */
+export function useMyCertificate(publicId: string) {
+  const query = useQuery({
+    queryKey: keys.one(publicId),
+    queryFn: () => certificatesService.getMyCertificate(publicId),
+  });
+  return { certificate: query.data, isPending: query.isPending, isError: query.isError };
+}
+
+/** Public verification — no auth. Used by /verify/$id and the print page. */
+export function usePublicCertificate(idOrPublicId: string) {
+  const query = useQuery({
+    queryKey: keys.public(idOrPublicId),
+    queryFn: () => certificatesService.getPublicCertificate(idOrPublicId),
   });
   return { certificate: query.data, isPending: query.isPending, isError: query.isError };
 }

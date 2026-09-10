@@ -259,19 +259,19 @@ function AchievementBadgesPanel() {
 function CertificatesPanel({
   certificates,
 }: {
-  certificates: { id: string; learningPathTitle: string }[];
+  certificates: { publicId: string; careerTrackName: string }[];
 }) {
   return (
     <Panel title="Certificates">
       {certificates.length === 0 ? (
         <p className="py-1 text-[12px] text-muted-foreground">
-          Complete a learning path to earn your first certificate.
+          Complete a Career Track to earn your first certificate.
         </p>
       ) : (
         certificates.map((c) => (
-          <div key={c.id} className="flex items-center gap-2 py-1 text-[12.5px]">
+          <div key={c.publicId} className="flex items-center gap-2 py-1 text-[12.5px]">
             <Award className="size-3.5 text-[color:var(--info)]" />
-            {c.learningPathTitle}
+            {c.careerTrackName}
           </div>
         ))
       )}

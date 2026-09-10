@@ -77,10 +77,12 @@ import { Route as AppAdminSubscriptionsRouteImport } from './routes/app.admin.su
 import { Route as AppAdminUsersRouteImport } from './routes/app.admin.users'
 import { Route as AppCasesIndexRouteImport } from './routes/app.cases.index'
 import { Route as AppCasesIdRouteImport } from './routes/app.cases.$id'
+import { Route as AppCertificatesIdRouteImport } from './routes/app.certificates.$id'
 import { Route as AppEmailIndexRouteImport } from './routes/app.email.index'
 import { Route as AppEndpointsIndexRouteImport } from './routes/app.endpoints.index'
 import { Route as AppIdentityIndexRouteImport } from './routes/app.identity.index'
 import { Route as AppReportsIndexRouteImport } from './routes/app.reports.index'
+import { Route as CertificatesIdPrintRouteImport } from './routes/certificates.$id.print'
 import { Route as AppAdminOrganizationsOrgIdRouteImport } from './routes/app.admin.organizations.$orgId'
 import { Route as AppAdminUsersUserIdRouteImport } from './routes/app.admin.users.$userId'
 import { Route as AppEmailSessionIdMessageIdRouteImport } from './routes/app.email.$sessionId.$messageId'
@@ -428,6 +430,11 @@ const AppCasesIdRoute = AppCasesIdRouteImport.update({
   path: '/cases/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCertificatesIdRoute = AppCertificatesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppCertificatesRoute,
+} as any)
 const AppEmailIndexRoute = AppEmailIndexRouteImport.update({
   id: '/email/',
   path: '/email/',
@@ -447,6 +454,11 @@ const AppReportsIndexRoute = AppReportsIndexRouteImport.update({
   id: '/reports/',
   path: '/reports/',
   getParentRoute: () => AppRoute,
+} as any)
+const CertificatesIdPrintRoute = CertificatesIdPrintRouteImport.update({
+  id: '/certificates/$id/print',
+  path: '/certificates/$id/print',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppAdminOrganizationsOrgIdRoute =
   AppAdminOrganizationsOrgIdRouteImport.update({
@@ -513,7 +525,7 @@ export interface FileRoutesByFullPath {
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -551,6 +563,8 @@ export interface FileRoutesByFullPath {
   '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/cases/': typeof AppCasesIndexRoute
   '/app/email/': typeof AppEmailIndexRoute
@@ -592,7 +606,7 @@ export interface FileRoutesByTo {
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -630,6 +644,8 @@ export interface FileRoutesByTo {
   '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
   '/app/admin': typeof AppAdminIndexRoute
   '/app/cases': typeof AppCasesIndexRoute
   '/app/email': typeof AppEmailIndexRoute
@@ -673,7 +689,7 @@ export interface FileRoutesById {
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -711,6 +727,8 @@ export interface FileRoutesById {
   '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/admin/users': typeof AppAdminUsersRouteWithChildren
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/cases/': typeof AppCasesIndexRoute
   '/app/email/': typeof AppEmailIndexRoute
@@ -793,6 +811,8 @@ export interface FileRouteTypes {
     | '/app/admin/subscriptions'
     | '/app/admin/users'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
     | '/app/admin/'
     | '/app/cases/'
     | '/app/email/'
@@ -872,6 +892,8 @@ export interface FileRouteTypes {
     | '/app/admin/subscriptions'
     | '/app/admin/users'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
     | '/app/admin'
     | '/app/cases'
     | '/app/email'
@@ -952,6 +974,8 @@ export interface FileRouteTypes {
     | '/app/admin/subscriptions'
     | '/app/admin/users'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
     | '/app/admin/'
     | '/app/cases/'
     | '/app/email/'
@@ -992,6 +1016,7 @@ export interface RootRouteChildren {
   ResetPasswordTokenRoute: typeof ResetPasswordTokenRoute
   VerifyEmailTokenRoute: typeof VerifyEmailTokenRoute
   VerifyIdRoute: typeof VerifyIdRoute
+  CertificatesIdPrintRoute: typeof CertificatesIdPrintRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1472,6 +1497,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCasesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/certificates/$id': {
+      id: '/app/certificates/$id'
+      path: '/$id'
+      fullPath: '/app/certificates/$id'
+      preLoaderRoute: typeof AppCertificatesIdRouteImport
+      parentRoute: typeof AppCertificatesRoute
+    }
     '/app/email/': {
       id: '/app/email/'
       path: '/email'
@@ -1499,6 +1531,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/reports/'
       preLoaderRoute: typeof AppReportsIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/certificates/$id/print': {
+      id: '/certificates/$id/print'
+      path: '/certificates/$id/print'
+      fullPath: '/certificates/$id/print'
+      preLoaderRoute: typeof CertificatesIdPrintRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/admin/organizations/$orgId': {
       id: '/app/admin/organizations/$orgId'
@@ -1545,6 +1584,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppCertificatesRouteChildren {
+  AppCertificatesIdRoute: typeof AppCertificatesIdRoute
+}
+
+const AppCertificatesRouteChildren: AppCertificatesRouteChildren = {
+  AppCertificatesIdRoute: AppCertificatesIdRoute,
+}
+
+const AppCertificatesRouteWithChildren = AppCertificatesRoute._addFileChildren(
+  AppCertificatesRouteChildren,
+)
+
 interface AppAdminOrganizationsRouteChildren {
   AppAdminOrganizationsOrgIdRoute: typeof AppAdminOrganizationsOrgIdRoute
 }
@@ -1578,7 +1629,7 @@ interface AppRouteChildren {
   AppAssessmentsRoute: typeof AppAssessmentsRoute
   AppAuditLogsRoute: typeof AppAuditLogsRoute
   AppBillingRoute: typeof AppBillingRoute
-  AppCertificatesRoute: typeof AppCertificatesRoute
+  AppCertificatesRoute: typeof AppCertificatesRouteWithChildren
   AppClosedRoute: typeof AppClosedRoute
   AppCohortsRoute: typeof AppCohortsRoute
   AppDocsRoute: typeof AppDocsRoute
@@ -1632,7 +1683,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAuditLogsRoute: AppAuditLogsRoute,
   AppBillingRoute: AppBillingRoute,
-  AppCertificatesRoute: AppCertificatesRoute,
+  AppCertificatesRoute: AppCertificatesRouteWithChildren,
   AppClosedRoute: AppClosedRoute,
   AppCohortsRoute: AppCohortsRoute,
   AppDocsRoute: AppDocsRoute,
@@ -1706,6 +1757,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordTokenRoute: ResetPasswordTokenRoute,
   VerifyEmailTokenRoute: VerifyEmailTokenRoute,
   VerifyIdRoute: VerifyIdRoute,
+  CertificatesIdPrintRoute: CertificatesIdPrintRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

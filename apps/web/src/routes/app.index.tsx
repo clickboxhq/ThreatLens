@@ -569,9 +569,9 @@ function Dashboard() {
             </div>
             {recentCertificates.length > 0 ? (
               recentCertificates.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 py-1.5 text-[12px]">
+                <div key={c.publicId} className="flex items-center gap-2 py-1.5 text-[12px]">
                   <Award className="size-3.5 text-[color:var(--info)]" />
-                  <span className="flex-1 truncate">{c.learningPathTitle}</span>
+                  <span className="flex-1 truncate">{c.careerTrackName}</span>
                   <span className="text-[11px] text-muted-foreground">
                     {new Date(c.issuedAt).toLocaleDateString(undefined, {
                       month: "short",

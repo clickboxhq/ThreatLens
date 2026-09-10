@@ -12,10 +12,18 @@ export interface AdminCertificateRow {
   holder: { id: string; displayName: string; email: string };
   type: string;
   issuedAt: string;
-  // The verification id shown on the public /verify page — this is the certificate's own id.
+  // The public id shown on the certificate and the /verify page (TL-YYYY-XXXXXXXX).
   verificationId: string;
   status: 'active' | 'revoked';
   revokedAt: string | null;
+}
+
+function certType(cert: {
+  course: { title: string } | null;
+  learningPath: { title: string } | null;
+}): string {
+  if (cert.course) return `${cert.course.title} Career Track`;
+  return cert.learningPath?.title ?? 'Certificate';
 }
 
 @Injectable()
@@ -36,11 +44,15 @@ export class AdminCertificatesService {
     if (query.status === 'revoked') where.revokedAt = { not: null };
     if (query.search) {
       where.OR = [
+        { publicId: { contains: query.search, mode: 'insensitive' } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
         {
           user: {
             displayName: { contains: query.search, mode: 'insensitive' },
           },
+        },
+        {
+          course: { title: { contains: query.search, mode: 'insensitive' } },
         },
         {
           learningPath: {
@@ -59,9 +71,11 @@ export class AdminCertificatesService {
         take: query.limit,
         select: {
           id: true,
+          publicId: true,
           issuedAt: true,
           revokedAt: true,
           user: { select: { id: true, displayName: true, email: true } },
+          course: { select: { title: true } },
           learningPath: { select: { title: true } },
         },
       }),
@@ -71,9 +85,9 @@ export class AdminCertificatesService {
       certs.map((c) => ({
         id: c.id,
         holder: c.user,
-        type: c.learningPath.title,
+        type: certType(c),
         issuedAt: c.issuedAt.toISOString(),
-        verificationId: c.id,
+        verificationId: c.publicId,
         status: (c.revokedAt ? 'revoked' : 'active') as 'active' | 'revoked',
         revokedAt: c.revokedAt?.toISOString() ?? null,
       })),
@@ -82,22 +96,49 @@ export class AdminCertificatesService {
     );
   }
 
+  /** Total issued + a per-career-track breakdown, for the admin certificates page. */
+  async stats() {
+    const [total, active, revoked, byCourse] = await Promise.all([
+      this.prisma.certificate.count(),
+      this.prisma.certificate.count({ where: { revokedAt: null } }),
+      this.prisma.certificate.count({ where: { revokedAt: { not: null } } }),
+      this.prisma.certificate.groupBy({
+        by: ['courseId'],
+        where: { courseId: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const courses = await this.prisma.course.findMany({
+      where: { id: { in: byCourse.map((r) => r.courseId!) } },
+      select: { id: true, title: true },
+    });
+    const titleById = new Map(courses.map((c) => [c.id, c.title]));
+    return {
+      total,
+      active,
+      revoked,
+      byCareerTrack: byCourse
+        .map((r) => ({
+          careerTrackName: `${titleById.get(r.courseId!) ?? 'Unknown'} Career Track`,
+          count: r._count._all,
+        }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }
+
   async getDetail(id: string) {
     const cert = await this.prisma.certificate.findUnique({
       where: { id },
       select: {
         id: true,
+        publicId: true,
         issuedAt: true,
         revokedAt: true,
         scoreSnapshot: true,
         user: { select: { id: true, displayName: true, email: true } },
+        course: { select: { title: true } },
         learningPath: {
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            course: { select: { title: true } },
-          },
+          select: { title: true, course: { select: { title: true } } },
         },
       },
     });
@@ -105,13 +146,14 @@ export class AdminCertificatesService {
       throw new AppException(404, 'NOT_FOUND', 'Certificate not found.');
     return {
       id: cert.id,
-      verificationId: cert.id,
+      verificationId: cert.publicId,
       status: cert.revokedAt ? 'revoked' : 'active',
       issuedAt: cert.issuedAt.toISOString(),
       revokedAt: cert.revokedAt?.toISOString() ?? null,
       holder: cert.user,
-      type: cert.learningPath.title,
-      course: cert.learningPath.course.title,
+      type: certType(cert),
+      course:
+        cert.course?.title ?? cert.learningPath?.course.title ?? 'ThreatLens',
       scoreSnapshot: cert.scoreSnapshot,
     };
   }
