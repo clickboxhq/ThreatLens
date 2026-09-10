@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { Award, Bell, Building2, ClipboardCheck, MessageSquare, Target, Users } from "lucide-react";
+import {
+  Award,
+  Bell,
+  Building2,
+  ClipboardCheck,
+  Megaphone,
+  MessageSquare,
+  Target,
+  Users,
+} from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -12,6 +21,7 @@ const categoryIcon: Record<NotificationCategory, typeof Bell> = {
   score_available: Target,
   instructor_feedback: MessageSquare,
   certificate_issued: Award,
+  announcement: Megaphone,
   org_invitation: Building2,
   cohort_invitation: Users,
 };

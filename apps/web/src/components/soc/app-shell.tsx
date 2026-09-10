@@ -29,6 +29,7 @@ import {
   Sparkles,
   Crosshair,
   Medal,
+  Megaphone,
   Trophy,
   Wrench,
   Users,
@@ -134,6 +135,7 @@ const instructorTools: NavItem[] = [
 
 const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
+  { to: "/app/announcements", label: "Announcements", icon: Megaphone },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
@@ -562,6 +564,7 @@ const crumbMap: Record<string, string> = {
   "/app/assessments": "Assessments",
   "/app/feedback": "Feedback Center",
   "/app/organizations": "My Organization",
+  "/app/announcements": "Announcements",
   "/app/settings": "Settings",
   "/app/audit-logs": "Audit Logs",
   "/app/billing": "Billing",

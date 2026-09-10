@@ -1,4 +1,6 @@
 import type {
+  AnnouncementDto,
+  CreateAnnouncementInput,
   InvitePreviewDto,
   InviteRole,
   OrganizationDto,
@@ -18,4 +20,10 @@ export interface OrganizationsService {
   /** Unauthenticated on the backend — used by the public accept-invite page. */
   previewInvite(token: string): Promise<InvitePreviewDto | null>;
   acceptInvite(token: string): Promise<OrganizationDto>;
+  /** org_admin: send a broadcast to the whole org or one cohort. */
+  createAnnouncement(input: CreateAnnouncementInput): Promise<AnnouncementDto>;
+  /** org_admin: announcements this org has sent. */
+  listSentAnnouncements(): Promise<AnnouncementDto[]>;
+  /** Any member: announcements addressed to them. */
+  listMyAnnouncements(): Promise<AnnouncementDto[]>;
 }

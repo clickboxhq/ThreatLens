@@ -13,6 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
 import {
+  CreateAnnouncementDto,
   CreateInviteDto,
   CreateOrganizationDto,
   UpdateOrganizationDto,
@@ -114,5 +115,18 @@ export class OrganizationsController {
     @Param('token') token: string,
   ) {
     return this.organizationsService.acceptInvite(user, token);
+  }
+
+  @Get('mine/announcements')
+  async listSentAnnouncements(@CurrentUser() user: AuthenticatedUser) {
+    return this.organizationsService.listSentAnnouncements(user);
+  }
+
+  @Post('mine/announcements')
+  async createAnnouncement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateAnnouncementDto,
+  ) {
+    return this.organizationsService.createAnnouncement(user, dto);
   }
 }

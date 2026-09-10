@@ -34,6 +34,7 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAchievementsRouteImport } from './routes/app.achievements'
 import { Route as AppAlertsRouteImport } from './routes/app.alerts'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
+import { Route as AppAnnouncementsRouteImport } from './routes/app.announcements'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
 import { Route as AppAuditLogsRouteImport } from './routes/app.audit-logs'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
@@ -210,6 +211,11 @@ const AppAlertsRoute = AppAlertsRouteImport.update({
 const AppAnalyticsRoute = AppAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAnnouncementsRoute = AppAnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
@@ -503,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
@@ -581,6 +588,7 @@ export interface FileRoutesByTo {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
@@ -661,6 +669,7 @@ export interface FileRoutesById {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
@@ -742,6 +751,7 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
     | '/app/audit-logs'
     | '/app/billing'
@@ -820,6 +830,7 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
     | '/app/audit-logs'
     | '/app/billing'
@@ -899,6 +910,7 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
     | '/app/audit-logs'
     | '/app/billing'
@@ -1157,6 +1169,13 @@ declare module '@tanstack/react-router' {
       path: '/analytics'
       fullPath: '/app/analytics'
       preLoaderRoute: typeof AppAnalyticsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/announcements': {
+      id: '/app/announcements'
+      path: '/announcements'
+      fullPath: '/app/announcements'
+      preLoaderRoute: typeof AppAnnouncementsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/assessments': {
@@ -1555,6 +1574,7 @@ interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
   AppAlertsRoute: typeof AppAlertsRoute
   AppAnalyticsRoute: typeof AppAnalyticsRoute
+  AppAnnouncementsRoute: typeof AppAnnouncementsRoute
   AppAssessmentsRoute: typeof AppAssessmentsRoute
   AppAuditLogsRoute: typeof AppAuditLogsRoute
   AppBillingRoute: typeof AppBillingRoute
@@ -1608,6 +1628,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAlertsRoute: AppAlertsRoute,
   AppAnalyticsRoute: AppAnalyticsRoute,
+  AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
   AppAuditLogsRoute: AppAuditLogsRoute,
   AppBillingRoute: AppBillingRoute,
