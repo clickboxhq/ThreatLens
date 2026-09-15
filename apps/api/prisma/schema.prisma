@@ -96,6 +96,15 @@ enum OrganizationInviteStatus {
   revoked
 }
 
+// A member's standing within their organization, independent of whether they belong to one at
+// all (User.orgId already answers that). Only meaningful while orgId is set — reset to `active`
+// whenever orgId changes (removeMember clears it, acceptInvite/create set it explicitly) so a
+// stale `suspended` from a past org can never leak into a later, unrelated membership.
+enum OrgMembershipStatus {
+  active
+  suspended
+}
+
 // §Phase 6 (merge plan): the org multi-tenancy this session builds out. An invite is scoped to
 // one email address and one role (student or instructor only — org_admin/platform_admin are
 // never grantable by invite, same privilege-escalation boundary signup itself enforces). Kept
@@ -122,24 +131,31 @@ model OrganizationInvite {
 }
 
 model User {
-  id                   String     @id @default(uuid()) @db.Uuid
-  orgId                String?    @map("org_id") @db.Uuid
-  email                String     @unique @db.Citext
-  passwordHash         String?    @map("password_hash")
-  role                 UserRole   @default(student)
-  displayName          String     @map("display_name")
-  status               UserStatus @default(active)
-  emailVerifiedAt      DateTime?  @map("email_verified_at")
-  sessionVersion       Int        @default(1) @map("session_version")
-  lastLoginAt          DateTime?  @map("last_login_at")
+  id                   String              @id @default(uuid()) @db.Uuid
+  orgId                String?             @map("org_id") @db.Uuid
+  // Standing within `orgId` — see OrgMembershipStatus. Meaningless while orgId is null.
+  orgMembershipStatus  OrgMembershipStatus @default(active) @map("org_membership_status")
+  // When the *current* orgId membership began — distinct from `createdAt`, which is the
+  // ThreatLens account's own age and predates joining any particular org. Set alongside
+  // orgId (org creation, invite acceptance) and cleared alongside it (removeMember), so it
+  // never survives into an unrelated later membership.
+  orgJoinedAt          DateTime?           @map("org_joined_at")
+  email                String              @unique @db.Citext
+  passwordHash         String?             @map("password_hash")
+  role                 UserRole            @default(student)
+  displayName          String              @map("display_name")
+  status               UserStatus          @default(active)
+  emailVerifiedAt      DateTime?           @map("email_verified_at")
+  sessionVersion       Int                 @default(1) @map("session_version")
+  lastLoginAt          DateTime?           @map("last_login_at")
   // §15.1: TOTP-based MFA. mfaSecret is written at /auth/mfa/setup (pending) and only takes
   // effect once mfaEnabled flips true at /auth/mfa/enable. Recovery codes are stored hashed
   // (sha256) and consumed one-time, same spirit as the recovery-code pattern used elsewhere
   // (§15.3 scopes app-layer field encryption to sso_config/payment tokens, not this table,
   // so mfaSecret relies on disk-level encryption like the rest of the schema).
-  mfaEnabled           Boolean    @default(false) @map("mfa_enabled")
-  mfaSecret            String?    @map("mfa_secret")
-  mfaRecoveryCodesHash String[]   @default([]) @map("mfa_recovery_codes_hash")
+  mfaEnabled           Boolean             @default(false) @map("mfa_enabled")
+  mfaSecret            String?             @map("mfa_secret")
+  mfaRecoveryCodesHash String[]            @default([]) @map("mfa_recovery_codes_hash")
 
   // Profile — all optional/additive, collected post-signup (see /welcome).
   // displayName above remains the name shown everywhere already built

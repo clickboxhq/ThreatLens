@@ -65,7 +65,7 @@ export class OrganizationsService {
       this.prisma.organization.create({ data: { id: orgId, name: dto.name } }),
       this.prisma.user.update({
         where: { id: user.id },
-        data: { orgId, role: 'org_admin' },
+        data: { orgId, role: 'org_admin', orgJoinedAt: new Date() },
       }),
     ]);
 
@@ -280,22 +280,34 @@ export class OrganizationsService {
   async listMyAnnouncements(user: AuthenticatedUser) {
     const me = await this.prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      select: { orgId: true },
+      select: { orgId: true, orgMembershipStatus: true },
     });
+    // A suspended member keeps the membership row (orgId stays set, so Restore Access can
+    // bring them right back) but stops counting as a standing org-wide recipient in the
+    // meantime — the same "temporarily prevented from accessing organization resources"
+    // this status exists for.
+    const orgActive =
+      me.orgId && me.orgMembershipStatus === 'active' ? me.orgId : null;
 
     const enrollments = await this.prisma.cohortEnrollment.findMany({
       where: { userId: user.id, status: 'active' },
-      select: { cohortId: true },
+      select: { cohortId: true, cohort: { select: { orgId: true } } },
     });
-    const cohortIds = enrollments.map((e) => e.cohortId);
+    // If suspended in an org, that org's own cohorts stop counting too — a suspension is
+    // meant to cut every resource that org provides, not just the org-wide ones. A cohort
+    // under a *different* org (or none) is unaffected: cohort membership there is its own,
+    // unrelated access grant, same reasoning as the cohort-only-member case above.
+    const cohortIds = enrollments
+      .filter((e) => !(me.orgId && !orgActive && e.cohort.orgId === me.orgId))
+      .map((e) => e.cohortId);
 
-    if (!me.orgId && cohortIds.length === 0) return [];
+    if (!orgActive && cohortIds.length === 0) return [];
 
     const rows = await this.prisma.announcement.findMany({
       where: {
         deletedAt: null,
         OR: [
-          ...(me.orgId ? [{ orgId: me.orgId, cohortId: null }] : []),
+          ...(orgActive ? [{ orgId: orgActive, cohortId: null }] : []),
           ...(cohortIds.length > 0 ? [{ cohortId: { in: cohortIds } }] : []),
         ],
       },
@@ -315,13 +327,21 @@ export class OrganizationsService {
   ): Promise<string[]> {
     if (cohortId) {
       const enrollments = await this.prisma.cohortEnrollment.findMany({
-        where: { cohortId, status: 'active' },
+        where: {
+          cohortId,
+          status: 'active',
+          // A cohort member who is also a *suspended* member of this same org (the cohort
+          // is already known to belong to it — createAnnouncement checked) doesn't get this
+          // send either. A cohort member unrelated to this org — no orgId, or a different
+          // one — is untouched, same as everywhere else this distinction is made.
+          user: { NOT: { orgId, orgMembershipStatus: 'suspended' } },
+        },
         select: { userId: true },
       });
       return enrollments.map((e) => e.userId);
     }
     const members = await this.prisma.user.findMany({
-      where: { orgId, deletedAt: null },
+      where: { orgId, orgMembershipStatus: 'active', deletedAt: null },
       select: { id: true },
     });
     return members.map((m) => m.id);
@@ -349,7 +369,12 @@ export class OrganizationsService {
       displayName: m.displayName,
       email: m.email,
       role: m.role,
-      status: m.status,
+      // Account status (ThreatLens-wide) and org membership status are deliberately separate
+      // fields — a suspended-from-the-org member's ThreatLens account is still `active`.
+      accountStatus: m.status,
+      orgMembershipStatus: m.orgMembershipStatus,
+      joinedAt: m.orgJoinedAt,
+      lastActiveAt: m.lastLoginAt,
     }));
   }
 
@@ -376,19 +401,32 @@ export class OrganizationsService {
    * rows outright) matches how Cohort.archivedAt already treats past-term data: the record
    * that this person once belonged here survives, only their standing access does not.
    */
-  async removeMember(user: AuthenticatedUser, memberId: string) {
-    const orgId = await this.getOwnedOrgId(user);
+  /**
+   * §11 shared guard for every member-management action below: an org_admin cannot act on
+   * themselves this way (ask another admin), and a member from a different org — or a bogus
+   * id — 404s rather than 403s, so this can't be used to probe which ids exist elsewhere.
+   */
+  private async requireManageableMember(
+    user: AuthenticatedUser,
+    orgId: string,
+    memberId: string,
+  ) {
     if (memberId === user.id) {
       throw new AppException(
         400,
-        'CANNOT_REMOVE_SELF',
-        'You cannot remove your own membership this way. Ask another organization admin.',
+        'CANNOT_MANAGE_SELF',
+        'You cannot do this to your own membership. Ask another organization admin.',
       );
     }
-
     const member = await this.prisma.user.findUnique({
       where: { id: memberId },
-      select: { id: true, orgId: true, email: true, displayName: true },
+      select: {
+        id: true,
+        orgId: true,
+        email: true,
+        displayName: true,
+        orgMembershipStatus: true,
+      },
     });
     if (!member || member.orgId !== orgId) {
       throw new AppException(
@@ -397,6 +435,62 @@ export class OrganizationsService {
         'That member is not part of your organization.',
       );
     }
+    return member;
+  }
+
+  /**
+   * §11: temporarily suspend a member's organization access without touching their
+   * membership record, ThreatLens account, or history — the reversible middle ground between
+   * "active" and "removed". Bumps `sessionVersion` for the same immediate-revocation reason
+   * removeMember does (see its own comment): a still-valid access token must stop granting
+   * org-scoped access on its very next request, not just once it happens to expire.
+   */
+  async suspendMember(user: AuthenticatedUser, memberId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const member = await this.requireManageableMember(user, orgId, memberId);
+    if (member.orgMembershipStatus === 'suspended') return;
+
+    await this.prisma.user.update({
+      where: { id: memberId },
+      data: {
+        orgMembershipStatus: 'suspended',
+        sessionVersion: { increment: 1 },
+      },
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_member_suspended',
+      targetType: 'user',
+      targetId: memberId,
+      metadata: { orgId, memberEmail: member.email },
+    });
+  }
+
+  /** §11: the inverse of suspendMember — restores standing access. No session bump needed;
+   * this only grants, and every access check re-reads status fresh from the DB anyway. */
+  async restoreMember(user: AuthenticatedUser, memberId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const member = await this.requireManageableMember(user, orgId, memberId);
+    if (member.orgMembershipStatus === 'active') return;
+
+    await this.prisma.user.update({
+      where: { id: memberId },
+      data: { orgMembershipStatus: 'active' },
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_member_restored',
+      targetType: 'user',
+      targetId: memberId,
+      metadata: { orgId, memberEmail: member.email },
+    });
+  }
+
+  async removeMember(user: AuthenticatedUser, memberId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const member = await this.requireManageableMember(user, orgId, memberId);
 
     const orgCohorts = await this.prisma.cohort.findMany({
       where: { orgId },
@@ -406,7 +500,14 @@ export class OrganizationsService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: memberId },
-        data: { orgId: null, sessionVersion: { increment: 1 } },
+        data: {
+          orgId: null,
+          // Reset to a clean slate — a later, unrelated org membership should never inherit
+          // this org's suspension state or this org's join date.
+          orgMembershipStatus: 'active',
+          orgJoinedAt: null,
+          sessionVersion: { increment: 1 },
+        },
       }),
       this.prisma.cohortEnrollment.updateMany({
         where: {
@@ -462,23 +563,7 @@ export class OrganizationsService {
       },
     });
 
-    const org = await this.prisma.organization.findUniqueOrThrow({
-      where: { id: orgId },
-    });
-    const inviter = await this.prisma.user.findUniqueOrThrow({
-      where: { id: user.id },
-      select: { displayName: true },
-    });
-    const inviteUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/accept-invite/${token}`;
-    await this.emailService.send({
-      to: dto.email,
-      ...organizationInviteEmail({
-        orgName: org.name,
-        inviterName: inviter.displayName,
-        role: dto.role,
-        inviteUrl,
-      }),
-    });
+    await this.sendInviteEmail(orgId, user.id, dto.email, dto.role, token);
 
     await this.auditLog.record({
       actorUserId: user.id,
@@ -489,6 +574,104 @@ export class OrganizationsService {
     });
 
     return toInviteDto(invite);
+  }
+
+  /** §Invitation management: cancels a pending invite so its link stops working. Reuses the
+   * `revoked` status OrganizationInviteStatus already had — this is the first place that ever
+   * sets it. */
+  async revokeInvite(user: AuthenticatedUser, inviteId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const invite = await this.prisma.organizationInvite.findUnique({
+      where: { id: inviteId },
+    });
+    if (!invite || invite.organizationId !== orgId) {
+      throw new AppException(404, 'NOT_FOUND', 'Invite not found.');
+    }
+    if (this.effectiveStatus(invite) !== 'pending') {
+      throw new AppException(
+        409,
+        'INVITE_NOT_PENDING',
+        'This invite is no longer pending.',
+      );
+    }
+
+    await this.prisma.organizationInvite.update({
+      where: { id: inviteId },
+      data: { status: 'revoked' },
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_invite_revoked',
+      targetType: 'organization',
+      targetId: orgId,
+      metadata: { inviteId, email: invite.email },
+    });
+  }
+
+  /** §Invitation management: reissues a fresh token/expiry and re-sends the same branded
+   * email — the token in the original message stops working the moment this runs, same as
+   * cohort-invite.service.ts's re-invite-reissues convention. */
+  async resendInvite(user: AuthenticatedUser, inviteId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const invite = await this.prisma.organizationInvite.findUnique({
+      where: { id: inviteId },
+    });
+    if (!invite || invite.organizationId !== orgId) {
+      throw new AppException(404, 'NOT_FOUND', 'Invite not found.');
+    }
+    if (this.effectiveStatus(invite) !== 'pending') {
+      throw new AppException(
+        409,
+        'INVITE_NOT_PENDING',
+        'This invite is no longer pending.',
+      );
+    }
+
+    const token = randomBytes(24).toString('hex');
+    const [updated] = await Promise.all([
+      this.prisma.organizationInvite.update({
+        where: { id: inviteId },
+        data: { token, expiresAt: new Date(Date.now() + INVITE_TTL_MS) },
+      }),
+      this.sendInviteEmail(orgId, user.id, invite.email, invite.role, token),
+    ]);
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_invite_resent',
+      targetType: 'organization',
+      targetId: orgId,
+      metadata: { inviteId, email: invite.email },
+    });
+
+    return toInviteDto(updated);
+  }
+
+  private async sendInviteEmail(
+    orgId: string,
+    inviterId: string,
+    email: string,
+    role: string,
+    token: string,
+  ): Promise<void> {
+    const [org, inviter] = await Promise.all([
+      this.prisma.organization.findUniqueOrThrow({ where: { id: orgId } }),
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: inviterId },
+        select: { displayName: true },
+      }),
+    ]);
+    const inviteUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/accept-invite/${token}`;
+    await this.emailService.send({
+      to: email,
+      ...organizationInviteEmail({
+        orgName: org.name,
+        inviterName: inviter.displayName,
+        role,
+        inviteUrl,
+      }),
+    });
   }
 
   /** Unauthenticated — the accept-invite page needs to show who's inviting whom before the
@@ -543,7 +726,11 @@ export class OrganizationsService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.id },
-        data: { orgId: invite.organizationId, role: invite.role },
+        data: {
+          orgId: invite.organizationId,
+          role: invite.role,
+          orgJoinedAt: new Date(),
+        },
       }),
       this.prisma.organizationInvite.update({
         where: { id: invite.id },

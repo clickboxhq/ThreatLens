@@ -263,7 +263,15 @@ export function SignalStreams({ className = "" }: { className?: string }) {
 }
 
 /** Identity / endpoint / email / cloud / network correlation topology. */
-export function TopologyDiagram({ className = "" }: { className?: string }) {
+export function TopologyDiagram({
+  className = "",
+  showCore = true,
+}: {
+  className?: string;
+  /** The "CASE GRAPH" core circle at the convergence point. Off on /welcome, where it
+   * visually collided with the onboarding card; every other caller keeps it. */
+  showCore?: boolean;
+}) {
   const nodes = [
     { x: 120, y: 90, l: "IDENTITY" },
     { x: 640, y: 60, l: "ENDPOINT" },
@@ -296,45 +304,49 @@ export function TopologyDiagram({ className = "" }: { className?: string }) {
         })}
       </g>
 
-      <circle cx="380" cy="230" r="96" fill="none" stroke="rgba(255,255,255,.1)" />
-      <circle
-        cx="380"
-        cy="230"
-        r="62"
-        fill="none"
-        stroke="color-mix(in oklab, var(--primary) 60%, transparent)"
-        strokeWidth="0.9"
-      />
-      <circle
-        cx="380"
-        cy="230"
-        r="30"
-        fill="color-mix(in oklab, var(--primary) 18%, transparent)"
-        stroke="color-mix(in oklab, var(--primary) 85%, transparent)"
-        strokeWidth="1"
-      />
-      <text
-        x="380"
-        y="228"
-        textAnchor="middle"
-        fill="#fff"
-        fontSize="9"
-        letterSpacing="1.6"
-        fontFamily='"Geist Mono", monospace'
-      >
-        CASE
-      </text>
-      <text
-        x="380"
-        y="239"
-        textAnchor="middle"
-        fill="rgba(255,255,255,.6)"
-        fontSize="7"
-        letterSpacing="1.4"
-        fontFamily='"Geist Mono", monospace'
-      >
-        GRAPH
-      </text>
+      {showCore && (
+        <>
+          <circle cx="380" cy="230" r="96" fill="none" stroke="rgba(255,255,255,.1)" />
+          <circle
+            cx="380"
+            cy="230"
+            r="62"
+            fill="none"
+            stroke="color-mix(in oklab, var(--primary) 60%, transparent)"
+            strokeWidth="0.9"
+          />
+          <circle
+            cx="380"
+            cy="230"
+            r="30"
+            fill="color-mix(in oklab, var(--primary) 18%, transparent)"
+            stroke="color-mix(in oklab, var(--primary) 85%, transparent)"
+            strokeWidth="1"
+          />
+          <text
+            x="380"
+            y="228"
+            textAnchor="middle"
+            fill="#fff"
+            fontSize="9"
+            letterSpacing="1.6"
+            fontFamily='"Geist Mono", monospace'
+          >
+            CASE
+          </text>
+          <text
+            x="380"
+            y="239"
+            textAnchor="middle"
+            fill="rgba(255,255,255,.6)"
+            fontSize="7"
+            letterSpacing="1.4"
+            fontFamily='"Geist Mono", monospace'
+          >
+            GRAPH
+          </text>
+        </>
+      )}
 
       {nodes.map((n) => (
         <g key={n.l}>

@@ -13,24 +13,42 @@ import {
   useRenameOrganization,
   useSetOrgLogo,
   useRemoveOrgLogo,
+  useSuspendMember,
+  useRestoreMember,
   useRemoveMember,
+  useResendInvite,
+  useRevokeInvite,
 } from "@/hooks/use-organizations";
 import { useAuthUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { formatRelativeTime } from "@/lib/format-relative-time";
+import {
   Building2,
   Clock,
+  Eye,
   Loader2,
+  Mail,
   Pencil,
+  RotateCcw,
+  ShieldOff,
   Trash2,
   UserMinus,
   Upload,
   UserPlus,
+  XCircle,
 } from "lucide-react";
 import type {
   InviteRole,
   OrganizationDto,
+  OrganizationInviteDto,
   OrganizationMemberDto,
 } from "@/types/threatlens-organizations";
 
@@ -197,14 +215,21 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
   } = useOrganizationMembers(true);
   const { invites } = useOrganizationInvites(true);
   const createInvite = useCreateInvite();
+  const resendInvite = useResendInvite();
+  const revokeInvite = useRevokeInvite();
   const renameOrg = useRenameOrganization();
+  const suspendMember = useSuspendMember();
+  const restoreMember = useRestoreMember();
   const removeMember = useRemoveMember();
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InviteRole>("student");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(organization.name);
+  const [memberToView, setMemberToView] = useState<OrganizationMemberDto | null>(null);
+  const [memberToSuspend, setMemberToSuspend] = useState<OrganizationMemberDto | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<OrganizationMemberDto | null>(null);
+  const [inviteToRevoke, setInviteToRevoke] = useState<OrganizationInviteDto | null>(null);
 
   const submitRename = (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,13 +377,39 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
         <Panel padded={false} className="mt-4" title="Pending invites">
           <ul className="divide-y divide-border">
             {invites.map((i) => (
-              <li key={i.id} className="flex items-center gap-2.5 px-4 py-3 text-[12.5px]">
-                <Clock className="size-3.5 text-muted-foreground" />
-                <span className="flex-1">{i.email}</span>
+              <li
+                key={i.id}
+                className="flex flex-wrap items-center gap-2.5 px-4 py-3 text-[12.5px]"
+              >
+                <Clock className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-[160px] flex-1 truncate">{i.email}</span>
                 <span className="text-secondary capitalize">{i.role}</span>
                 <span className="text-[11px] text-muted-foreground">
                   Expires {new Date(i.expiresAt).toLocaleDateString()}
                 </span>
+                <button
+                  type="button"
+                  disabled={resendInvite.isPending && resendInvite.variables === i.id}
+                  onClick={() =>
+                    resendInvite.mutate(i.id, {
+                      onSuccess: () => toast.success(`Invite resent to ${i.email}.`),
+                      onError: (err) =>
+                        toast.error(
+                          err instanceof ApiError ? err.message : "Couldn't resend that invite.",
+                        ),
+                    })
+                  }
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
+                >
+                  <Mail className="size-3" /> Resend
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInviteToRevoke(i)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)]"
+                >
+                  <XCircle className="size-3" /> Revoke
+                </button>
               </li>
             ))}
           </ul>
@@ -387,6 +438,8 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                   <th className="px-4 py-2.5 text-left">Member</th>
                   <th className="px-4 py-2.5 text-left">Role</th>
                   <th className="px-4 py-2.5 text-left">Status</th>
+                  <th className="px-4 py-2.5 text-left">Last active</th>
+                  <th className="px-4 py-2.5 text-left">Joined</th>
                   {isOrgAdmin && <th className="px-4 py-2.5 text-right">Actions</th>}
                 </tr>
               </thead>
@@ -418,18 +471,69 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                     <td className="px-4 py-3 capitalize text-secondary">
                       {m.role.replace("_", " ")}
                     </td>
-                    <td className="px-4 py-3 capitalize text-[color:var(--success)]">{m.status}</td>
+                    <td className="px-4 py-3">
+                      <MembershipStatusBadge status={m.orgMembershipStatus} />
+                    </td>
+                    <td className="px-4 py-3 text-[11.5px] text-muted-foreground">
+                      {m.lastActiveAt ? formatRelativeTime(m.lastActiveAt) : "Never"}
+                    </td>
+                    <td className="px-4 py-3 text-[11.5px] text-muted-foreground">
+                      {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—"}
+                    </td>
                     {isOrgAdmin && (
-                      <td className="px-4 py-3 text-right">
-                        {m.userId !== me?.id && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => setMemberToRemove(m)}
-                            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)]"
+                            onClick={() => setMemberToView(m)}
+                            aria-label={`View ${m.displayName}`}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-secondary hover:text-foreground"
                           >
-                            <UserMinus className="size-3" /> Remove
+                            <Eye className="size-3" /> View
                           </button>
-                        )}
+                          {m.userId !== me?.id && (
+                            <>
+                              {m.orgMembershipStatus === "suspended" ? (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    restoreMember.isPending && restoreMember.variables === m.userId
+                                  }
+                                  onClick={() =>
+                                    restoreMember.mutate(m.userId, {
+                                      onSuccess: () =>
+                                        toast.success(`${m.displayName}'s access was restored.`),
+                                      onError: (err) =>
+                                        toast.error(
+                                          err instanceof ApiError
+                                            ? err.message
+                                            : "Couldn't restore that member.",
+                                        ),
+                                    })
+                                  }
+                                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-[color:var(--success)] hover:opacity-80 disabled:opacity-50"
+                                >
+                                  <RotateCcw className="size-3" /> Restore Access
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setMemberToSuspend(m)}
+                                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--warning)]"
+                                >
+                                  <ShieldOff className="size-3" /> Suspend
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setMemberToRemove(m)}
+                                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)]"
+                              >
+                                <UserMinus className="size-3" /> Remove
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -441,20 +545,158 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
       </Panel>
 
       <ConfirmDialog
+        open={memberToSuspend !== null}
+        onOpenChange={(open) => {
+          if (!open) setMemberToSuspend(null);
+        }}
+        title="Suspend this member?"
+        description={`This will temporarily prevent ${memberToSuspend?.displayName} from accessing resources and activities provided through ${organization.name}. Their ThreatLens account and personal data will remain intact.`}
+        confirmLabel="Suspend Access"
+        onConfirm={async () => {
+          if (!memberToSuspend) return;
+          await suspendMember.mutateAsync(memberToSuspend.userId);
+          toast.success(`${memberToSuspend.displayName}'s organization access was suspended.`);
+        }}
+      />
+
+      <ConfirmDialog
         open={memberToRemove !== null}
         onOpenChange={(open) => {
           if (!open) setMemberToRemove(null);
         }}
         title="Remove this member?"
-        description={`This will remove ${memberToRemove?.displayName} from ${organization.name} and revoke their access to this organization's workspace and resources.`}
-        note="Their personal ThreatLens account, investigation history, scores, and certificates are not affected — only their access to this organization."
-        confirmLabel="Remove member"
+        description={`This will remove ${memberToRemove?.displayName} from ${organization.name} and revoke their access to this organization's workspace, cohorts, assignments, announcements, and other organization resources.`}
+        note="Their personal ThreatLens account, investigation history, scores, and certificates will not be deleted."
+        confirmLabel="Remove Member"
         onConfirm={async () => {
           if (!memberToRemove) return;
           await removeMember.mutateAsync(memberToRemove.userId);
           toast.success(`${memberToRemove.displayName} was removed from ${organization.name}.`);
         }}
       />
+
+      <ConfirmDialog
+        open={inviteToRevoke !== null}
+        onOpenChange={(open) => {
+          if (!open) setInviteToRevoke(null);
+        }}
+        title="Revoke this invitation?"
+        description={`The invitation link sent to ${inviteToRevoke?.email} will stop working.`}
+        confirmLabel="Revoke Invitation"
+        onConfirm={async () => {
+          if (!inviteToRevoke) return;
+          await revokeInvite.mutateAsync(inviteToRevoke.id);
+          toast.success(`Invitation to ${inviteToRevoke.email} was revoked.`);
+        }}
+      />
+
+      <MemberDetailDialog
+        member={memberToView}
+        organizationName={organization.name}
+        onOpenChange={(open) => {
+          if (!open) setMemberToView(null);
+        }}
+      />
     </div>
+  );
+}
+
+function MembershipStatusBadge({
+  status,
+}: {
+  status: OrganizationMemberDto["orgMembershipStatus"];
+}) {
+  if (status === "suspended") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--warning)]/12 px-2 py-0.5 text-[11px] font-medium text-[color:var(--warning)]">
+        <span className="size-1.5 rounded-full bg-[color:var(--warning)]" />
+        Suspended
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--success)]/12 px-2 py-0.5 text-[11px] font-medium text-[color:var(--success)]">
+      <span className="size-1.5 rounded-full bg-[color:var(--success)]" />
+      Active
+    </span>
+  );
+}
+
+function MemberDetailDialog({
+  member,
+  organizationName,
+  onOpenChange,
+}: {
+  member: OrganizationMemberDto | null;
+  organizationName: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={member !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="glass-card border-border bg-card sm:max-w-md">
+        {member && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <IconTile
+                  tone="info"
+                  size="lg"
+                  shape="circle"
+                  className="text-[13px] font-semibold"
+                >
+                  {member.displayName
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")}
+                </IconTile>
+                <div>
+                  <DialogTitle className="text-foreground">{member.displayName}</DialogTitle>
+                  <DialogDescription className="font-mono text-[11.5px]">
+                    {member.email}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 pt-2 text-[12.5px]">
+              <div>
+                <dt className="t-label text-muted-foreground">Role</dt>
+                <dd className="mt-0.5 capitalize text-foreground">
+                  {member.role.replace("_", " ")}
+                </dd>
+              </div>
+              <div>
+                <dt className="t-label text-muted-foreground">Organization access</dt>
+                <dd className="mt-0.5">
+                  <MembershipStatusBadge status={member.orgMembershipStatus} />
+                </dd>
+              </div>
+              <div>
+                <dt className="t-label text-muted-foreground">ThreatLens account</dt>
+                <dd className="mt-0.5 capitalize text-foreground">{member.accountStatus}</dd>
+              </div>
+              <div>
+                <dt className="t-label text-muted-foreground">Last active</dt>
+                <dd className="mt-0.5 text-foreground">
+                  {member.lastActiveAt ? formatRelativeTime(member.lastActiveAt) : "Never"}
+                </dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="t-label text-muted-foreground">Joined {organizationName}</dt>
+                <dd className="mt-0.5 text-foreground">
+                  {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : "Unknown"}
+                </dd>
+              </div>
+            </dl>
+
+            <p className="mt-1 border-t border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
+              This member's personal ThreatLens account, investigation history, scores, and
+              certificates exist independently of their membership in {organizationName}.
+            </p>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

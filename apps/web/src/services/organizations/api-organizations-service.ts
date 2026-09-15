@@ -34,6 +34,14 @@ export const apiOrganizationsService: OrganizationsService = {
 
   listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
 
+  suspendMember: async (userId) => {
+    await apiClient.post(`/organizations/mine/members/${encodeURIComponent(userId)}/suspend`);
+  },
+
+  restoreMember: async (userId) => {
+    await apiClient.post(`/organizations/mine/members/${encodeURIComponent(userId)}/restore`);
+  },
+
   removeMember: async (userId) => {
     await apiClient.delete(`/organizations/mine/members/${encodeURIComponent(userId)}`);
   },
@@ -42,6 +50,15 @@ export const apiOrganizationsService: OrganizationsService = {
 
   createInvite: (email, role) =>
     apiClient.post<OrganizationInviteDto>("/organizations/mine/invites", { email, role }),
+
+  resendInvite: (inviteId) =>
+    apiClient.post<OrganizationInviteDto>(
+      `/organizations/mine/invites/${encodeURIComponent(inviteId)}/resend`,
+    ),
+
+  revokeInvite: async (inviteId) => {
+    await apiClient.delete(`/organizations/mine/invites/${encodeURIComponent(inviteId)}`);
+  },
 
   previewInvite: async (token) => {
     try {

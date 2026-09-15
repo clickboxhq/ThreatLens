@@ -20,6 +20,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     email: 'admin@contoso.com',
     displayName: 'Ada Admin',
     orgId: null as string | null,
+    orgMembershipStatus: 'active' as 'active' | 'suspended',
     role: 'student',
     ...overrides,
   };
@@ -58,7 +59,12 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
         id: 'invite-1',
         ...args.data,
       })),
-      update: jest.fn(async () => undefined),
+      update: jest.fn(
+        async (args?: {
+          data: Record<string, unknown>;
+        }): Promise<Record<string, unknown> | undefined> =>
+          args ? undefined : undefined,
+      ),
     },
     cohort: {
       findUnique: jest.fn(async () => ({ id: 'cohort-1', orgId: 'org-1' })),
@@ -66,9 +72,15 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     },
     cohortEnrollment: {
       findMany: jest.fn(
-        async (): Promise<Array<{ userId?: string; cohortId?: string }>> => [
-          { userId: 'm1' },
-          { userId: 'm2' },
+        async (): Promise<
+          Array<{
+            userId?: string;
+            cohortId?: string;
+            cohort?: { orgId: string | null };
+          }>
+        > => [
+          { userId: 'm1', cohort: { orgId: null } },
+          { userId: 'm2', cohort: { orgId: null } },
         ],
       ),
       updateMany: jest.fn(async () => ({ count: 0 })),
@@ -225,6 +237,129 @@ describe('OrganizationsService member/invite access control', () => {
         role: 'student',
       }),
     ).rejects.toMatchObject({ status: 409, code: 'ALREADY_A_MEMBER' });
+  });
+});
+
+describe('OrganizationsService invite management', () => {
+  const pendingInvite = {
+    id: 'invite-1',
+    organizationId: 'org-1',
+    email: 'candidate@contoso.com',
+    role: 'student',
+    status: 'pending',
+    token: 'old-token',
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+  };
+
+  it('revokeInvite rejects a non-org_admin caller', async () => {
+    const { service } = buildService();
+    await expect(
+      service.revokeInvite(buildUser({ role: 'student' }), 'invite-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it("revokeInvite 404s on an invite belonging to a different organisation (an admin can't reach across tenants)", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.organizationInvite.findUnique = jest.fn(async () => ({
+      ...pendingInvite,
+      organizationId: 'some-other-org',
+    }));
+    await expect(
+      service.revokeInvite(buildUser({ role: 'org_admin' }), 'invite-1'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('revokeInvite marks the invite revoked and audits it', async () => {
+    const { service, prisma, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.organizationInvite.findUnique = jest.fn(async () => pendingInvite);
+
+    await service.revokeInvite(buildUser({ role: 'org_admin' }), 'invite-1');
+
+    expect(prisma.organizationInvite.update).toHaveBeenCalledWith({
+      where: { id: 'invite-1' },
+      data: { status: 'revoked' },
+    });
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'organization_invite_revoked' }),
+    );
+  });
+
+  it('revokeInvite rejects an invite that is no longer pending', async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.organizationInvite.findUnique = jest.fn(async () => ({
+      ...pendingInvite,
+      status: 'accepted',
+    }));
+    await expect(
+      service.revokeInvite(buildUser({ role: 'org_admin' }), 'invite-1'),
+    ).rejects.toMatchObject({ status: 409, code: 'INVITE_NOT_PENDING' });
+  });
+
+  it('resendInvite rejects a non-org_admin caller', async () => {
+    const { service } = buildService();
+    await expect(
+      service.resendInvite(buildUser({ role: 'student' }), 'invite-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it("resendInvite 404s on an invite belonging to a different organisation (an admin can't reach across tenants)", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.organizationInvite.findUnique = jest.fn(async () => ({
+      ...pendingInvite,
+      organizationId: 'some-other-org',
+    }));
+    await expect(
+      service.resendInvite(buildUser({ role: 'org_admin' }), 'invite-1'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('resendInvite reissues the token/expiry, re-sends the email, and audits it', async () => {
+    const { service, prisma, emailService, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.organizationInvite.findUnique = jest.fn(async () => pendingInvite);
+    prisma.organizationInvite.update = jest.fn(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...pendingInvite,
+        ...args.data,
+      }),
+    );
+
+    await service.resendInvite(buildUser({ role: 'org_admin' }), 'invite-1');
+
+    expect(prisma.organizationInvite.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'invite-1' },
+        data: expect.objectContaining({
+          token: expect.any(String),
+          expiresAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(
+      (prisma.organizationInvite.update as jest.Mock).mock.calls[0][0].data
+        .token,
+    ).not.toBe('old-token');
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'candidate@contoso.com' }),
+    );
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'organization_invite_resent' }),
+    );
   });
 });
 
@@ -403,7 +538,7 @@ describe('OrganizationsService announcements', () => {
   it('listMyAnnouncements returns cohort-scoped announcements for a cohort-only member with no formal org membership', async () => {
     const { service, prisma } = buildService({ orgId: null });
     prisma.cohortEnrollment.findMany = jest.fn(async () => [
-      { cohortId: 'cohort-1' },
+      { cohortId: 'cohort-1', cohort: { orgId: 'org-1' } },
     ]);
     prisma.announcement.findMany = jest.fn(async () => [
       {
@@ -433,7 +568,7 @@ describe('OrganizationsService announcements', () => {
   it("listMyAnnouncements includes both the caller's org-wide announcements and their cohort's, when both apply", async () => {
     const { service, prisma } = buildService({ orgId: 'org-1' });
     prisma.cohortEnrollment.findMany = jest.fn(async () => [
-      { cohortId: 'cohort-1' },
+      { cohortId: 'cohort-1', cohort: { orgId: 'some-other-org' } },
     ]);
     await service.listMyAnnouncements(
       buildUser({ id: 'user-1', role: 'student', orgId: 'org-1' }),
@@ -540,7 +675,7 @@ describe('OrganizationsService.removeMember', () => {
     const admin = buildUser({ id: 'admin-1', role: 'org_admin' });
     await expect(service.removeMember(admin, admin.id)).rejects.toMatchObject({
       status: 400,
-      code: 'CANNOT_REMOVE_SELF',
+      code: 'CANNOT_MANAGE_SELF',
     });
   });
 
@@ -584,7 +719,12 @@ describe('OrganizationsService.removeMember', () => {
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'member-1' },
-      data: { orgId: null, sessionVersion: { increment: 1 } },
+      data: {
+        orgId: null,
+        orgMembershipStatus: 'active',
+        orgJoinedAt: null,
+        sessionVersion: { increment: 1 },
+      },
     });
     expect(prisma.cohortEnrollment.updateMany).toHaveBeenCalledWith({
       where: {
@@ -596,6 +736,166 @@ describe('OrganizationsService.removeMember', () => {
     });
     expect(auditLog.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'organization_member_removed' }),
+    );
+  });
+});
+
+describe('OrganizationsService.suspendMember / restoreMember', () => {
+  const activeMember = {
+    id: 'member-1',
+    orgId: 'org-1',
+    email: 'student@contoso.com',
+    displayName: 'Sam Student',
+    orgMembershipStatus: 'active' as const,
+  };
+  const suspendedMember = {
+    ...activeMember,
+    orgMembershipStatus: 'suspended' as const,
+  };
+
+  it('suspendMember rejects a caller who is not an org_admin', async () => {
+    const { service } = buildService();
+    await expect(
+      service.suspendMember(buildUser({ role: 'student' }), 'member-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('suspendMember rejects an org_admin trying to suspend themselves', async () => {
+    const { service } = buildService({ orgId: 'org-1', role: 'org_admin' });
+    const admin = buildUser({ id: 'admin-1', role: 'org_admin' });
+    await expect(service.suspendMember(admin, admin.id)).rejects.toMatchObject({
+      status: 400,
+      code: 'CANNOT_MANAGE_SELF',
+    });
+  });
+
+  it("suspendMember 404s on a member from a different organisation (an admin can't reach across tenants)", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findUnique = jest.fn(async () => ({
+      ...activeMember,
+      orgId: 'some-other-org',
+    }));
+    await expect(
+      service.suspendMember(buildUser({ role: 'org_admin' }), 'member-1'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('suspendMember flips status, bumps sessionVersion (immediate revocation), and audits it', async () => {
+    const { service, prisma, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findUnique = jest.fn(async () => activeMember);
+
+    await service.suspendMember(
+      buildUser({ id: 'admin-1', role: 'org_admin' }),
+      'member-1',
+    );
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'member-1' },
+      data: {
+        orgMembershipStatus: 'suspended',
+        sessionVersion: { increment: 1 },
+      },
+    });
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'organization_member_suspended' }),
+    );
+  });
+
+  it('suspendMember is a no-op on an already-suspended member', async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findUnique = jest.fn(async () => suspendedMember);
+
+    await service.suspendMember(buildUser({ role: 'org_admin' }), 'member-1');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('restoreMember rejects a caller who is not an org_admin', async () => {
+    const { service } = buildService();
+    await expect(
+      service.restoreMember(buildUser({ role: 'student' }), 'member-1'),
+    ).rejects.toMatchObject({ status: 403, code: 'FORBIDDEN' });
+  });
+
+  it("restoreMember 404s on a member from a different organisation (an admin can't reach across tenants)", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findUnique = jest.fn(async () => ({
+      ...suspendedMember,
+      orgId: 'some-other-org',
+    }));
+    await expect(
+      service.restoreMember(buildUser({ role: 'org_admin' }), 'member-1'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('restoreMember flips status back to active and audits it — no session bump (only grants)', async () => {
+    const { service, prisma, auditLog } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findUnique = jest.fn(async () => suspendedMember);
+
+    await service.restoreMember(
+      buildUser({ id: 'admin-1', role: 'org_admin' }),
+      'member-1',
+    );
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'member-1' },
+      data: { orgMembershipStatus: 'active' },
+    });
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'organization_member_restored' }),
+    );
+  });
+});
+
+describe('OrganizationsService — suspension blocks announcement access', () => {
+  it("listMyAnnouncements excludes a suspended member's own org-wide announcements", async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      orgMembershipStatus: 'suspended',
+    });
+    prisma.cohortEnrollment.findMany = jest.fn(async () => []);
+
+    const result = await service.listMyAnnouncements(
+      buildUser({ orgId: 'org-1' }),
+    );
+    expect(result).toEqual([]);
+    expect(prisma.announcement.findMany).not.toHaveBeenCalled();
+  });
+
+  it('resolveAnnouncementRecipients (via createAnnouncement) excludes suspended members from an org-wide send', async () => {
+    const { service, prisma } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    await service.createAnnouncement(
+      buildUser({ id: 'admin-1', role: 'org_admin' }),
+      {
+        title: 'Heads up',
+        body: 'Read this',
+      },
+    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          orgId: 'org-1',
+          orgMembershipStatus: 'active',
+          deletedAt: null,
+        },
+      }),
     );
   });
 });
