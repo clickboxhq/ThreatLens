@@ -90,6 +90,9 @@ export class CohortsService {
         // Cohort-wide work, plus work set for a group this student is actually in. Without
         // this a student would see — and could launch — assignments meant for another group.
         OR: [{ groupId: null }, { groupId: { in: myGroupIds } }],
+        // Pulled back by an instructor/org_admin — gone from here the same as it's gone from
+        // their own assignments table and the Assigned Scenarios page.
+        removedAt: null,
       },
       include: { scenario: true, cohort: true },
       orderBy: { createdAt: 'desc' },

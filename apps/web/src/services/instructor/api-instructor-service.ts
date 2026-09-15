@@ -34,6 +34,11 @@ export const apiInstructorService: InstructorService = {
   createAssignment: (cohortId, input) =>
     apiClient.post<AssignmentDto>(`/instructor/cohorts/${cohortId}/assignments`, input),
 
+  removeAssignment: (cohortId, assignmentId) =>
+    apiClient.delete<AssignmentDto[]>(
+      `/instructor/cohorts/${cohortId}/assignments/${assignmentId}`,
+    ),
+
   reviewQueue: (cohortId) =>
     apiClient.get<ReviewQueueItemDto[]>(`/instructor/cohorts/${cohortId}/review-queue`),
 

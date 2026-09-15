@@ -434,6 +434,10 @@ model CohortScenarioAssignment {
   attemptLimit Int?      @map("attempt_limit")
   createdBy    String    @map("created_by") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at")
+  /// Set when an instructor/org_admin pulls this assignment back. Soft, like
+  /// OrganizationScenario.removedAt: sessions and scores already produced against it must stay
+  /// exactly as they are, only its "currently assigned" visibility goes away.
+  removedAt    DateTime? @map("removed_at")
 
   cohort   Cohort                 @relation(fields: [cohortId], references: [id])
   group    CohortGroup?           @relation(fields: [groupId], references: [id], onDelete: Cascade)
