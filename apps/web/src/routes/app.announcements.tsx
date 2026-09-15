@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Megaphone, Send, Users } from "lucide-react";
+import { Megaphone, Send, Trash2, Users } from "lucide-react";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
+import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import {
   useMyAnnouncements,
   useSentAnnouncements,
   useCreateAnnouncement,
+  useDeleteAnnouncement,
 } from "@/hooks/use-organizations";
 import { useOwnedCohorts } from "@/hooks/use-instructor";
 import { useAuthUser } from "@/lib/auth-store";
@@ -46,11 +48,13 @@ function AnnouncementsPage() {
 function AdminView() {
   const cohortsQuery = useOwnedCohorts();
   const create = useCreateAnnouncement();
+  const deleteAnnouncement = useDeleteAnnouncement();
   const { announcements: sent, isPending: sentPending } = useSentAnnouncements(true);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [cohortId, setCohortId] = useState("");
+  const [toDelete, setToDelete] = useState<AnnouncementDto | null>(null);
 
   const cohorts = useMemo(
     () => (cohortsQuery.data ?? []).filter((c) => !c.archivedAt),
@@ -159,11 +163,32 @@ function AdminView() {
         ) : (
           <ul className="divide-y divide-border">
             {sent.map((a) => (
-              <AnnouncementRow key={a.id} announcement={a} showAudience />
+              <AnnouncementRow
+                key={a.id}
+                announcement={a}
+                showAudience
+                onDelete={() => setToDelete(a)}
+              />
             ))}
           </ul>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setToDelete(null);
+        }}
+        title="Delete this announcement?"
+        description="This announcement will be removed from the organization's announcement history and will no longer be available to recipients."
+        target={toDelete?.title}
+        confirmLabel="Delete announcement"
+        onConfirm={async () => {
+          if (!toDelete) return;
+          await deleteAnnouncement.mutateAsync(toDelete.id);
+          toast.success("Announcement deleted.");
+        }}
+      />
     </>
   );
 }
@@ -205,9 +230,11 @@ function ReceivedFeed() {
 function AnnouncementRow({
   announcement,
   showAudience = false,
+  onDelete,
 }: {
   announcement: AnnouncementDto;
   showAudience?: boolean;
+  onDelete?: () => void;
 }) {
   const audienceLabel =
     announcement.audience.scope === "cohort"
@@ -239,6 +266,16 @@ function AnnouncementRow({
           )}
         </div>
       </div>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete announcement"
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-[color:var(--critical)]"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
     </li>
   );
 }

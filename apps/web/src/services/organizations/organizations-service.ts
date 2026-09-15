@@ -15,6 +15,8 @@ export interface OrganizationsService {
   setLogo(file: File): Promise<OrganizationDto>;
   removeLogo(): Promise<OrganizationDto>;
   listMembers(): Promise<OrganizationMemberDto[]>;
+  /** org_admin: revoke a member's organization access. Their personal account is preserved. */
+  removeMember(userId: string): Promise<void>;
   listInvites(): Promise<OrganizationInviteDto[]>;
   createInvite(email: string, role: InviteRole): Promise<OrganizationInviteDto>;
   /** Unauthenticated on the backend — used by the public accept-invite page. */
@@ -26,4 +28,6 @@ export interface OrganizationsService {
   listSentAnnouncements(): Promise<AnnouncementDto[]>;
   /** Any member: announcements addressed to them. */
   listMyAnnouncements(): Promise<AnnouncementDto[]>;
+  /** org_admin: clear one previously sent announcement. */
+  deleteAnnouncement(id: string): Promise<void>;
 }

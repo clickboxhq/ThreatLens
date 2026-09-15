@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
+import { organizationInviteEmail } from '../../common/email/email-templates';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
@@ -216,7 +217,7 @@ export class OrganizationsService {
   async listSentAnnouncements(user: AuthenticatedUser) {
     const orgId = await this.getOwnedOrgId(user);
     const rows = await this.prisma.announcement.findMany({
-      where: { orgId },
+      where: { orgId, deletedAt: null },
       include: {
         author: { select: { displayName: true } },
         cohort: { select: { name: true } },
@@ -228,16 +229,59 @@ export class OrganizationsService {
   }
 
   /**
-   * Announcements addressed to the caller: everything sent to their whole org,
-   * plus anything sent to a cohort they are actively enrolled in. Scoped to
-   * `me.orgId`, so a user only ever sees their own tenant's announcements.
+   * §12: an org_admin clearing a previously sent announcement. Soft-deletes the
+   * Announcement row only — existing Notification rows for it are untouched (they
+   * carry their own copy of title/body, not a reference to this row), so recipients
+   * keep their notification history and nothing goes "not found" underneath them.
+   * `getOwnedOrgId` + the orgId match below are the same two-layer tenant check every
+   * other org_admin mutation here uses: an admin can only ever reach their own org's rows.
+   */
+  async deleteAnnouncement(user: AuthenticatedUser, announcementId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    const announcement = await this.prisma.announcement.findUnique({
+      where: { id: announcementId },
+      select: { id: true, orgId: true, deletedAt: true },
+    });
+    if (!announcement || announcement.orgId !== orgId) {
+      throw new AppException(404, 'NOT_FOUND', 'Announcement not found.');
+    }
+    if (announcement.deletedAt) return;
+
+    await this.prisma.announcement.update({
+      where: { id: announcementId },
+      data: { deletedAt: new Date() },
+    });
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_announcement_deleted',
+      targetType: 'organization',
+      targetId: orgId,
+      metadata: { announcementId },
+    });
+  }
+
+  /**
+   * Announcements addressed to the caller: everything sent to their whole org
+   * (only if they are a formal member of it — `me.orgId` match), plus anything
+   * sent to a cohort they are actively enrolled in.
+   *
+   * The cohort half deliberately does NOT also require `me.orgId` to match: a
+   * user can be an active CohortEnrollment member of a cohort under an org
+   * without ever being a formal org member themselves (cohort-invite.service.ts's
+   * `accept()` creates the enrollment but never touches `user.orgId` — a
+   * cohort's own roster and an org's member list are separate lists by design).
+   * resolveAnnouncementRecipients (the notification fan-out above) already
+   * follows this same rule for cohort-targeted sends, so this read path has to
+   * match it or a user can receive the notification for an announcement this
+   * query then hides from them — a real symptom previously seen with the
+   * ClickBox cohort-only accounts, not a hypothetical.
    */
   async listMyAnnouncements(user: AuthenticatedUser) {
     const me = await this.prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: { orgId: true },
     });
-    if (!me.orgId) return [];
 
     const enrollments = await this.prisma.cohortEnrollment.findMany({
       where: { userId: user.id, status: 'active' },
@@ -245,10 +289,15 @@ export class OrganizationsService {
     });
     const cohortIds = enrollments.map((e) => e.cohortId);
 
+    if (!me.orgId && cohortIds.length === 0) return [];
+
     const rows = await this.prisma.announcement.findMany({
       where: {
-        orgId: me.orgId,
-        OR: [{ cohortId: null }, { cohortId: { in: cohortIds } }],
+        deletedAt: null,
+        OR: [
+          ...(me.orgId ? [{ orgId: me.orgId, cohortId: null }] : []),
+          ...(cohortIds.length > 0 ? [{ cohortId: { in: cohortIds } }] : []),
+        ],
       },
       include: {
         author: { select: { displayName: true } },
@@ -304,6 +353,80 @@ export class OrganizationsService {
     }));
   }
 
+  /**
+   * §11: an org_admin revoking a member's organization access.
+   *
+   * Three things happen together, in one transaction:
+   *  1. `orgId` is cleared — the member's personal account, investigation history, scores
+   *     and certificates are untouched (only the org relation is), same as the rest of this
+   *     codebase's soft/relational-only removals.
+   *  2. Their active enrollments in *this org's* cohorts are dropped, so they stop being a
+   *     recipient of this org's cohort-scoped announcements/assignments the moment this
+   *     runs — listMyAnnouncements (above) treats an active CohortEnrollment as standing
+   *     access independent of `orgId`, so leaving the enrollment active would silently
+   *     undo the revocation for anything cohort-scoped.
+   *  3. `sessionVersion` is bumped — the same primitive auth.service.ts uses for
+   *     logout-all/MFA-change/password-reset. `cohort-access.service.ts` grants an
+   *     org_admin cohort access from the *JWT's* cached orgId (not a fresh DB read), and a
+   *     plain student's access token is still valid for up to 15 minutes after this call;
+   *     bumping the version makes JwtAuthGuard reject that token on its very next request
+   *     instead of waiting for it to expire on its own.
+   *
+   * A history-preserving removal (rather than deleting the CohortEnrollment/CohortStaff
+   * rows outright) matches how Cohort.archivedAt already treats past-term data: the record
+   * that this person once belonged here survives, only their standing access does not.
+   */
+  async removeMember(user: AuthenticatedUser, memberId: string) {
+    const orgId = await this.getOwnedOrgId(user);
+    if (memberId === user.id) {
+      throw new AppException(
+        400,
+        'CANNOT_REMOVE_SELF',
+        'You cannot remove your own membership this way. Ask another organization admin.',
+      );
+    }
+
+    const member = await this.prisma.user.findUnique({
+      where: { id: memberId },
+      select: { id: true, orgId: true, email: true, displayName: true },
+    });
+    if (!member || member.orgId !== orgId) {
+      throw new AppException(
+        404,
+        'NOT_FOUND',
+        'That member is not part of your organization.',
+      );
+    }
+
+    const orgCohorts = await this.prisma.cohort.findMany({
+      where: { orgId },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: memberId },
+        data: { orgId: null, sessionVersion: { increment: 1 } },
+      }),
+      this.prisma.cohortEnrollment.updateMany({
+        where: {
+          userId: memberId,
+          cohortId: { in: orgCohorts.map((c) => c.id) },
+          status: 'active',
+        },
+        data: { status: 'dropped' },
+      }),
+    ]);
+
+    await this.auditLog.record({
+      actorUserId: user.id,
+      action: 'organization_member_removed',
+      targetType: 'user',
+      targetId: memberId,
+      metadata: { orgId, memberEmail: member.email },
+    });
+  }
+
   async listInvites(user: AuthenticatedUser) {
     const orgId = await this.getOwnedOrgId(user);
     const invites = await this.prisma.organizationInvite.findMany({
@@ -342,11 +465,19 @@ export class OrganizationsService {
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: orgId },
     });
+    const inviter = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { displayName: true },
+    });
     const inviteUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/accept-invite/${token}`;
     await this.emailService.send({
       to: dto.email,
-      subject: `You've been invited to join ${org.name} on ThreatLens`,
-      html: `<p>You've been invited to join <strong>${org.name}</strong> on ThreatLens as a${dto.role === 'instructor' ? 'n' : ''} ${dto.role}.</p><p><a href="${inviteUrl}">${inviteUrl}</a></p><p>This invite expires in 7 days.</p>`,
+      ...organizationInviteEmail({
+        orgName: org.name,
+        inviterName: inviter.displayName,
+        role: dto.role,
+        inviteUrl,
+      }),
     });
 
     await this.auditLog.record({

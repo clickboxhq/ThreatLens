@@ -87,6 +87,24 @@ export class NotificationsService {
       data: { read: true },
     });
   }
+
+  /** §13: a user clearing one of their own notifications. Same ownership check as
+   * markAsRead — a 404 either way, so this can't be used to probe another user's ids. */
+  async clearOne(user: AuthenticatedUser, id: string): Promise<void> {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id },
+    });
+    if (!notification || notification.userId !== user.id) {
+      throw new AppException(404, 'NOT_FOUND', 'Notification not found.');
+    }
+    await this.prisma.notification.delete({ where: { id } });
+  }
+
+  /** §13: "Clear all" — scoped to `userId` in the query itself, not a loop over ids the
+   * client supplied, so there is no path from this call to another user's rows. */
+  async clearAll(user: AuthenticatedUser): Promise<void> {
+    await this.prisma.notification.deleteMany({ where: { userId: user.id } });
+  }
 }
 
 function toDto(n: {

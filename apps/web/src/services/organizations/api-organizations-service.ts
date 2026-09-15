@@ -34,6 +34,10 @@ export const apiOrganizationsService: OrganizationsService = {
 
   listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
 
+  removeMember: async (userId) => {
+    await apiClient.delete(`/organizations/mine/members/${encodeURIComponent(userId)}`);
+  },
+
   listInvites: () => apiClient.get<OrganizationInviteDto[]>("/organizations/mine/invites"),
 
   createInvite: (email, role) =>
@@ -58,4 +62,8 @@ export const apiOrganizationsService: OrganizationsService = {
     apiClient.get<AnnouncementDto[]>("/organizations/mine/announcements"),
 
   listMyAnnouncements: () => apiClient.get<AnnouncementDto[]>("/announcements/mine"),
+
+  deleteAnnouncement: async (id) => {
+    await apiClient.delete(`/organizations/mine/announcements/${encodeURIComponent(id)}`);
+  },
 };
