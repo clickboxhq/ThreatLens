@@ -113,6 +113,9 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     create: jest.fn(async () => undefined),
     createMany: jest.fn(async () => undefined),
   };
+  const organizationScenariosService = {
+    assignAllActiveScenariosToNewMember: jest.fn(async () => undefined),
+  };
 
   const service = new OrganizationsService(
     prisma as never,
@@ -120,6 +123,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     auditLog as never,
     config as never,
     notificationsService as never,
+    organizationScenariosService as never,
   );
   return {
     service,
@@ -127,6 +131,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     emailService,
     auditLog,
     notificationsService,
+    organizationScenariosService,
     orgId,
   };
 }
@@ -977,6 +982,9 @@ describe('OrganizationsService invite preview and acceptance', () => {
       organizationId: 'org-1',
       invitedBy: 'admin-1',
     });
+    prisma.user.findMany = jest.fn(async () => [
+      { id: 'admin-1', displayName: 'Ada Admin', email: 'admin@contoso.com' },
+    ]);
     const user = buildUser();
 
     await service.acceptInvite(user, 'tok');
@@ -995,8 +1003,68 @@ describe('OrganizationsService invite preview and acceptance', () => {
       expect.objectContaining({
         userId: 'admin-1',
         category: 'org_invitation',
+        title: 'New student joined your organization',
       }),
     );
+  });
+
+  it('acceptInvite() emails every org_admin of the org — not just the original inviter — and the notification/email never fire before membership is actually created', async () => {
+    const { service, prisma, notificationsService, emailService } =
+      buildService({
+        email: 'me@contoso.com',
+        orgId: null,
+      });
+    prisma.organizationInvite.findUnique.mockResolvedValueOnce({
+      id: 'invite-1',
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 100_000),
+      email: 'me@contoso.com',
+      role: 'student',
+      organizationId: 'org-1',
+      invitedBy: 'admin-1',
+    });
+    prisma.user.findMany = jest.fn(async () => [
+      { id: 'admin-1', displayName: 'Ada Admin', email: 'ada@contoso.com' },
+      { id: 'admin-2', displayName: 'Bo Admin', email: 'bo@contoso.com' },
+    ]);
+    const user = buildUser();
+
+    // The transaction (membership creation) must be attempted before either channel fires.
+    let transactionRanBeforeNotify = false;
+    (prisma.$transaction as jest.Mock).mockImplementationOnce(
+      async (ops: Promise<unknown>[]) => {
+        const result = await Promise.all(ops);
+        transactionRanBeforeNotify = true;
+        return result;
+      },
+    );
+
+    await service.acceptInvite(user, 'tok');
+
+    expect(transactionRanBeforeNotify).toBe(true);
+    expect(notificationsService.create).toHaveBeenCalledTimes(2);
+    expect(notificationsService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'admin-1' }),
+    );
+    expect(notificationsService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'admin-2' }),
+    );
+
+    expect(emailService.send).toHaveBeenCalledTimes(2);
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'ada@contoso.com',
+        subject: expect.stringContaining('New student joined'),
+      }),
+    );
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'bo@contoso.com' }),
+    );
+    const sent = (emailService.send as jest.Mock).mock.calls[0][0] as {
+      html: string;
+    };
+    expect(sent.html).toContain('Contoso University');
+    expect(sent.html).toContain('View Organization Members');
   });
 
   it('acceptInvite() rejects an already-accepted invite', async () => {

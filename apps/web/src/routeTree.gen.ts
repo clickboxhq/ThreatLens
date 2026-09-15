@@ -36,6 +36,7 @@ import { Route as AppAlertsRouteImport } from './routes/app.alerts'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
 import { Route as AppAnnouncementsRouteImport } from './routes/app.announcements'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
+import { Route as AppAssignedScenariosRouteImport } from './routes/app.assigned-scenarios'
 import { Route as AppAuditLogsRouteImport } from './routes/app.audit-logs'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppCertificatesRouteImport } from './routes/app.certificates'
@@ -52,6 +53,7 @@ import { Route as AppLearningRouteImport } from './routes/app.learning'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppMitreRouteImport } from './routes/app.mitre'
 import { Route as AppNetworkRouteImport } from './routes/app.network'
+import { Route as AppOrganizationScenariosRouteImport } from './routes/app.organization-scenarios'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppScenarioBuilderRouteImport } from './routes/app.scenario-builder'
@@ -225,6 +227,11 @@ const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
   path: '/assessments',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAssignedScenariosRoute = AppAssignedScenariosRouteImport.update({
+  id: '/assigned-scenarios',
+  path: '/assigned-scenarios',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditLogsRoute = AppAuditLogsRouteImport.update({
   id: '/audit-logs',
   path: '/audit-logs',
@@ -305,6 +312,12 @@ const AppNetworkRoute = AppNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrganizationScenariosRoute =
+  AppOrganizationScenariosRouteImport.update({
+    id: '/organization-scenarios',
+    path: '/organization-scenarios',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -523,6 +536,7 @@ export interface FileRoutesByFullPath {
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRouteWithChildren
@@ -539,6 +553,7 @@ export interface FileRoutesByFullPath {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -604,6 +619,7 @@ export interface FileRoutesByTo {
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRouteWithChildren
@@ -620,6 +636,7 @@ export interface FileRoutesByTo {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -687,6 +704,7 @@ export interface FileRoutesById {
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/certificates': typeof AppCertificatesRouteWithChildren
@@ -703,6 +721,7 @@ export interface FileRoutesById {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -771,6 +790,7 @@ export interface FileRouteTypes {
     | '/app/analytics'
     | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -787,6 +807,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -852,6 +873,7 @@ export interface FileRouteTypes {
     | '/app/analytics'
     | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -868,6 +890,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -934,6 +957,7 @@ export interface FileRouteTypes {
     | '/app/analytics'
     | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -950,6 +974,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -1210,6 +1235,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAssessmentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/assigned-scenarios': {
+      id: '/app/assigned-scenarios'
+      path: '/assigned-scenarios'
+      fullPath: '/app/assigned-scenarios'
+      preLoaderRoute: typeof AppAssignedScenariosRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/audit-logs': {
       id: '/app/audit-logs'
       path: '/audit-logs'
@@ -1320,6 +1352,13 @@ declare module '@tanstack/react-router' {
       path: '/network'
       fullPath: '/app/network'
       preLoaderRoute: typeof AppNetworkRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/organization-scenarios': {
+      id: '/app/organization-scenarios'
+      path: '/organization-scenarios'
+      fullPath: '/app/organization-scenarios'
+      preLoaderRoute: typeof AppOrganizationScenariosRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/organizations': {
@@ -1627,6 +1666,7 @@ interface AppRouteChildren {
   AppAnalyticsRoute: typeof AppAnalyticsRoute
   AppAnnouncementsRoute: typeof AppAnnouncementsRoute
   AppAssessmentsRoute: typeof AppAssessmentsRoute
+  AppAssignedScenariosRoute: typeof AppAssignedScenariosRoute
   AppAuditLogsRoute: typeof AppAuditLogsRoute
   AppBillingRoute: typeof AppBillingRoute
   AppCertificatesRoute: typeof AppCertificatesRouteWithChildren
@@ -1643,6 +1683,7 @@ interface AppRouteChildren {
   AppLogsRoute: typeof AppLogsRoute
   AppMitreRoute: typeof AppMitreRoute
   AppNetworkRoute: typeof AppNetworkRoute
+  AppOrganizationScenariosRoute: typeof AppOrganizationScenariosRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppScenarioBuilderRoute: typeof AppScenarioBuilderRoute
@@ -1681,6 +1722,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAnalyticsRoute: AppAnalyticsRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
+  AppAssignedScenariosRoute: AppAssignedScenariosRoute,
   AppAuditLogsRoute: AppAuditLogsRoute,
   AppBillingRoute: AppBillingRoute,
   AppCertificatesRoute: AppCertificatesRouteWithChildren,
@@ -1697,6 +1739,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLogsRoute: AppLogsRoute,
   AppMitreRoute: AppMitreRoute,
   AppNetworkRoute: AppNetworkRoute,
+  AppOrganizationScenariosRoute: AppOrganizationScenariosRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
   AppScenarioBuilderRoute: AppScenarioBuilderRoute,

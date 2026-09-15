@@ -3,9 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
-import { organizationInviteEmail } from '../../common/email/email-templates';
+import {
+  organizationInviteEmail,
+  organizationMemberJoinedEmail,
+} from '../../common/email/email-templates';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrganizationScenariosService } from './organization-scenarios.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
@@ -28,6 +32,7 @@ export class OrganizationsService {
     private readonly auditLog: AuditLogService,
     private readonly config: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly organizationScenariosService: OrganizationScenariosService,
   ) {}
 
   // Creating an org promotes the creator to org_admin — a deliberate, explicit action
@@ -738,6 +743,13 @@ export class OrganizationsService {
       }),
     ]);
 
+    // §Task 2: a new member sees every scenario the org is already running, same as if
+    // they'd joined before each was added.
+    await this.organizationScenariosService.assignAllActiveScenariosToNewMember(
+      invite.organizationId,
+      user.id,
+    );
+
     await this.auditLog.record({
       actorUserId: user.id,
       action: 'organization_invite_accepted',
@@ -745,13 +757,55 @@ export class OrganizationsService {
       targetId: invite.organizationId,
     });
 
-    await this.notificationsService.create({
-      userId: invite.invitedBy,
-      category: 'org_invitation',
-      title: `${me.displayName} joined your organization`,
-      body: `${me.displayName} (${me.email}) accepted your invite as ${invite.role === 'instructor' ? 'an' : 'a'} ${invite.role}.`,
-      link: '/app/organizations',
-    });
+    // §Task 1: everyone who can actually act on this — not just whoever happened to send
+    // this particular invite. Today an org has exactly one org_admin (role is never
+    // grantable by invite), but this stays correct if that ever changes.
+    const [org, admins] = await Promise.all([
+      this.prisma.organization.findUniqueOrThrow({
+        where: { id: invite.organizationId },
+        select: { name: true },
+      }),
+      this.prisma.user.findMany({
+        where: { orgId: invite.organizationId, role: 'org_admin' },
+        select: { id: true, displayName: true, email: true },
+      }),
+    ]);
+    const joinedAt = new Date();
+
+    await Promise.all(
+      admins.map((admin) =>
+        this.notificationsService.create({
+          userId: admin.id,
+          category: 'org_invitation',
+          title: 'New student joined your organization',
+          body: `${me.displayName} (${me.email}) has accepted the invitation and joined ${org.name} as ${invite.role === 'instructor' ? 'an' : 'a'} ${invite.role}.`,
+          link: '/app/organizations',
+        }),
+      ),
+    );
+
+    // A logged-out admin never sees the in-app notification above, so this is the only
+    // channel that reliably reaches them — see organizationMemberJoinedEmail's own comment.
+    // EmailService.send() catches and logs its own failures rather than throwing (checked:
+    // apps/api/src/common/email/email.service.ts), so a delivery failure here can never roll
+    // back the membership transaction that already committed above.
+    const membersUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/app/organizations`;
+    await Promise.all(
+      admins.map((admin) =>
+        this.emailService.send({
+          to: admin.email,
+          ...organizationMemberJoinedEmail({
+            adminName: admin.displayName,
+            memberName: me.displayName,
+            memberEmail: me.email,
+            orgName: org.name,
+            role: invite.role,
+            joinedAt,
+            membersUrl,
+          }),
+        }),
+      ),
+    );
 
     return this.toOrgDto(invite.organizationId);
   }

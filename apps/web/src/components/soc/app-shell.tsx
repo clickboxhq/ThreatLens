@@ -60,6 +60,7 @@ import { PageTransition } from "@/components/soc/ui/motion";
 import { EmailVerificationBanner } from "@/components/soc/email-verification-banner";
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
+import { useMyOrganization } from "@/hooks/use-organizations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -135,10 +136,18 @@ const instructorTools: NavItem[] = [
 
 const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
+  { to: "/app/organization-scenarios", label: "Organization Scenarios", icon: ClipboardCheck },
   { to: "/app/announcements", label: "Announcements", icon: Megaphone },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
+];
+
+// A student/instructor's own org-assigned work — shown only while an active organization
+// membership exists (see hasActiveOrg below), independent of the org_admin-only `isOrg` gate:
+// an individual account must never see this, per §Task 2's critical access rule.
+const orgLearning: NavItem[] = [
+  { to: "/app/assigned-scenarios", label: "Assigned Scenarios", icon: ClipboardCheck },
 ];
 
 // Platform-operator surface — every route below is gated to platform_admin specifically on
@@ -254,6 +263,12 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
   // real admin-provisioned account (no self-serve path) logs in.
   const isOrg = user?.role === "instructor" || user?.role === "org_admin";
   const isPlatformAdmin = user?.role === "platform_admin";
+  // Any authenticated user with a current organization — including a plain student, who
+  // `isOrg` above deliberately excludes — gets the Assigned Scenarios link. An individual
+  // account (organization === null) never does; the backend enforces this independently
+  // (organization-scenarios.service.ts), this is just the matching nav visibility.
+  const { organization: myOrganization } = useMyOrganization();
+  const hasActiveOrg = myOrganization !== null;
   const accountName = user?.displayName ?? "Account";
 
   return (
@@ -291,6 +306,9 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
           collapsed={collapsed}
         />
         <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+        {hasActiveOrg && (
+          <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
+        )}
         {isOrg && (
           <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
         )}
@@ -564,6 +582,8 @@ const crumbMap: Record<string, string> = {
   "/app/assessments": "Assessments",
   "/app/feedback": "Feedback Center",
   "/app/organizations": "My Organization",
+  "/app/organization-scenarios": "Organization Scenarios",
+  "/app/assigned-scenarios": "Assigned Scenarios",
   "/app/announcements": "Announcements",
   "/app/settings": "Settings",
   "/app/audit-logs": "Audit Logs",

@@ -340,6 +340,49 @@ export function organizationInviteEmail(input: {
   };
 }
 
+/**
+ * §Task 1: sent to an org_admin the moment an invited student/instructor's membership is
+ * actually created (organizations.service.ts's acceptInvite, after the transaction commits) —
+ * never on invite-sent or invite-viewed. Works whether or not the admin is currently signed
+ * in, which is the whole point of an email rather than relying on the in-app notification alone.
+ */
+export function organizationMemberJoinedEmail(input: {
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  orgName: string;
+  role: string;
+  joinedAt: Date;
+  membersUrl: string;
+}): { subject: string; html: string } {
+  const admin = escapeHtml(input.adminName.trim().split(/\s+/)[0] || 'there');
+  const member = escapeHtml(input.memberName);
+  const email = escapeHtml(input.memberEmail);
+  const org = escapeHtml(input.orgName);
+  const roleLabel = ORG_ROLE_LABEL[input.role] ?? 'Member';
+  const joined = input.joinedAt.toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  return {
+    subject: `New student joined your organization — ThreatLens`,
+    html: renderEmail({
+      preheader: `${input.memberName} accepted the invitation and joined ${input.orgName}.`,
+      heading: `New member joined ${input.orgName}`,
+      paragraphs: [
+        `Hello ${admin},`,
+        `<strong>${member}</strong> has successfully joined <strong>${org}</strong> on ThreatLens.`,
+        `<strong>Member details</strong><br>Name: <strong>${member}</strong><br>Email: <strong>${email}</strong><br>Role: <strong>${roleLabel}</strong><br>Joined: <strong>${escapeHtml(joined)}</strong>`,
+        `${member} can now access the scenarios and resources assigned to them by your organization.`,
+      ],
+      cta: { label: 'View Organization Members', url: input.membersUrl },
+      meta: 'You can manage your organization’s members, assignments, and learning activities from your ThreatLens organization dashboard.',
+      fallbackUrl: input.membersUrl,
+    }),
+  };
+}
+
 const STAFF_ROLE_LABEL: Record<string, string> = {
   lead: 'a lead',
   tutor: 'a tutor',
