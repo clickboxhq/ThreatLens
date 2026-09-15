@@ -60,10 +60,11 @@ model Organization {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  users         User[]
-  invites       OrganizationInvite[]
-  cohorts       Cohort[]
-  announcements Announcement[]
+  users                 User[]
+  invites               OrganizationInvite[]
+  cohorts               Cohort[]
+  announcements         Announcement[]
+  organizationScenarios OrganizationScenario[]
 
   @@map("organizations")
 }
@@ -186,29 +187,31 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  organization           Organization?              @relation(fields: [orgId], references: [id])
+  organization           Organization?                    @relation(fields: [orgId], references: [id])
   refreshTokens          RefreshToken[]
   investigationSessions  InvestigationSession[]
-  authoredScenarios      AttackScenario[]           @relation("ScenarioAuthor")
-  authoredVersions       ScenarioVersion[]          @relation("ScenarioVersionAuthor")
+  authoredScenarios      AttackScenario[]                 @relation("ScenarioAuthor")
+  authoredVersions       ScenarioVersion[]                @relation("ScenarioVersionAuthor")
   pinnedEvidence         EvidenceCollection[]
   timelineItems          TimelineItem[]
   analystNotes           AnalystNote[]
   investigationActions   InvestigationAction[]
-  ownedCohorts           Cohort[]                   @relation("CohortOwner")
-  cohortInvitesSent      CohortInvite[]             @relation("CohortInviteInviter")
-  cohortEnrollments      CohortEnrollment[]         @relation("CohortEnrollments")
-  cohortStaffRoles       CohortStaff[]              @relation("CohortStaffMember")
-  cohortGroupTutorships  CohortGroupTutor[]         @relation("CohortGroupTutor")
-  createdAssignments     CohortScenarioAssignment[] @relation("AssignmentCreator")
-  instructorFeedback     InstructorFeedback[]       @relation("InstructorFeedbackAuthor")
+  ownedCohorts           Cohort[]                         @relation("CohortOwner")
+  cohortInvitesSent      CohortInvite[]                   @relation("CohortInviteInviter")
+  cohortEnrollments      CohortEnrollment[]               @relation("CohortEnrollments")
+  cohortStaffRoles       CohortStaff[]                    @relation("CohortStaffMember")
+  cohortGroupTutorships  CohortGroupTutor[]               @relation("CohortGroupTutor")
+  createdAssignments     CohortScenarioAssignment[]       @relation("AssignmentCreator")
+  instructorFeedback     InstructorFeedback[]             @relation("InstructorFeedbackAuthor")
   certificates           Certificate[]
   achievements           Achievement[]
   auditLogs              AuditLog[]
-  sentOrgInvites         OrganizationInvite[]       @relation("OrganizationInviteInviter")
+  sentOrgInvites         OrganizationInvite[]             @relation("OrganizationInviteInviter")
   notifications          Notification[]
-  authoredAnnouncements  Announcement[]             @relation("AnnouncementAuthor")
+  authoredAnnouncements  Announcement[]                   @relation("AnnouncementAuthor")
   platformSettingUpdates PlatformSetting[]
+  addedOrgScenarios      OrganizationScenario[]           @relation("OrgScenarioAddedBy")
+  orgScenarioAssignments OrganizationScenarioAssignment[] @relation("OrgScenarioAssignmentUser")
 
   @@map("users")
 }
@@ -443,6 +446,56 @@ model CohortScenarioAssignment {
   @@map("cohort_scenario_assignments")
 }
 
+/// The org-wide counterpart to CohortScenarioAssignment: an org_admin's "we're running this
+/// scenario org-wide" decision, independent of any cohort (an org that has never set up a
+/// cohort can still assign scenarios directly to its members). `dueAt` lives here, not on the
+/// per-member OrganizationScenarioAssignment row below — the due date is one property of "the
+/// org is running this scenario", not a per-student choice, matching the single editable date
+/// shown per scenario row in the admin table.
+///
+/// `removedAt` soft-removes it from the org's active collection (Task 4's "Remove Scenario")
+/// without touching the underlying AttackScenario or any OrganizationScenarioAssignment /
+/// InvestigationSession that already exists — those rows, and a student's investigation
+/// history against this scenario, are untouched by removal.
+model OrganizationScenario {
+  id         String    @id @default(uuid()) @db.Uuid
+  orgId      String    @map("org_id") @db.Uuid
+  scenarioId String    @map("scenario_id") @db.Uuid
+  dueAt      DateTime? @map("due_at")
+  addedBy    String    @map("added_by") @db.Uuid
+  addedAt    DateTime  @default(now()) @map("added_at")
+  removedAt  DateTime? @map("removed_at")
+
+  org         Organization                     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scenario    AttackScenario                   @relation(fields: [scenarioId], references: [id])
+  addedByUser User                             @relation("OrgScenarioAddedBy", fields: [addedBy], references: [id])
+  assignments OrganizationScenarioAssignment[]
+
+  @@unique([orgId, scenarioId])
+  @@index([orgId])
+  @@map("organization_scenarios")
+}
+
+/// One row per (org scenario, member) — materialized when a scenario is added to the org
+/// (fanned out to every currently-active member) and when a new member joins (fanned out to
+/// every currently-active org scenario). Purely a "this is assigned to you" marker: status,
+/// progress and score are never duplicated here — they're read live from the member's own
+/// InvestigationSession(s) against `scenarioId`, the same source of truth every other part of
+/// ThreatLens already uses, so nothing about a student's actual work is tracked twice.
+model OrganizationScenarioAssignment {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationScenarioId String   @map("organization_scenario_id") @db.Uuid
+  userId                 String   @map("user_id") @db.Uuid
+  assignedAt             DateTime @default(now()) @map("assigned_at")
+
+  organizationScenario OrganizationScenario @relation(fields: [organizationScenarioId], references: [id], onDelete: Cascade)
+  user                 User                 @relation("OrgScenarioAssignmentUser", fields: [userId], references: [id])
+
+  @@unique([organizationScenarioId, userId])
+  @@index([userId])
+  @@map("organization_scenario_assignments")
+}
+
 model InstructorFeedback {
   id              String   @id @default(uuid()) @db.Uuid
   incidentId      String   @map("incident_id") @db.Uuid
@@ -537,6 +590,7 @@ model AttackScenario {
   sessions              InvestigationSession[]
   cohortAssignments     CohortScenarioAssignment[]
   learningPathScenarios LearningPathScenario[]
+  organizationScenarios OrganizationScenario[]
 
   @@map("attack_scenarios")
 }
