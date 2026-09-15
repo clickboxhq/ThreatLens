@@ -107,6 +107,26 @@ export function useOrganizationMembers(enabled: boolean) {
   return { members: query.data ?? [], isPending: query.isPending, isError: query.isError };
 }
 
+export function useSuspendMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => organizationsService.suspendMember(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.members });
+    },
+  });
+}
+
+export function useRestoreMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => organizationsService.restoreMember(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.members });
+    },
+  });
+}
+
 export function useRemoveMember() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -146,6 +166,26 @@ export function useCreateInvite() {
       queryClient.invalidateQueries({ queryKey: keys.invites });
       queryClient.invalidateQueries({ queryKey: keys.members });
       queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
+  });
+}
+
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => organizationsService.resendInvite(inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.invites });
+    },
+  });
+}
+
+export function useRevokeInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => organizationsService.revokeInvite(inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.invites });
     },
   });
 }

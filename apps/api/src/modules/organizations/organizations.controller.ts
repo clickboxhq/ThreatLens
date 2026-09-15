@@ -96,6 +96,24 @@ export class OrganizationsController {
     return this.organizationsService.listMembers(user);
   }
 
+  @Post('mine/members/:userId/suspend')
+  async suspendMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ) {
+    await this.organizationsService.suspendMember(user, userId);
+    return { suspended: true };
+  }
+
+  @Post('mine/members/:userId/restore')
+  async restoreMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ) {
+    await this.organizationsService.restoreMember(user, userId);
+    return { restored: true };
+  }
+
   @Delete('mine/members/:userId')
   async removeMember(
     @CurrentUser() user: AuthenticatedUser,
@@ -116,6 +134,23 @@ export class OrganizationsController {
     @Body() dto: CreateInviteDto,
   ) {
     return this.organizationsService.createInvite(user, dto);
+  }
+
+  @Post('mine/invites/:inviteId/resend')
+  async resendInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.organizationsService.resendInvite(user, inviteId);
+  }
+
+  @Delete('mine/invites/:inviteId')
+  async revokeInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('inviteId') inviteId: string,
+  ) {
+    await this.organizationsService.revokeInvite(user, inviteId);
+    return { revoked: true };
   }
 
   @Post('invites/:token/accept')

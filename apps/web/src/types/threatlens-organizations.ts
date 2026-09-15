@@ -14,14 +14,23 @@ export interface OrganizationDto {
 }
 
 export type OrgMemberRole = "student" | "instructor" | "org_admin" | "platform_admin";
-export type OrgMemberStatus = "active" | "suspended" | "pending_verification";
+/** The ThreatLens *account's* own status — platform-wide, not org-specific. */
+export type AccountStatus = "active" | "suspended" | "pending_verification";
+/** Standing within *this* organization. A removed member simply stops appearing in the
+ * roster (their `orgId` is cleared), so this only ever holds these two values here. */
+export type OrgMembershipStatus = "active" | "suspended";
 
 export interface OrganizationMemberDto {
   userId: string;
   displayName: string;
   email: string;
   role: OrgMemberRole;
-  status: OrgMemberStatus;
+  accountStatus: AccountStatus;
+  orgMembershipStatus: OrgMembershipStatus;
+  /** When this membership began. Null for rows that predate this field. */
+  joinedAt: string | null;
+  /** Last successful login, platform-wide — not org-specific activity. Null if never. */
+  lastActiveAt: string | null;
 }
 
 export type InviteRole = "student" | "instructor";
