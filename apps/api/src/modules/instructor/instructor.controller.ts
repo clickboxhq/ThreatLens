@@ -242,6 +242,15 @@ export class InstructorController {
     return this.instructorService.listAssignments(user, id);
   }
 
+  @Delete('cohorts/:id/assignments/:assignmentId')
+  async removeAssignment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+  ) {
+    return this.instructorService.removeAssignment(user, id, assignmentId);
+  }
+
   @Get('cohorts/:id/review-queue')
   async reviewQueue(
     @CurrentUser() user: AuthenticatedUser,

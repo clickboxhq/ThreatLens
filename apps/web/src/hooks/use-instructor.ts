@@ -94,6 +94,20 @@ export function useCreateAssignment(cohortId: string | undefined) {
   });
 }
 
+export function useRemoveAssignment(cohortId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assignmentId: string) =>
+      instructorService.removeAssignment(cohortId!, assignmentId),
+    onSuccess: () => {
+      if (cohortId) {
+        queryClient.invalidateQueries({ queryKey: keys.assignments(cohortId) });
+        queryClient.invalidateQueries({ queryKey: keys.cohorts });
+      }
+    },
+  });
+}
+
 export function useReviewQueue(cohortId: string | undefined) {
   return useQuery({
     queryKey: cohortId ? keys.reviewQueue(cohortId) : ["review-queue", "none"],

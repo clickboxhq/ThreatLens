@@ -302,12 +302,19 @@ export class OrganizationScenariosService {
    * computed live from their own InvestigationSession history — never a second, duplicated
    * copy of progress/score. `userId: user.id` is baked into every query below, so there is no
    * parameter here a client could manipulate to reach another student's or another org's rows.
+   *
+   * Also folds in the caller's CohortScenarioAssignment rows (the pre-existing cohort-scoped
+   * "Assessments" mechanism org_admins used to assign scenarios before this org-scoped one
+   * existed) so scenarios sent that way keep showing up here too, in one unified list, instead
+   * of only on the instructor-only /app/assessments page. Same non-duplication rule: status
+   * comes from the student's own session, now matched by the precise cohortAssignmentId FK
+   * rather than by scenarioId.
    */
   async listMyAssignedScenarios(user: AuthenticatedUser) {
     const orgId = await this.requireActiveOrgMembership(user);
 
-    const assignments =
-      await this.prisma.organizationScenarioAssignment.findMany({
+    const [orgAssignments, cohortRows] = await Promise.all([
+      this.prisma.organizationScenarioAssignment.findMany({
         where: {
           userId: user.id,
           organizationScenario: { orgId, removedAt: null },
@@ -330,29 +337,32 @@ export class OrganizationScenariosService {
           },
         },
         orderBy: { assignedAt: 'desc' },
-      });
-    if (assignments.length === 0) return [];
+      }),
+      this.listMyCohortAssignments(user.id),
+    ]);
 
-    const scenarioIds = assignments.map(
+    const scenarioIds = orgAssignments.map(
       (a) => a.organizationScenario.scenarioId,
     );
-    const sessions = await this.prisma.investigationSession.findMany({
-      where: { userId: user.id, scenarioId: { in: scenarioIds } },
-      select: {
-        scenarioId: true,
-        status: true,
-        startedAt: true,
-        score: { select: { overallPercent: true } },
-      },
-      orderBy: { startedAt: 'desc' },
-    });
+    const sessions = scenarioIds.length
+      ? await this.prisma.investigationSession.findMany({
+          where: { userId: user.id, scenarioId: { in: scenarioIds } },
+          select: {
+            scenarioId: true,
+            status: true,
+            startedAt: true,
+            score: { select: { overallPercent: true } },
+          },
+          orderBy: { startedAt: 'desc' },
+        })
+      : [];
     const latestByScenario = new Map<string, (typeof sessions)[number]>();
     for (const s of sessions) {
       if (!latestByScenario.has(s.scenarioId))
         latestByScenario.set(s.scenarioId, s);
     }
 
-    return assignments.map((a) => {
+    const fromOrg = orgAssignments.map((a) => {
       const os = a.organizationScenario;
       const session = latestByScenario.get(os.scenarioId);
       return {
@@ -367,6 +377,90 @@ export class OrganizationScenariosService {
         assignedAt: a.assignedAt,
         dueAt: os.dueAt,
         status: computeAssignmentStatus(session, os.dueAt),
+        scorePercent: session?.score
+          ? Number(session.score.overallPercent)
+          : null,
+      };
+    });
+
+    return [...fromOrg, ...cohortRows].sort(
+      (a, b) => b.assignedAt.getTime() - a.assignedAt.getTime(),
+    );
+  }
+
+  /**
+   * The caller's own CohortScenarioAssignment rows — every cohort they're actively enrolled
+   * in, filtered to assignments that are cohort-wide or scoped to their own group, excluding
+   * ones an instructor has since removed. `cohortAssignmentId` is a direct FK on
+   * InvestigationSession, so status here is exact rather than inferred by scenarioId match.
+   */
+  private async listMyCohortAssignments(userId: string) {
+    const enrollments = await this.prisma.cohortEnrollment.findMany({
+      where: { userId, status: 'active' },
+      select: { cohortId: true, groupId: true },
+    });
+    if (enrollments.length === 0) return [];
+    const groupIdByCohort = new Map(
+      enrollments.map((e) => [e.cohortId, e.groupId]),
+    );
+
+    const assignments = await this.prisma.cohortScenarioAssignment.findMany({
+      where: {
+        cohortId: { in: [...groupIdByCohort.keys()] },
+        removedAt: null,
+      },
+      include: {
+        scenario: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            category: true,
+            difficulty: true,
+            estimatedMinutes: true,
+          },
+        },
+        cohort: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const relevant = assignments.filter((a) => {
+      const myGroupId = groupIdByCohort.get(a.cohortId);
+      return a.groupId === null || a.groupId === myGroupId;
+    });
+    if (relevant.length === 0) return [];
+
+    const assignmentIds = relevant.map((a) => a.id);
+    const sessions = await this.prisma.investigationSession.findMany({
+      where: { userId, cohortAssignmentId: { in: assignmentIds } },
+      select: {
+        cohortAssignmentId: true,
+        status: true,
+        startedAt: true,
+        score: { select: { overallPercent: true } },
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+    const latestByAssignment = new Map<string, (typeof sessions)[number]>();
+    for (const s of sessions) {
+      const key = s.cohortAssignmentId!;
+      if (!latestByAssignment.has(key)) latestByAssignment.set(key, s);
+    }
+
+    return relevant.map((a) => {
+      const session = latestByAssignment.get(a.id);
+      return {
+        assignmentId: a.id,
+        scenarioId: a.scenario.id,
+        scenarioSlug: a.scenario.slug,
+        title: a.scenario.title,
+        category: a.scenario.category,
+        difficulty: a.scenario.difficulty,
+        estimatedMinutes: a.scenario.estimatedMinutes,
+        organizationName: a.cohort.name,
+        assignedAt: a.createdAt,
+        dueAt: a.dueAt,
+        status: computeAssignmentStatus(session, a.dueAt),
         scorePercent: session?.score
           ? Number(session.score.overallPercent)
           : null,

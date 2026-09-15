@@ -86,6 +86,35 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     investigationSession: {
       findMany: jest.fn(async () => []),
     },
+    cohortEnrollment: {
+      findMany: jest.fn(
+        async (): Promise<
+          Array<{ cohortId: string; groupId: string | null }>
+        > => [],
+      ),
+    },
+    cohortScenarioAssignment: {
+      findMany: jest.fn(
+        async (): Promise<
+          Array<{
+            id: string;
+            cohortId: string;
+            groupId: string | null;
+            dueAt: Date | null;
+            createdAt: Date;
+            scenario: {
+              id: string;
+              slug: string;
+              title: string;
+              category: string;
+              difficulty: string;
+              estimatedMinutes: number;
+            };
+            cohort: { name: string };
+          }>
+        > => [],
+      ),
+    },
   };
   const auditLog = { record: jest.fn(async () => undefined) };
   const notificationsService = { create: jest.fn(async () => undefined) };
@@ -357,6 +386,60 @@ describe('OrganizationScenariosService.listMyAssignedScenarios', () => {
     expect(completed[0]).toMatchObject({
       status: 'completed',
       scorePercent: 88,
+    });
+  });
+
+  it("folds in the caller's cohort-scoped assignments (the pre-existing /app/assessments mechanism), respecting group scope and skipping removed cohorts", async () => {
+    const { service, prisma } = buildService({ orgId: 'org-1' });
+    prisma.organizationScenarioAssignment.findMany = jest.fn(async () => []);
+    prisma.cohortEnrollment.findMany = jest.fn(async () => [
+      { cohortId: 'cohort-1', groupId: 'group-A' },
+    ]);
+    prisma.cohortScenarioAssignment.findMany = jest.fn(async () => [
+      {
+        id: 'cassign-1',
+        cohortId: 'cohort-1',
+        groupId: null, // whole cohort — applies regardless of my group
+        dueAt: null,
+        createdAt: new Date('2026-09-03'),
+        scenario: {
+          id: 'scenario-2',
+          slug: 'phishing-scenario',
+          title: 'Phishing Triage',
+          category: 'email',
+          difficulty: 'beginner',
+          estimatedMinutes: 30,
+        },
+        cohort: { name: 'Fall Cohort' },
+      },
+      {
+        id: 'cassign-2',
+        cohortId: 'cohort-1',
+        groupId: 'group-B', // a different group than mine — must not appear
+        dueAt: null,
+        createdAt: new Date('2026-09-04'),
+        scenario: {
+          id: 'scenario-3',
+          slug: 'other-scenario',
+          title: 'Other',
+          category: 'email',
+          difficulty: 'beginner',
+          estimatedMinutes: 30,
+        },
+        cohort: { name: 'Fall Cohort' },
+      },
+    ]);
+
+    const result = await service.listMyAssignedScenarios(
+      buildUser({ id: 'student-1', orgId: 'org-1' }),
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      assignmentId: 'cassign-1',
+      title: 'Phishing Triage',
+      organizationName: 'Fall Cohort',
+      status: 'assigned',
     });
   });
 });
