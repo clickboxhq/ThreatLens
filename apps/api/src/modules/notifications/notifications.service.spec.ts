@@ -24,6 +24,8 @@ function buildService(
       findUnique: jest.fn(async () => null),
       update: jest.fn(async () => undefined),
       updateMany: jest.fn(async () => ({ count: 0 })),
+      delete: jest.fn(async () => undefined),
+      deleteMany: jest.fn(async () => ({ count: 0 })),
     },
   };
   const service = new NotificationsService(prisma as never);
@@ -168,6 +170,57 @@ describe('NotificationsService.markAllAsRead', () => {
     expect(prisma.notification.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', read: false },
       data: { read: true },
+    });
+  });
+});
+
+describe('NotificationsService.clearOne', () => {
+  it('404s on a notification that does not exist', async () => {
+    const { service } = buildService();
+    await expect(
+      service.clearOne(buildUser(), 'missing'),
+    ).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it("404s on someone else's notification rather than leaking its existence", async () => {
+    const { service, prisma } = buildService();
+    prisma.notification.findUnique.mockResolvedValueOnce({
+      id: 'n-1',
+      userId: 'someone-else',
+      read: false,
+    });
+
+    await expect(service.clearOne(buildUser(), 'n-1')).rejects.toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    });
+    expect(prisma.notification.delete).not.toHaveBeenCalled();
+  });
+
+  it("deletes the caller's own notification", async () => {
+    const { service, prisma } = buildService();
+    prisma.notification.findUnique.mockResolvedValueOnce({
+      id: 'n-1',
+      userId: 'user-1',
+      read: false,
+    });
+
+    await service.clearOne(buildUser(), 'n-1');
+
+    expect(prisma.notification.delete).toHaveBeenCalledWith({
+      where: { id: 'n-1' },
+    });
+  });
+});
+
+describe('NotificationsService.clearAll', () => {
+  it("only deletes the caller's own notifications", async () => {
+    const { service, prisma } = buildService();
+
+    await service.clearAll(buildUser());
+
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
     });
   });
 });

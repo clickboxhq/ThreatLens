@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Target,
   Users,
+  X,
 } from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
@@ -27,7 +28,7 @@ const categoryIcon: Record<NotificationCategory, typeof Bell> = {
 };
 
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
-  const { notifications, state, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, state, markAsRead, markAllAsRead, clear, clearAll } = useNotifications();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,12 +53,22 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
         <h3 className="text-[13px] font-medium">Notifications</h3>
-        <button
-          onClick={() => markAllAsRead()}
-          className="text-[11.5px] text-secondary hover:text-foreground"
-        >
-          Mark all read
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => markAllAsRead()}
+            className="text-[11.5px] text-secondary hover:text-foreground"
+          >
+            Mark all read
+          </button>
+          {notifications.length > 0 && (
+            <button
+              onClick={() => clearAll()}
+              className="text-[11.5px] text-secondary hover:text-[color:var(--critical)]"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       {state === "loading" && (
@@ -105,7 +116,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
               </div>
             );
             return (
-              <li key={n.id} className="transition-colors hover:bg-background/60">
+              <li key={n.id} className="group relative transition-colors hover:bg-background/60">
                 {n.link ? (
                   <Link
                     to={n.link}
@@ -121,6 +132,17 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
                     {content}
                   </button>
                 )}
+                <button
+                  aria-label="Clear notification"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clear(n.id);
+                  }}
+                  className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 hover:text-[color:var(--critical)] group-hover:opacity-100"
+                >
+                  <X className="size-3" />
+                </button>
               </li>
             );
           })}

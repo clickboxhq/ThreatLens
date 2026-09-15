@@ -291,6 +291,55 @@ export function passwordResetEmail(resetUrl: string): {
   };
 }
 
+const ORG_ROLE_LABEL: Record<string, string> = {
+  student: 'Student',
+  instructor: 'Instructor',
+};
+
+/**
+ * §1: an organisation's invite to join it. Distinct from cohortInviteEmail — an org invite
+ * grants membership in the tenant itself (org-wide access, no specific cohort yet), sent by
+ * organizations.service.ts's createInvite. Every value here is caller-supplied at send time;
+ * nothing about a specific org/role/inviter is hardcoded.
+ */
+export function organizationInviteEmail(input: {
+  orgName: string;
+  inviterName: string;
+  role: string;
+  inviteUrl: string;
+}): { subject: string; html: string } {
+  const org = escapeHtml(input.orgName);
+  const inviter = escapeHtml(input.inviterName);
+  const roleLabel = ORG_ROLE_LABEL[input.role] ?? 'Member';
+
+  return {
+    subject: `You're invited to join ${input.orgName} on ThreatLens`,
+    html: renderEmail({
+      preheader: `${input.inviterName} invited you to join ${input.orgName} as ${roleLabel.toLowerCase() === 'instructor' ? 'an' : 'a'} ${roleLabel.toLowerCase()} on ThreatLens.`,
+      heading: `You're invited to join ${input.orgName}`,
+      paragraphs: [
+        `<strong>${inviter}</strong> has invited you to join <strong>${org}</strong> on ThreatLens as ${
+          roleLabel.toLowerCase() === 'instructor' ? 'an' : 'a'
+        } <strong>${roleLabel}</strong>.`,
+        'ThreatLens is where you can build and demonstrate practical cybersecurity investigation skills through realistic security scenarios.',
+        `<strong>Invitation details</strong><br>Organization: <strong>${org}</strong><br>Role: <strong>${roleLabel}</strong><br>Invited by: <strong>${inviter}</strong>`,
+        `<strong>What happens next</strong><br>
+          <ol style="margin:4px 0 4px;padding-left:20px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">
+            <li style="margin:0 0 8px;">Accept the invitation below.</li>
+            <li style="margin:0 0 8px;">Create or sign in to your ThreatLens account.</li>
+            <li style="margin:0 0 8px;">You'll join <strong>${org}</strong> automatically, with the role above.</li>
+            <li style="margin:0;">Access the organization's assigned learning activities and resources.</li>
+          </ol>`,
+      ],
+      cta: { label: 'Accept Invitation', url: input.inviteUrl },
+      meta: 'This invitation expires in 7 days.',
+      fallbackUrl: input.inviteUrl,
+      footnote:
+        'Security notice: if you were not expecting this invitation, you can safely ignore this email — nothing happens unless you accept it.',
+    }),
+  };
+}
+
 const STAFF_ROLE_LABEL: Record<string, string> = {
   lead: 'a lead',
   tutor: 'a tutor',

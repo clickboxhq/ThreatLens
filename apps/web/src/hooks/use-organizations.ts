@@ -107,6 +107,27 @@ export function useOrganizationMembers(enabled: boolean) {
   return { members: query.data ?? [], isPending: query.isPending, isError: query.isError };
 }
 
+export function useRemoveMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => organizationsService.removeMember(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.members });
+      queryClient.invalidateQueries({ queryKey: keys.mine });
+    },
+  });
+}
+
+export function useDeleteAnnouncement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => organizationsService.deleteAnnouncement(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.announcementsSent });
+    },
+  });
+}
+
 export function useOrganizationInvites(enabled: boolean) {
   const query = useQuery({
     queryKey: keys.invites,

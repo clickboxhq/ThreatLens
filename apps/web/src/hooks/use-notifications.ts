@@ -23,6 +23,14 @@ export function useNotifications() {
     mutationFn: () => notificationsService.markAllAsRead(),
     onSuccess: invalidate,
   });
+  const clear = useMutation({
+    mutationFn: (id: string) => notificationsService.clear(id),
+    onSuccess: invalidate,
+  });
+  const clearAll = useMutation({
+    mutationFn: () => notificationsService.clearAll(),
+    onSuccess: invalidate,
+  });
 
   const notifications = query.data ?? [];
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -33,5 +41,7 @@ export function useNotifications() {
     state: deriveViewState(query),
     markAsRead: markAsRead.mutate,
     markAllAsRead: markAllAsRead.mutate,
+    clear: clear.mutate,
+    clearAll: clearAll.mutate,
   };
 }

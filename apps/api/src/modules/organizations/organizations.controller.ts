@@ -96,6 +96,15 @@ export class OrganizationsController {
     return this.organizationsService.listMembers(user);
   }
 
+  @Delete('mine/members/:userId')
+  async removeMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ) {
+    await this.organizationsService.removeMember(user, userId);
+    return { removed: true };
+  }
+
   @Get('mine/invites')
   async listInvites(@CurrentUser() user: AuthenticatedUser) {
     return this.organizationsService.listInvites(user);
@@ -128,5 +137,14 @@ export class OrganizationsController {
     @Body() dto: CreateAnnouncementDto,
   ) {
     return this.organizationsService.createAnnouncement(user, dto);
+  }
+
+  @Delete('mine/announcements/:id')
+  async deleteAnnouncement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    await this.organizationsService.deleteAnnouncement(user, id);
+    return { deleted: true };
   }
 }

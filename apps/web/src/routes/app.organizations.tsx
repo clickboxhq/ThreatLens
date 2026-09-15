@@ -13,11 +13,26 @@ import {
   useRenameOrganization,
   useSetOrgLogo,
   useRemoveOrgLogo,
+  useRemoveMember,
 } from "@/hooks/use-organizations";
 import { useAuthUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api-client";
-import { Building2, Clock, Loader2, Pencil, Trash2, Upload, UserPlus } from "lucide-react";
-import type { InviteRole, OrganizationDto } from "@/types/threatlens-organizations";
+import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import {
+  Building2,
+  Clock,
+  Loader2,
+  Pencil,
+  Trash2,
+  UserMinus,
+  Upload,
+  UserPlus,
+} from "lucide-react";
+import type {
+  InviteRole,
+  OrganizationDto,
+  OrganizationMemberDto,
+} from "@/types/threatlens-organizations";
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -183,11 +198,13 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
   const { invites } = useOrganizationInvites(true);
   const createInvite = useCreateInvite();
   const renameOrg = useRenameOrganization();
+  const removeMember = useRemoveMember();
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InviteRole>("student");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(organization.name);
+  const [memberToRemove, setMemberToRemove] = useState<OrganizationMemberDto | null>(null);
 
   const submitRename = (e: React.FormEvent) => {
     e.preventDefault();
@@ -370,6 +387,7 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                   <th className="px-4 py-2.5 text-left">Member</th>
                   <th className="px-4 py-2.5 text-left">Role</th>
                   <th className="px-4 py-2.5 text-left">Status</th>
+                  {isOrgAdmin && <th className="px-4 py-2.5 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -401,6 +419,19 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                       {m.role.replace("_", " ")}
                     </td>
                     <td className="px-4 py-3 capitalize text-[color:var(--success)]">{m.status}</td>
+                    {isOrgAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        {m.userId !== me?.id && (
+                          <button
+                            type="button"
+                            onClick={() => setMemberToRemove(m)}
+                            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)]"
+                          >
+                            <UserMinus className="size-3" /> Remove
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -408,6 +439,22 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
           </div>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={memberToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setMemberToRemove(null);
+        }}
+        title="Remove this member?"
+        description={`This will remove ${memberToRemove?.displayName} from ${organization.name} and revoke their access to this organization's workspace and resources.`}
+        note="Their personal ThreatLens account, investigation history, scores, and certificates are not affected — only their access to this organization."
+        confirmLabel="Remove member"
+        onConfirm={async () => {
+          if (!memberToRemove) return;
+          await removeMember.mutateAsync(memberToRemove.userId);
+          toast.success(`${memberToRemove.displayName} was removed from ${organization.name}.`);
+        }}
+      />
     </div>
   );
 }

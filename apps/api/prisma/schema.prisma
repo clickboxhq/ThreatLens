@@ -1484,16 +1484,22 @@ model Notification {
 /// recipient-facing list. audience/cohortId is validated against the sender's
 /// own org server-side — an org can never target another org.
 model Announcement {
-  id             String   @id @default(uuid()) @db.Uuid
-  orgId          String   @map("org_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
   /// Null = the whole organisation. Set = one cohort belonging to this org.
-  cohortId       String?  @map("cohort_id") @db.Uuid
-  authorId       String   @map("author_id") @db.Uuid
+  cohortId       String?   @map("cohort_id") @db.Uuid
+  authorId       String    @map("author_id") @db.Uuid
   title          String
   body           String
   /// How many Notification rows the send fanned out to — shown in the sent list.
-  recipientCount Int      @default(0) @map("recipient_count")
-  createdAt      DateTime @default(now()) @map("created_at")
+  recipientCount Int       @default(0) @map("recipient_count")
+  /// Set when an org_admin deletes the announcement from their sent history. Soft, same
+  /// convention as Cohort.archivedAt/User.deletedAt: existing Notification rows for this
+  /// announcement are self-contained (title/body copied in at send time, no FK back to this
+  /// row) so they stay readable in a recipient's notification history either way — deleting
+  /// here only removes it from the announcement lists, never dangles a notification.
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   cohort Cohort?      @relation(fields: [cohortId], references: [id], onDelete: SetNull)
