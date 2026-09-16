@@ -6,6 +6,7 @@ import { EmailService } from '../../common/email/email.service';
 import {
   organizationInviteEmail,
   organizationMemberJoinedEmail,
+  organizationAnnouncementEmail,
 } from '../../common/email/email-templates';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -202,6 +203,44 @@ export class OrganizationsService {
       body: dto.body,
       link: '/app/announcements',
     });
+
+    // §13: the same event that creates the in-app notification also emails every recipient —
+    // one source of truth, so this can't drift out of sync with what students see in-app, and
+    // reaching them doesn't depend on being signed in when it's sent (EmailService.send()
+    // catches and logs its own failures rather than throwing, so a bad address can never roll
+    // back the announcement or the notifications already created above).
+    if (notifyIds.length > 0) {
+      const [author, org, recipients] = await Promise.all([
+        this.prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+          select: { displayName: true },
+        }),
+        this.prisma.organization.findUniqueOrThrow({
+          where: { id: orgId },
+          select: { name: true },
+        }),
+        this.prisma.user.findMany({
+          where: { id: { in: notifyIds } },
+          select: { id: true, email: true, displayName: true },
+        }),
+      ]);
+      const announcementsUrl = `${this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173'}/app/announcements`;
+      await Promise.all(
+        recipients.map((r) =>
+          this.emailService.send({
+            to: r.email,
+            ...organizationAnnouncementEmail({
+              recipientName: r.displayName,
+              orgName: org.name,
+              authorName: author.displayName,
+              title: dto.title,
+              body: dto.body,
+              announcementsUrl,
+            }),
+          }),
+        ),
+      );
+    }
 
     await this.auditLog.record({
       actorUserId: user.id,
