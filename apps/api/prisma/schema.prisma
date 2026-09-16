@@ -175,6 +175,10 @@ model User {
   bio              String?
   careerGoal       String?          @map("career_goal")
   experienceLevel  ExperienceLevel? @map("experience_level")
+  /// IANA zone name (e.g. "America/New_York"), captured client-side from Intl on first
+  /// authenticated load — see StreaksService. Null falls back to UTC calendar days for streak
+  /// date boundaries.
+  timezone         String?
 
   // Avatar — three modes. `avatarDataUrl` holds an uploaded image as a
   // size-capped (~2MB) base64 data URL directly in Postgres rather than via
@@ -219,6 +223,8 @@ model User {
   platformSettingUpdates PlatformSetting[]
   addedOrgScenarios      OrganizationScenario[]           @relation("OrgScenarioAddedBy")
   orgScenarioAssignments OrganizationScenarioAssignment[] @relation("OrgScenarioAssignmentUser")
+  streakActivity         StreakActivity[]
+  streak                 UserStreak?
 
   @@map("users")
 }
@@ -1588,4 +1594,39 @@ model Announcement {
 
   @@index([orgId, createdAt])
   @@map("announcements")
+}
+
+/// One row per (user, calendar day) they did something streak-qualifying — session
+/// submission, see StreaksService. Append-only and never read directly by the UI; its only
+/// job is idempotency: the unique constraint means a second submission on the same day is a
+/// no-op insert-conflict rather than a double-increment, and it's what lets the streak
+/// recompute stay O(1) (today's insert-or-conflict, one UserStreak row) instead of scanning
+/// this user's whole history on every submission.
+model StreakActivity {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  /// Calendar day in the user's own timezone (UTC if none is set) — a `date`, not a instant,
+  /// so "today" means the same thing here as it does in the UI.
+  activityDate DateTime @map("activity_date") @db.Date
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityDate])
+  @@map("streak_activity")
+}
+
+/// The current summary a user's streak card reads — one row per user, kept in sync by
+/// StreaksService.recordQualifyingActivity alongside the StreakActivity row for the same
+/// event. Never recomputed from full history; see that service for why.
+model UserStreak {
+  userId           String    @id @map("user_id") @db.Uuid
+  currentStreak    Int       @default(0) @map("current_streak")
+  longestStreak    Int       @default(0) @map("longest_streak")
+  lastActivityDate DateTime? @map("last_activity_date") @db.Date
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_streaks")
 }

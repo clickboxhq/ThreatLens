@@ -7,6 +7,7 @@ import {
   AlertOctagon,
   Award,
   ArrowUpRight,
+  Flame,
   Gauge,
   PlayCircle,
   ShieldAlert,
@@ -28,6 +29,7 @@ import { useLearningRecommendation } from "@/hooks/use-learning-recommendation";
 import { useLearningOverview } from "@/hooks/use-learning-center";
 import { useCertificates } from "@/hooks/use-certificates";
 import { useActiveSession } from "@/hooks/use-active-session";
+import { useStreak } from "@/hooks/use-streak";
 import { useAuthUser } from "@/lib/auth-store";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 
@@ -53,6 +55,53 @@ const kpiIcons = [
   <ShieldAlert className="size-4" key="e" />,
   <Activity className="size-4" key="f" />,
 ];
+
+/** One quiet card, not a gamification wall — a streak that hasn't started yet, one that's
+ * live but waiting on today, and one already done today all read as clearly different states
+ * at a glance without needing flames scattered across the rest of the page. */
+function StreakIndicator() {
+  const { streak, state } = useStreak();
+  if (state !== "ready" || !streak) return null;
+
+  const { currentStreak, longestStreak, completedToday } = streak;
+  const isPersonalBest = currentStreak > 0 && currentStreak === longestStreak;
+
+  return (
+    <div className="glass-card flex items-center gap-3 px-4 py-3.5">
+      <IconTile
+        tone={completedToday ? "success" : currentStreak > 0 ? "warning" : undefined}
+        size="md"
+      >
+        <Flame className="size-4" />
+      </IconTile>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[13.5px] font-semibold">
+            {currentStreak > 0 ? `${currentStreak}-day streak` : "Start your streak"}
+          </span>
+          {isPersonalBest && (
+            <span className="rounded-full bg-[color:var(--warning)]/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[color:var(--warning)]">
+              Personal best
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 text-[11px] text-secondary">
+          {completedToday
+            ? "Today's investigation is logged — nice work."
+            : currentStreak > 0
+              ? "Submit an investigation today to keep it going."
+              : "Submit an investigation to begin."}
+        </div>
+      </div>
+      {longestStreak > 0 && (
+        <div className="shrink-0 text-right">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Best</div>
+          <div className="text-[13px] font-semibold tabular-nums">{longestStreak}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function masteryTone(v: number) {
   if (v >= 85) return "var(--success)";
@@ -156,6 +205,11 @@ function Dashboard() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Practice streak */}
+      <div className="mb-6">
+        <StreakIndicator />
       </div>
 
       {/* Training KPI grid */}

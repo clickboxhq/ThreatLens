@@ -12,6 +12,7 @@ export const queryKeys = {
   mitreExplorer: ["mitre-explorer"] as const,
   analytics: ["analytics"] as const,
   achievements: ["achievements"] as const,
+  streak: ["streak"] as const,
   certificates: ["certificates"] as const,
   auditLogs: ["audit-logs"] as const,
   adminAnalytics: ["admin-analytics"] as const,
