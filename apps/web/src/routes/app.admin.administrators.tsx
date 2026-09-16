@@ -4,6 +4,7 @@ import { Loader2, ShieldPlus } from "lucide-react";
 import { Panel } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { StatusPill } from "@/components/soc/admin/admin-table";
 import { useAuthUser } from "@/lib/auth-store";
@@ -62,9 +63,14 @@ function AdminAdministrators() {
                     {data.map((a) => (
                       <tr key={a.id} className="hover:bg-background/40">
                         <td className="px-4 py-2.5">
-                          <div className="font-medium">{a.displayName}</div>
-                          <div className="font-mono text-[11px] text-muted-foreground">
-                            {a.email}
+                          <div className="flex items-center gap-2.5">
+                            <UserAvatar user={a} size={28} />
+                            <div>
+                              <div className="font-medium">{a.displayName}</div>
+                              <div className="font-mono text-[11px] text-muted-foreground">
+                                {a.email}
+                              </div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-2.5">

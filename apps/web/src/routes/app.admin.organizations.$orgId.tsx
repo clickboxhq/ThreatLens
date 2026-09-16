@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, ShieldOff, ShieldCheck } from "lucide-react";
 import { Panel } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { StatusPill } from "@/components/soc/admin/admin-table";
 import { useAdminOrganization, useSetOrgStatus } from "@/hooks/use-admin";
@@ -103,11 +104,14 @@ function OrgDetail() {
                           <Link
                             to="/app/admin/users/$userId"
                             params={{ userId: m.id }}
-                            className="hover:underline"
+                            className="flex items-center gap-2.5 hover:underline"
                           >
-                            <span className="font-medium">{m.displayName}</span>
-                            <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-                              {m.email}
+                            <UserAvatar user={m} size={24} />
+                            <span>
+                              <span className="font-medium">{m.displayName}</span>
+                              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                                {m.email}
+                              </span>
                             </span>
                           </Link>
                         </td>

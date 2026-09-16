@@ -29,6 +29,9 @@ export class AdminAdministratorsService {
         mfaEnabled: true,
         lastLoginAt: true,
         createdAt: true,
+        avatarType: true,
+        avatarPresetKey: true,
+        avatarDataUrl: true,
       },
     });
 
@@ -59,6 +62,9 @@ export class AdminAdministratorsService {
         a.lastLoginAt?.toISOString() ??
         null,
       createdAt: a.createdAt.toISOString(),
+      avatarType: a.avatarType,
+      avatarPresetKey: a.avatarPresetKey,
+      avatarDataUrl: a.avatarDataUrl,
     }));
   }
 

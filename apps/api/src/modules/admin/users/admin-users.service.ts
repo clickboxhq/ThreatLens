@@ -23,6 +23,9 @@ export interface AdminUserRow {
   emailVerified: boolean;
   joinedAt: string;
   lastActiveAt: string | null;
+  avatarType: string;
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
 }
 
 @Injectable()
@@ -73,6 +76,9 @@ export class AdminUsersService {
           createdAt: true,
           lastLoginAt: true,
           organization: { select: { id: true, name: true } },
+          avatarType: true,
+          avatarPresetKey: true,
+          avatarDataUrl: true,
         },
       }),
     ]);
@@ -90,6 +96,9 @@ export class AdminUsersService {
         emailVerified: u.emailVerifiedAt !== null,
         joinedAt: u.createdAt.toISOString(),
         lastActiveAt: u.lastLoginAt?.toISOString() ?? null,
+        avatarType: u.avatarType,
+        avatarPresetKey: u.avatarPresetKey,
+        avatarDataUrl: u.avatarDataUrl,
       })),
       total,
       query,
@@ -117,6 +126,9 @@ export class AdminUsersService {
         createdAt: true,
         lastLoginAt: true,
         organization: { select: { id: true, name: true, status: true } },
+        avatarType: true,
+        avatarPresetKey: true,
+        avatarDataUrl: true,
       },
     });
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');

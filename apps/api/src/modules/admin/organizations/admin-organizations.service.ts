@@ -21,6 +21,7 @@ export interface AdminOrgRow {
   // No billing yet.
   plan: string | null;
   activeSeats: number | null;
+  logoDataUrl: string | null;
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ export class AdminOrganizationsService {
           industry: true,
           status: true,
           createdAt: true,
+          logoDataUrl: true,
           _count: { select: { users: true } },
           users: { where: { role: 'org_admin' }, select: { id: true } },
         },
@@ -71,6 +73,7 @@ export class AdminOrganizationsService {
         adminCount: o.users.length,
         plan: null,
         activeSeats: null,
+        logoDataUrl: o.logoDataUrl,
         createdAt: o.createdAt.toISOString(),
       })),
       total,
@@ -101,6 +104,9 @@ export class AdminOrganizationsService {
             status: true,
             lastLoginAt: true,
             createdAt: true,
+            avatarType: true,
+            avatarPresetKey: true,
+            avatarDataUrl: true,
           },
         },
         cohorts: {
