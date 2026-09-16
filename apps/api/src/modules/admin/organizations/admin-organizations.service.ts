@@ -35,7 +35,7 @@ export class AdminOrganizationsService {
   async list(
     query: PaginationQuery & { status?: string },
   ): Promise<Page<AdminOrgRow>> {
-    const where: Prisma.OrganizationWhereInput = {};
+    const where: Prisma.OrganizationWhereInput = { deletedAt: null };
     if (query.status === 'active' || query.status === 'suspended') {
       where.status = query.status;
     }
@@ -82,8 +82,8 @@ export class AdminOrganizationsService {
   }
 
   async getDetail(orgId: string) {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: orgId },
+    const org = await this.prisma.organization.findFirst({
+      where: { id: orgId, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -204,5 +204,77 @@ export class AdminOrganizationsService {
     });
 
     return { id: orgId, status };
+  }
+
+  /**
+   * Soft delete — requires the org already be suspended (409 otherwise). That two-step keeps
+   * delete a narrow "make it permanent" action on top of the already-audited, already-reversible
+   * suspend path, rather than a new independent state with its own untested edge cases: an
+   * admin always suspends first (which already blocks member access — see
+   * AuthService.assertAccountActive), then deletes only once they mean it. Members'
+   * investigations, scores, certificates and org-scenario data are never touched — this only
+   * sets `deletedAt`, excluding the org from admin listings the same way User.deletedAt already
+   * does for users.
+   */
+  async deleteOrg(admin: AuthenticatedUser, orgId: string, actorIp?: string) {
+    const org = await this.prisma.organization.findFirst({
+      where: { id: orgId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!org)
+      throw new AppException(404, 'NOT_FOUND', 'Organization not found.');
+    if (org.status !== 'suspended') {
+      throw new AppException(
+        409,
+        'ORG_NOT_SUSPENDED',
+        'Suspend this organization before deleting it.',
+      );
+    }
+
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { deletedAt: new Date() },
+    });
+
+    await this.auditLog.record({
+      actorUserId: admin.id,
+      actorIp: actorIp ?? null,
+      action: ADMIN_AUDIT.orgDeleted,
+      targetType: 'organization',
+      targetId: orgId,
+    });
+
+    return { id: orgId, deleted: true };
+  }
+
+  /** Reversal of deleteOrg. Clears only `deletedAt` — `status` stays `suspended`, so a restored
+   * org is back in admin listings but its members remain blocked until an admin separately
+   * reactivates it, same as any other suspended org. */
+  async restoreOrg(admin: AuthenticatedUser, orgId: string, actorIp?: string) {
+    const org = await this.prisma.organization.findFirst({
+      where: { id: orgId, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (!org)
+      throw new AppException(
+        404,
+        'NOT_FOUND',
+        'Organization not found, or not deleted.',
+      );
+
+    await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { deletedAt: null },
+    });
+
+    await this.auditLog.record({
+      actorUserId: admin.id,
+      actorIp: actorIp ?? null,
+      action: ADMIN_AUDIT.orgRestored,
+      targetType: 'organization',
+      targetId: orgId,
+    });
+
+    return { id: orgId, deleted: false };
   }
 }

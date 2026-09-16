@@ -306,7 +306,7 @@ export class AuthService {
       );
     }
 
-    if (user.status !== 'active') {
+    if (!(await this.isAccountActive(user))) {
       throw new AppException(
         403,
         'ACCOUNT_NOT_ACTIVE',
@@ -353,6 +353,27 @@ export class AuthService {
       ...tokens,
       user: toAuthUserDto(user),
     };
+  }
+
+  /**
+   * The account-level half of "can this session be issued/kept": the account itself must be
+   * `active`, and — when it belongs to an organisation — that organisation must not be
+   * `suspended`. Org suspension previously had zero effect here (Organization.status was a
+   * pure admin-facing flag; only User.status was ever checked), so a platform admin suspending
+   * an org did not actually block anyone. Same ACCOUNT_NOT_ACTIVE-shaped outcome as an
+   * individually-suspended account, so this never distinguishes "your org was suspended" from
+   * "your account was suspended" to the client.
+   */
+  private async isAccountActive(
+    user: Pick<User, 'status' | 'orgId'>,
+  ): Promise<boolean> {
+    if (user.status !== 'active') return false;
+    if (!user.orgId) return true;
+    const org = await this.prisma.organization.findUnique({
+      where: { id: user.orgId },
+      select: { status: true },
+    });
+    return org?.status !== 'suspended';
   }
 
   /**
@@ -412,12 +433,14 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (
-      !user ||
-      !user.mfaEnabled ||
-      !user.mfaSecret ||
-      user.status !== 'active'
-    ) {
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      throw new AppException(
+        401,
+        'INVALID_CREDENTIALS',
+        'Unable to complete sign-in.',
+      );
+    }
+    if (!(await this.isAccountActive(user))) {
       throw new AppException(
         401,
         'INVALID_CREDENTIALS',
@@ -760,7 +783,7 @@ export class AuthService {
    */
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.passwordHash || user.status !== 'active') {
+    if (!user || !user.passwordHash || !(await this.isAccountActive(user))) {
       return;
     }
 
@@ -891,7 +914,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: existing.userId },
     });
-    if (!user || user.status !== 'active') {
+    if (!user || !(await this.isAccountActive(user))) {
       throw new AppException(
         401,
         'INVALID_REFRESH_TOKEN',

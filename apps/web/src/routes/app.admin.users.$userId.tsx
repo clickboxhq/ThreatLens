@@ -1,13 +1,13 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, ShieldOff, ShieldCheck, KeyRound } from "lucide-react";
+import { ArrowLeft, ShieldOff, ShieldCheck, KeyRound, Trash2 } from "lucide-react";
 import { Panel } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { StatusPill } from "@/components/soc/admin/admin-table";
-import { useAdminUser, useSetUserStatus, useResetUserMfa } from "@/hooks/use-admin";
+import { useAdminUser, useSetUserStatus, useResetUserMfa, useDeleteUser } from "@/hooks/use-admin";
 import { shortDate, relTime, humaniseAction, pct } from "@/lib/admin-format";
 
 export const Route = createFileRoute("/app/admin/users/$userId")({
@@ -26,11 +26,14 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 function UserDetail() {
   const { userId } = useParams({ from: "/app/admin/users/$userId" });
+  const navigate = useNavigate();
   const { data: user, isPending, isError } = useAdminUser(userId);
   const setStatus = useSetUserStatus();
   const resetMfa = useResetUserMfa();
+  const deleteUser = useDeleteUser();
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [mfaOpen, setMfaOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
     <AdminPage
@@ -173,6 +176,19 @@ function UserDetail() {
                   Reset MFA clears the authenticator and recovery codes and revokes active sessions.
                   It never exposes the secret. The user re-enrols on next sign-in.
                 </p>
+                <div className="border-t border-border pt-2">
+                  <button
+                    className="btn-app-danger w-full justify-center"
+                    disabled={deleteUser.isPending}
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-3.5" /> Delete account
+                  </button>
+                  <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Removes this account from ThreatLens. Their investigations, scores, and
+                    certificates are kept, never deleted. Reversible.
+                  </p>
+                </div>
               </div>
             </Panel>
           </div>
@@ -190,6 +206,21 @@ function UserDetail() {
         tone="destructive"
         onConfirm={async () => {
           if (user) await setStatus.mutateAsync({ id: user.id, status: "suspended" });
+        }}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this account?"
+        description="The user will be signed out immediately and unable to sign in:"
+        target={user?.email}
+        note="Their investigations, scores, and certificates are kept — never deleted. This is reversible."
+        confirmLabel="Delete account"
+        tone="destructive"
+        onConfirm={async () => {
+          if (!user) return;
+          await deleteUser.mutateAsync(user.id);
+          navigate({ to: "/app/admin/users" });
         }}
       />
       <ConfirmDialog

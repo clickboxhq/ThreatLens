@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   Req,
 } from '@nestjs/common';
@@ -46,5 +48,23 @@ export class AdminOrganizationsController {
     @Req() req: Request,
   ) {
     return this.orgs.setStatus(admin, id, dto.status, actorIpOf(req));
+  }
+
+  @Delete(':id')
+  deleteOrg(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.orgs.deleteOrg(admin, id, actorIpOf(req));
+  }
+
+  @Post(':id/restore')
+  restoreOrg(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.orgs.restoreOrg(admin, id, actorIpOf(req));
   }
 }
