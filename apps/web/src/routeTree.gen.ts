@@ -53,6 +53,7 @@ import { Route as AppLearningRouteImport } from './routes/app.learning'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppMitreRouteImport } from './routes/app.mitre'
 import { Route as AppNetworkRouteImport } from './routes/app.network'
+import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
 import { Route as AppOrganizationScenariosRouteImport } from './routes/app.organization-scenarios'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
@@ -312,6 +313,11 @@ const AppNetworkRoute = AppNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrganizationScenariosRoute =
   AppOrganizationScenariosRouteImport.update({
     id: '/organization-scenarios',
@@ -553,6 +559,7 @@ export interface FileRoutesByFullPath {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
@@ -636,6 +643,7 @@ export interface FileRoutesByTo {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
@@ -721,6 +729,7 @@ export interface FileRoutesById {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
@@ -807,6 +816,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
     | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
@@ -890,6 +900,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
     | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
@@ -974,6 +985,7 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
     | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
@@ -1354,6 +1366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNetworkRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/notifications': {
+      id: '/app/notifications'
+      path: '/notifications'
+      fullPath: '/app/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/organization-scenarios': {
       id: '/app/organization-scenarios'
       path: '/organization-scenarios'
@@ -1683,6 +1702,7 @@ interface AppRouteChildren {
   AppLogsRoute: typeof AppLogsRoute
   AppMitreRoute: typeof AppMitreRoute
   AppNetworkRoute: typeof AppNetworkRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppOrganizationScenariosRoute: typeof AppOrganizationScenariosRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
@@ -1739,6 +1759,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLogsRoute: AppLogsRoute,
   AppMitreRoute: AppMitreRoute,
   AppNetworkRoute: AppNetworkRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppOrganizationScenariosRoute: AppOrganizationScenariosRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
