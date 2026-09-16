@@ -6,8 +6,27 @@ import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { TopologyDiagram } from "@/components/soc/marketing/atmos";
 import { displayFont, monoFont } from "@/components/soc/marketing/atmos";
 import { ApiError } from "@/lib/api-client";
-import { useAuthStore } from "@/lib/auth-store";
+import { useAuthStore, type AuthUser } from "@/lib/auth-store";
 import { MfaEnrolment } from "@/components/soc/mfa-enrolment";
+import { organizationsService } from "@/services/organizations";
+
+/**
+ * Where a role lands with no explicit `?next=` deep link. org_admin always has an org (it's
+ * only reachable by creating one — never a signup choice, never invite-grantable), so no need
+ * to check. A plain 'student' might be an individual, an active org member, or a
+ * suspended/removed one still carrying an orgId — same ambiguity the sidebar's own
+ * `hasActiveOrg` already lives with (organizations.service.ts's getMine only checks orgId, not
+ * membership status), so this makes the identical call the nav already makes rather than
+ * inventing a stricter check just for this redirect.
+ */
+async function resolveLandingPath(user: AuthUser): Promise<string> {
+  if (user.role === "org_admin") return "/app/organizations";
+  if (user.role === "student") {
+    const org = await organizationsService.getMine().catch(() => null);
+    if (org) return "/app/assigned-scenarios";
+  }
+  return "/app";
+}
 
 export const Route = createFileRoute("/login")({
   // ?next= carries where the visitor was trying to get to. Without it somebody arriving from
@@ -32,8 +51,10 @@ function LoginPage() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
   // Only same-origin paths. An open redirect here would let an attacker send a ThreatLens
-  // login link that bounces the victim to their own site with the session already warm.
-  const afterLogin = next && next.startsWith("/") && !next.startsWith("//") ? next : "/app";
+  // login link that bounces the victim to their own site with the session already warm. An
+  // explicit deep link always wins over the role-based default below — next() exists
+  // specifically so a visitor bounced here from a real destination lands back there.
+  const explicitNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
   const login = useAuthStore((s) => s.login);
   const completeMfaLogin = useAuthStore((s) => s.completeMfaLogin);
   const [email, setEmail] = useState("");
@@ -69,7 +90,7 @@ function LoginPage() {
         setMfaChallengeId(result.mfaChallengeId);
         return;
       }
-      navigate({ to: afterLogin });
+      navigate({ to: explicitNext ?? (await resolveLandingPath(result.user)) });
     } catch (err) {
       setSubmitting(false);
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
@@ -82,8 +103,8 @@ function LoginPage() {
     setError(null);
     setVerifyingMfa(true);
     try {
-      await completeMfaLogin(mfaChallengeId, mfaCode.trim());
-      navigate({ to: afterLogin });
+      const user = await completeMfaLogin(mfaChallengeId, mfaCode.trim());
+      navigate({ to: explicitNext ?? (await resolveLandingPath(user)) });
     } catch (err) {
       setVerifyingMfa(false);
       setMfaChallengeId(null);
