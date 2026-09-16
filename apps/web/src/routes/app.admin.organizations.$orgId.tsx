@@ -1,13 +1,13 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, Building2, ShieldOff, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, ShieldOff, ShieldCheck, Trash2 } from "lucide-react";
 import { Panel } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { StatusPill } from "@/components/soc/admin/admin-table";
-import { useAdminOrganization, useSetOrgStatus } from "@/hooks/use-admin";
+import { useAdminOrganization, useSetOrgStatus, useDeleteOrg } from "@/hooks/use-admin";
 import { shortDate, relTime, humaniseAction, num } from "@/lib/admin-format";
 
 export const Route = createFileRoute("/app/admin/organizations/$orgId")({
@@ -26,9 +26,12 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 function OrgDetail() {
   const { orgId } = useParams({ from: "/app/admin/organizations/$orgId" });
+  const navigate = useNavigate();
   const { data: org, isPending, isError } = useAdminOrganization(orgId);
   const setStatus = useSetOrgStatus();
+  const deleteOrg = useDeleteOrg();
   const [suspendOpen, setSuspendOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
     <AdminPage
@@ -168,9 +171,24 @@ function OrgDetail() {
                 </button>
               )}
               <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
-                Suspending an organization is a platform-side flag. Members keep their individual
-                accounts.
+                Suspending immediately blocks every member from signing in. Their accounts,
+                investigations, scores, and certificates are kept — never touched.
               </p>
+              <div className="mt-3 border-t border-border pt-3">
+                <button
+                  className="btn-app-danger w-full justify-center"
+                  disabled={deleteOrg.isPending || org.status !== "suspended"}
+                  onClick={() => setDeleteOpen(true)}
+                  title={org.status !== "suspended" ? "Suspend the organization first" : undefined}
+                >
+                  <Trash2 className="size-3.5" /> Delete organization
+                </button>
+                <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Removes this organization from ThreatLens. Only available once suspended. Members'
+                  accounts, investigations, scores, and certificates are kept — never deleted.
+                  Reversible.
+                </p>
+              </div>
             </Panel>
           </div>
         </div>
@@ -180,13 +198,28 @@ function OrgDetail() {
         open={suspendOpen}
         onOpenChange={setSuspendOpen}
         title="Suspend this organization?"
-        description="Flags the organization as suspended platform-side:"
+        description="Every member will be signed out immediately and blocked from signing in until the organization is reactivated:"
         target={org?.name}
-        note="Members' individual accounts are unaffected. This is reversible."
+        note="Their accounts, investigations, scores, and certificates are kept. This is reversible."
         confirmLabel="Suspend organization"
         tone="destructive"
         onConfirm={async () => {
           if (org) await setStatus.mutateAsync({ id: org.id, status: "suspended" });
+        }}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this organization?"
+        description="Removes the organization from ThreatLens:"
+        target={org?.name}
+        note="Members' accounts, investigations, scores, and certificates are kept — never deleted. This is reversible."
+        confirmLabel="Delete organization"
+        tone="destructive"
+        onConfirm={async () => {
+          if (!org) return;
+          await deleteOrg.mutateAsync(org.id);
+          navigate({ to: "/app/admin/organizations" });
         }}
       />
     </AdminPage>

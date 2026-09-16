@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -40,6 +41,24 @@ export class AdminUsersController {
     @Req() req: Request,
   ) {
     return this.users.setStatus(admin, id, dto.status, actorIpOf(req));
+  }
+
+  @Delete(':id')
+  deleteUser(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.users.deleteUser(admin, id, actorIpOf(req));
+  }
+
+  @Post(':id/restore')
+  restoreUser(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.users.restoreUser(admin, id, actorIpOf(req));
   }
 
   @Post(':id/reset-mfa')

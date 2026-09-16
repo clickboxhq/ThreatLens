@@ -230,6 +230,85 @@ export class AdminUsersService {
     return { id: userId, status };
   }
 
+  /**
+   * Soft delete. `deletedAt` already existed on User and every admin/analytics query already
+   * filters `deletedAt: null` — this is the first place that ever sets it. Mirrors setStatus
+   * exactly (same self-action guard, same session-revocation transaction) rather than a
+   * separate mechanism: no PII scrubbing, no cascade — the row and every investigation, score,
+   * certificate and org membership it touches stay exactly as they are, just excluded from
+   * admin listings and immediately logged out everywhere.
+   */
+  async deleteUser(admin: AuthenticatedUser, userId: string, actorIp?: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!target) throw new AppException(404, 'NOT_FOUND', 'User not found.');
+    if (target.id === admin.id) {
+      throw new AppException(
+        400,
+        'CANNOT_DELETE_SELF',
+        'You cannot delete your own account.',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { deletedAt: new Date(), sessionVersion: { increment: 1 } },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    await this.auditLog.record({
+      actorUserId: admin.id,
+      actorIp: actorIp ?? null,
+      action: ADMIN_AUDIT.userDeleted,
+      targetType: 'user',
+      targetId: userId,
+    });
+
+    return { id: userId, deleted: true };
+  }
+
+  /** Reversal of deleteUser — for symmetry with suspend/restore. Does not by itself undo
+   * anything else deleteUser didn't do (no data was touched), and does not force a re-login;
+   * the account simply becomes visible and loginable again. */
+  async restoreUser(
+    admin: AuthenticatedUser,
+    userId: string,
+    actorIp?: string,
+  ) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    if (!target)
+      throw new AppException(
+        404,
+        'NOT_FOUND',
+        'User not found, or not deleted.',
+      );
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { deletedAt: null },
+    });
+
+    await this.auditLog.record({
+      actorUserId: admin.id,
+      actorIp: actorIp ?? null,
+      action: ADMIN_AUDIT.userRestored,
+      targetType: 'user',
+      targetId: userId,
+    });
+
+    return { id: userId, deleted: false };
+  }
+
   // Clears MFA the same way the break-glass CLI (prisma/reset-mfa.ts) does — flips the flag,
   // nulls the secret, empties the recovery-code hashes, bumps the session version. It never
   // reads or returns the secret. The user re-enrols on next sign-in (privileged roles are

@@ -212,6 +212,12 @@ function buildService(users: Map<string, User>) {
       update: jest.fn(async () => ({})),
       updateMany: jest.fn(async () => ({ count: 0 })),
     },
+    // isAccountActive() only reaches this when a test user carries a non-null orgId (the
+    // default `user()` factory leaves it null, so most tests never touch this) — 'active' so
+    // an org-having test user isn't unexpectedly blocked unless a test overrides it.
+    organization: {
+      findUnique: jest.fn(async () => ({ status: 'active' })),
+    },
     $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
 

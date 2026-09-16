@@ -60,6 +60,10 @@ export const adminService = {
     apiClient.patch<{ id: string; status: string }>(`/admin/users/${id}/status`, { status }),
   resetUserMfa: (id: string) =>
     apiClient.post<{ id: string; mfaEnabled: boolean }>(`/admin/users/${id}/reset-mfa`),
+  deleteUser: (id: string) =>
+    apiClient.delete<{ id: string; deleted: boolean }>(`/admin/users/${id}`),
+  restoreUser: (id: string) =>
+    apiClient.post<{ id: string; deleted: boolean }>(`/admin/users/${id}/restore`),
 
   // Organizations
   listOrganizations: (p: { page?: number; limit?: number; search?: string; status?: string }) =>
@@ -69,6 +73,10 @@ export const adminService = {
     apiClient.patch<{ id: string; status: string }>(`/admin/organizations/${id}/status`, {
       status,
     }),
+  deleteOrganization: (id: string) =>
+    apiClient.delete<{ id: string; deleted: boolean }>(`/admin/organizations/${id}`),
+  restoreOrganization: (id: string) =>
+    apiClient.post<{ id: string; deleted: boolean }>(`/admin/organizations/${id}/restore`),
 
   // Certificates
   listCertificates: (p: { page?: number; limit?: number; search?: string; status?: string }) =>

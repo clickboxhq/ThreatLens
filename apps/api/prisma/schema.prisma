@@ -58,6 +58,13 @@ model Organization {
   // per org is disproportionate.
   logoDataUrl String?   @map("logo_data_url")
   createdAt   DateTime  @default(now()) @map("created_at")
+  /// Platform-admin soft delete, mirroring User.deletedAt exactly. Set only once the org is
+  /// already suspended (see AdminOrganizationsService.deleteOrg) — a narrow "make it permanent"
+  /// step on top of the already-audited, already-reversible suspend path, not a new
+  /// independent state. Members, investigations, scores, certificates and scenarios are never
+  /// touched; this flag only excludes the org from admin listings (every admin/analytics query
+  /// already filters deletedAt: null for User, and this does the same for Organization).
+  deletedAt   DateTime? @map("deleted_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   users                 User[]

@@ -160,6 +160,24 @@ export const useResetUserMfa = () =>
     ],
   });
 
+export const useDeleteUser = () =>
+  useAdminMutation((id: string) => adminService.deleteUser(id), {
+    success: "Account deleted",
+    invalidate: [
+      [...KEY, "users"],
+      [...KEY, "overview"],
+    ],
+  });
+
+export const useRestoreUser = () =>
+  useAdminMutation((id: string) => adminService.restoreUser(id), {
+    success: "Account restored",
+    invalidate: [
+      [...KEY, "users"],
+      [...KEY, "overview"],
+    ],
+  });
+
 export const useSetOrgStatus = () =>
   useAdminMutation(
     (v: { id: string; status: "active" | "suspended" }) =>
@@ -172,6 +190,24 @@ export const useSetOrgStatus = () =>
       ],
     },
   );
+
+export const useDeleteOrg = () =>
+  useAdminMutation((id: string) => adminService.deleteOrganization(id), {
+    success: "Organization deleted",
+    invalidate: [
+      [...KEY, "organizations"],
+      [...KEY, "overview"],
+    ],
+  });
+
+export const useRestoreOrg = () =>
+  useAdminMutation((id: string) => adminService.restoreOrganization(id), {
+    success: "Organization restored",
+    invalidate: [
+      [...KEY, "organizations"],
+      [...KEY, "overview"],
+    ],
+  });
 
 export const useRevokeCertificate = () =>
   useAdminMutation(
