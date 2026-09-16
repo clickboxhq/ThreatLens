@@ -621,6 +621,7 @@ const crumbMap: Record<string, string> = {
   "/app/assigned-scenarios": "Assigned Scenarios",
   "/app/announcements": "Announcements",
   "/app/settings": "Settings",
+  "/app/notifications": "Notifications",
   "/app/audit-logs": "Audit Logs",
   "/app/billing": "Billing",
   "/app/profile": "Profile",

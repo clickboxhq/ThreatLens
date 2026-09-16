@@ -79,6 +79,16 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {state === "error" && (
+        <div className="p-2">
+          <EmptyState
+            title="Couldn't load notifications"
+            description="Try reloading the page."
+            icon={<Bell className="size-5" />}
+          />
+        </div>
+      )}
+
       {state === "empty" && (
         <div className="p-2">
           <EmptyState
@@ -148,6 +158,14 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           })}
         </ul>
       )}
+
+      <Link
+        to="/app/notifications"
+        onClick={onClose}
+        className="block border-t border-border px-3.5 py-2.5 text-center text-[12px] text-secondary hover:bg-background/60 hover:text-foreground"
+      >
+        View all notifications
+      </Link>
     </div>
   );
 }
