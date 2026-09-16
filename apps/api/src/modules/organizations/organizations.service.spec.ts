@@ -29,10 +29,20 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     user: {
       findUniqueOrThrow: jest.fn(async () => dbUser),
       findUnique: jest.fn(async () => null),
-      findMany: jest.fn(async () => [
-        { id: 'm1' },
-        { id: 'm2' },
-        { id: 'user-1' },
+      // Explicit generic (rather than an unused `args` parameter) widens the mock's declared
+      // signature so a later per-test override can accept `{ where }` — jest.fn()'s inferred
+      // type otherwise locks reassignment to this exact zero-arg shape.
+      findMany: jest.fn<
+        Promise<Array<{ id: string; email: string; displayName: string }>>,
+        [args?: { where?: { id?: { in?: string[] } } }]
+      >(async () => [
+        { id: 'm1', email: 'm1@contoso.com', displayName: 'Member One' },
+        { id: 'm2', email: 'm2@contoso.com', displayName: 'Member Two' },
+        {
+          id: 'user-1',
+          email: 'admin@contoso.com',
+          displayName: 'Ada Admin',
+        },
       ]),
       update: jest.fn(async (args: { data: unknown }) => ({
         ...dbUser,
@@ -502,6 +512,64 @@ describe('OrganizationsService announcements', () => {
     expect(auditLog.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'organization_announcement_sent' }),
     );
+  });
+
+  it('emails every recipient alongside the in-app notification, but never the author', async () => {
+    const { service, prisma, emailService } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    // The base mock's user.findMany ignores `where` and always returns all 3 seeded users —
+    // fine for resolveAnnouncementRecipients' unfiltered "all org members" call, but the
+    // email fan-out's own `where: { id: { in: notifyIds } } }` call needs the real filtering
+    // behaviour simulated, or it would (wrongly) get the author back too.
+    const allUsers = [
+      { id: 'm1', email: 'm1@contoso.com', displayName: 'Member One' },
+      { id: 'm2', email: 'm2@contoso.com', displayName: 'Member Two' },
+      { id: 'user-1', email: 'admin@contoso.com', displayName: 'Ada Admin' },
+    ];
+    prisma.user.findMany = jest.fn(
+      async (args?: { where?: { id?: { in?: string[] } } }) =>
+        args?.where?.id?.in
+          ? allUsers.filter((u) => args.where!.id!.in!.includes(u.id))
+          : allUsers,
+    );
+    await service.createAnnouncement(
+      buildUser({ id: 'user-1', role: 'org_admin' }),
+      dto,
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['m1', 'm2'] } } }),
+    );
+    expect(emailService.send).toHaveBeenCalledTimes(2);
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'm1@contoso.com',
+        subject: expect.stringContaining(dto.title),
+      }),
+    );
+    expect(emailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'm2@contoso.com' }),
+    );
+    expect(emailService.send).not.toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'admin@contoso.com' }),
+    );
+  });
+
+  it("skips the email fan-out entirely when there's nobody to notify", async () => {
+    const { service, prisma, emailService } = buildService({
+      orgId: 'org-1',
+      role: 'org_admin',
+    });
+    prisma.user.findMany = jest.fn(async () => [
+      { id: 'user-1', email: 'admin@contoso.com', displayName: 'Ada Admin' },
+    ]);
+    await service.createAnnouncement(
+      buildUser({ id: 'user-1', role: 'org_admin' }),
+      dto,
+    );
+    expect(emailService.send).not.toHaveBeenCalled();
   });
 
   it('rejects a cohort target that belongs to a different organisation', async () => {

@@ -383,6 +383,45 @@ export function organizationMemberJoinedEmail(input: {
   };
 }
 
+/**
+ * An organisation's announcement, emailed to every recipient alongside the in-app notification
+ * — organizations.service.ts's createAnnouncement sends both from the same event, so an
+ * announcement reaches a student even if they're not signed in when it goes out.
+ */
+export function organizationAnnouncementEmail(input: {
+  recipientName: string;
+  orgName: string;
+  authorName: string;
+  title: string;
+  body: string;
+  announcementsUrl: string;
+}): { subject: string; html: string } {
+  const recipient = escapeHtml(
+    input.recipientName.trim().split(/\s+/)[0] || 'there',
+  );
+  const org = escapeHtml(input.orgName);
+  const author = escapeHtml(input.authorName);
+  const title = escapeHtml(input.title);
+  // Line breaks are meaningful in an admin-written announcement; escape first, then restore
+  // them as <br> so nothing else in the body can inject markup.
+  const body = escapeHtml(input.body).replace(/\n/g, '<br>');
+
+  return {
+    subject: `${input.title} — ${input.orgName} announcement`,
+    html: renderEmail({
+      preheader: `${input.authorName} posted an announcement in ${input.orgName}: ${input.title}`,
+      heading: title,
+      paragraphs: [
+        `Hello ${recipient},`,
+        `<strong>${author}</strong> posted a new announcement in <strong>${org}</strong> on ThreatLens.`,
+        `<div style="margin:4px 0;padding:14px 16px;background-color:${PAGE_BG};border-radius:8px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">${body}</div>`,
+      ],
+      cta: { label: 'View Announcements', url: input.announcementsUrl },
+      fallbackUrl: input.announcementsUrl,
+    }),
+  };
+}
+
 const STAFF_ROLE_LABEL: Record<string, string> = {
   lead: 'a lead',
   tutor: 'a tutor',
