@@ -628,6 +628,7 @@ const crumbMap: Record<string, string> = {
 };
 
 export function AppShell({ children }: { children?: ReactNode }) {
+  const user = useAuthUser();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const crumb =
     crumbMap[path] ??
@@ -661,6 +662,25 @@ export function AppShell({ children }: { children?: ReactNode }) {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [path]);
+
+  // Lazily captures the streak feature's timezone, once, the first time this account is seen
+  // with none recorded — never at signup, so there's no added friction there, and this
+  // self-heals every existing account without a backfill migration. Silent and best-effort:
+  // a failure here just means streak date boundaries fall back to UTC a little longer, never
+  // something worth surfacing to the user.
+  useEffect(() => {
+    if (!user || user.timezone) return;
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timezone)
+        void useAuthStore
+          .getState()
+          .updateProfile({ timezone })
+          .catch(() => {});
+    } catch {
+      // Intl unavailable or threw — leave timezone unset, UTC fallback still works.
+    }
+  }, [user]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {

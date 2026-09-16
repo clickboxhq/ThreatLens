@@ -59,6 +59,7 @@ export interface AuthUserDto {
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;
   careerLevel: string;
+  timezone: string | null;
 }
 
 /** The one place the signed-in user's shape is defined, so login and GET /auth/me cannot drift. */
@@ -79,6 +80,7 @@ function toAuthUserDto(user: {
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;
   careerLevel: string;
+  timezone: string | null;
 }): AuthUserDto {
   return {
     id: user.id,
@@ -97,6 +99,7 @@ function toAuthUserDto(user: {
     avatarPresetKey: user.avatarPresetKey,
     avatarDataUrl: user.avatarDataUrl,
     careerLevel: user.careerLevel,
+    timezone: user.timezone,
   };
 }
 
@@ -692,6 +695,7 @@ export class AuthService {
       bio?: string;
       careerGoal?: string;
       experienceLevel?: string;
+      timezone?: string;
     },
   ) {
     // displayName is what the app shows in the header, the roster, the leaderboard and every
@@ -727,6 +731,7 @@ export class AuthService {
         ...(dto.experienceLevel !== undefined && {
           experienceLevel: dto.experienceLevel as never,
         }),
+        ...(dto.timezone !== undefined && { timezone: dto.timezone }),
       },
     });
     return this.getMe(user.id);
