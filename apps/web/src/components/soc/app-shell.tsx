@@ -127,6 +127,7 @@ const learning: NavItem[] = [
 // (admin.threatlens.useclickbox.com), not something linked from this nav.
 const instructorTools: NavItem[] = [
   { to: "/app/instructor", label: "Instructor Portal", icon: Presentation },
+  { to: "/app/organization-scenarios", label: "Organization Scenarios", icon: ClipboardCheck },
   { to: "/app/student-analytics", label: "Student Analytics", icon: BarChart3 },
   { to: "/app/scenario-builder", label: "Scenario Builder", icon: Wrench },
   { to: "/app/cohorts", label: "Cohorts", icon: Users },
@@ -136,7 +137,6 @@ const instructorTools: NavItem[] = [
 
 const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
-  { to: "/app/organization-scenarios", label: "Organization Scenarios", icon: ClipboardCheck },
   { to: "/app/announcements", label: "Announcements", icon: Megaphone },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
@@ -298,24 +298,16 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
         </button>
       </div>
 
+      {/* Role-specific order, one branch per role rather than independent flags — a platform
+          admin must never see Organization/Instructor Tools/Organization Learning even if
+          `hasActiveOrg` were ever true for an admin account, and an org student's Assigned
+          Scenarios must lead the sidebar rather than trailing after Workspace. Mutually
+          exclusive branches make both guarantees structural instead of relying on flag
+          combinations staying correct as more roles are added. */}
       <nav className="flex-1 overflow-y-auto pb-4" onClick={onNavigate}>
-        <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
-        <NavGroup
-          label="Investigation Centers"
-          items={investigationCenters}
-          collapsed={collapsed}
-        />
-        <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
-        {hasActiveOrg && (
-          <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
-        )}
-        {isOrg && (
-          <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
-        )}
-        {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
-        {isPlatformAdmin && (
+        {isPlatformAdmin ? (
           <>
-            <div className="mx-2 mt-5 border-t border-sidebar-border pt-3">
+            <div className="mx-2 mt-2 border-t border-sidebar-border pt-3">
               {!collapsed && (
                 <div className="flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-secondary">
                   <ShieldCheck className="size-3.5 text-[color:var(--info)]" />
@@ -327,7 +319,50 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
             <NavGroup label="Management" items={adminManagement} collapsed={collapsed} />
             <NavGroup label="Business" items={adminBusiness} collapsed={collapsed} />
             <NavGroup label="Security" items={adminSecurity} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
             <NavGroup label="System" items={adminSystem} collapsed={collapsed} />
+          </>
+        ) : isOrg ? (
+          <>
+            <NavGroup label="Organization" items={organization} collapsed={collapsed} />
+            <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+            {hasActiveOrg && (
+              <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
+            )}
+          </>
+        ) : hasActiveOrg ? (
+          <>
+            <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+          </>
+        ) : (
+          <>
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
           </>
         )}
       </nav>

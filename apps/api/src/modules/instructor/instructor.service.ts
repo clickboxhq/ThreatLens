@@ -211,7 +211,10 @@ export class InstructorService {
           category: 'assignment',
           title: `New assignment: ${scenario.title}`,
           body: `Assigned to ${cohort.name}${dto.dueAt ? `, due ${new Date(dto.dueAt).toLocaleDateString()}` : ''}.`,
-          link: '/app/assessments',
+          // Not '/app/assessments' — that page is instructor-tier-gated, so a plain student
+          // clicking their own assignment notification would 403. This is the student-facing
+          // page that already folds cohort assignments in (organization-scenarios.service.ts).
+          link: '/app/assigned-scenarios',
         }),
       ),
     );
