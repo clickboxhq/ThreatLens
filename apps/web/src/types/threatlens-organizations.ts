@@ -31,6 +31,9 @@ export interface OrganizationMemberDto {
   joinedAt: string | null;
   /** Last successful login, platform-wide — not org-specific activity. Null if never. */
   lastActiveAt: string | null;
+  avatarType: "initials" | "preset" | "upload";
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
 }
 
 export type InviteRole = "student" | "instructor";

@@ -419,6 +419,9 @@ export class OrganizationsService {
       orgMembershipStatus: m.orgMembershipStatus,
       joinedAt: m.orgJoinedAt,
       lastActiveAt: m.lastLoginAt,
+      avatarType: m.avatarType,
+      avatarPresetKey: m.avatarPresetKey,
+      avatarDataUrl: m.avatarDataUrl,
     }));
   }
 

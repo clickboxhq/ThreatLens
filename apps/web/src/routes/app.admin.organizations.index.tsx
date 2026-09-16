@@ -1,12 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { Building2 } from "lucide-react";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { AdminTable, StatusPill, type Column } from "@/components/soc/admin/admin-table";
 import { useAdminOrganizations } from "@/hooks/use-admin";
 import { shortDate, num } from "@/lib/admin-format";
 import type { AdminOrgRow } from "@/types/admin";
 
-export const Route = createFileRoute("/app/admin/organizations")({
+export const Route = createFileRoute("/app/admin/organizations/")({
   component: AdminOrganizations,
   head: () => ({ meta: [{ title: "ThreatLens · Admin · Organizations" }] }),
 });
@@ -30,7 +31,22 @@ function AdminOrganizations() {
     {
       key: "name",
       header: "Organization",
-      cell: (o) => <span className="font-medium">{o.name}</span>,
+      cell: (o) => (
+        <div className="flex items-center gap-2.5">
+          {o.logoDataUrl ? (
+            <img
+              src={o.logoDataUrl}
+              alt=""
+              className="size-7 shrink-0 rounded-md border border-border object-cover"
+            />
+          ) : (
+            <div className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-background">
+              <Building2 className="size-3.5 text-muted-foreground" />
+            </div>
+          )}
+          <span className="font-medium">{o.name}</span>
+        </div>
+      ),
     },
     { key: "industry", header: "Industry", cell: (o) => o.industry ?? "—" },
     { key: "members", header: "Members", align: "right", cell: (o) => num(o.memberCount) },

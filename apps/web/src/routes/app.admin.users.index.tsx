@@ -2,11 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { AdminTable, StatusPill, type Column } from "@/components/soc/admin/admin-table";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { useAdminUsers } from "@/hooks/use-admin";
 import { shortDate, relTime } from "@/lib/admin-format";
 import type { AdminUserRow } from "@/types/admin";
 
-export const Route = createFileRoute("/app/admin/users")({
+export const Route = createFileRoute("/app/admin/users/")({
   component: AdminUsers,
   head: () => ({ meta: [{ title: "ThreatLens · Admin · Users" }] }),
 });
@@ -36,10 +37,13 @@ function AdminUsers() {
       key: "user",
       header: "User",
       cell: (u) => (
-        <div className="min-w-0">
-          <div className="truncate font-medium">{u.displayName}</div>
-          <div className="truncate text-[11px] capitalize text-muted-foreground">
-            {u.role.replace("_", " ")}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <UserAvatar user={u} size={28} />
+          <div className="min-w-0">
+            <div className="truncate font-medium">{u.displayName}</div>
+            <div className="truncate text-[11px] capitalize text-muted-foreground">
+              {u.role.replace("_", " ")}
+            </div>
           </div>
         </div>
       ),

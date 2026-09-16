@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldOff, ShieldCheck, KeyRound } from "lucide-react";
 import { Panel } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { StatusPill } from "@/components/soc/admin/admin-table";
 import { useAdminUser, useSetUserStatus, useResetUserMfa } from "@/hooks/use-admin";
@@ -49,6 +50,13 @@ function UserDetail() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <Panel title="Account">
+              <div className="mb-4 flex items-center gap-3">
+                <UserAvatar user={user} size={40} />
+                <div>
+                  <div className="text-[14px] font-semibold">{user.displayName}</div>
+                  <div className="font-mono text-[11.5px] text-muted-foreground">{user.email}</div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Field label="Name" value={user.displayName} />
                 <Field

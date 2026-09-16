@@ -97,6 +97,9 @@ export interface AdminUserRow {
   emailVerified: boolean;
   joinedAt: string;
   lastActiveAt: string | null;
+  avatarType: "initials" | "preset" | "upload";
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
 }
 
 export interface AdminUserDetail {
@@ -114,6 +117,9 @@ export interface AdminUserDetail {
   createdAt: string;
   lastLoginAt: string | null;
   organization: { id: string; name: string; status: string } | null;
+  avatarType: "initials" | "preset" | "upload";
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
   performance: {
     investigationsCompleted: number;
     averageScore: number | null;
@@ -139,6 +145,7 @@ export interface AdminOrgRow {
   adminCount: number;
   plan: string | null;
   activeSeats: number | null;
+  logoDataUrl: string | null;
   createdAt: string;
 }
 
@@ -159,6 +166,9 @@ export interface AdminOrgDetail {
     status: string;
     lastLoginAt: string | null;
     createdAt: string;
+    avatarType: "initials" | "preset" | "upload";
+    avatarPresetKey: string | null;
+    avatarDataUrl: string | null;
   }[];
   cohorts: { id: string; name: string; archived: boolean }[];
   usage: { activeCohorts: number; investigationsCompleted: number };
@@ -196,6 +206,9 @@ export interface AdministratorRow {
   mfaEnabled: boolean;
   lastActivityAt: string | null;
   createdAt: string;
+  avatarType: "initials" | "preset" | "upload";
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
 }
 
 // ---- Security -------------------------------------------------------------

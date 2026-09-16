@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
+import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import {
   useMyOrganization,
   useCreateOrganization,
@@ -448,18 +449,7 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                   <tr key={m.userId} className="hover:bg-background/40">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <IconTile
-                          tone="info"
-                          size="sm"
-                          shape="circle"
-                          className="text-[10.5px] font-semibold"
-                        >
-                          {m.displayName
-                            .split(" ")
-                            .map((p) => p[0])
-                            .slice(0, 2)
-                            .join("")}
-                        </IconTile>
+                        <UserAvatar user={m} size={32} />
                         <div>
                           <div className="font-medium">{m.displayName}</div>
                           <div className="font-mono text-[10.5px] text-muted-foreground">
@@ -638,18 +628,7 @@ function MemberDetailDialog({
           <>
             <DialogHeader>
               <div className="flex items-center gap-3">
-                <IconTile
-                  tone="info"
-                  size="lg"
-                  shape="circle"
-                  className="text-[13px] font-semibold"
-                >
-                  {member.displayName
-                    .split(" ")
-                    .map((p) => p[0])
-                    .slice(0, 2)
-                    .join("")}
-                </IconTile>
+                <UserAvatar user={member} size={44} />
                 <div>
                   <DialogTitle className="text-foreground">{member.displayName}</DialogTitle>
                   <DialogDescription className="font-mono text-[11.5px]">
