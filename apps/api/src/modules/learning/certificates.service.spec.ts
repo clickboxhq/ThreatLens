@@ -61,13 +61,15 @@ function buildService(
   };
   const notifications = { create: jest.fn(async () => undefined) };
   const config = { get: jest.fn(() => 'https://threatlensapp.com') };
+  const activityTracking = { touch: jest.fn(async () => undefined) };
 
   const service = new CertificatesService(
     prisma as never,
     notifications as never,
     config as never,
+    activityTracking as never,
   );
-  return { service, prisma, notifications, created };
+  return { service, prisma, notifications, activityTracking, created };
 }
 
 const user = (id = 'u1'): AuthenticatedUser => ({ id }) as AuthenticatedUser;

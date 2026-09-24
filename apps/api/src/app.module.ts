@@ -29,6 +29,7 @@ import { AuditLogModule } from './common/audit-log/audit-log.module';
 import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { ActivityModule } from './common/activity/activity.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { AchievementsApiModule } from './modules/achievements/achievements-api.module';
 import { StreaksApiModule } from './modules/streaks/streaks-api.module';
@@ -71,6 +72,7 @@ import { MaintenanceMiddleware } from './common/middleware/maintenance.middlewar
     RateLimiterModule,
     AdminModule,
     MetricsModule,
+    ActivityModule,
     OrganizationsModule,
     AchievementsApiModule,
     StreaksApiModule,

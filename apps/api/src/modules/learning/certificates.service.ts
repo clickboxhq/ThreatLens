@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ActivityTrackingService } from '../../common/activity/activity-tracking.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // Crockford-ish alphabet — no 0/O/1/I/L/U, so a public id read off a printed
@@ -21,6 +22,7 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly config: ConfigService,
+    private readonly activityTracking: ActivityTrackingService,
   ) {}
 
   private webOrigin(): string {
@@ -143,6 +145,10 @@ export class CertificatesService {
       body: `You've completed the ${course.title} Career Track — your certificate is ready.`,
       link: '/app/certificates',
     });
+    // Completing a Career Track is explicitly "meaningful activity" for presence/inactivity
+    // purposes — this runs in the worker process (async scoring), not an HTTP request, so it
+    // can't go through ActivityInterceptor and has to call the shared tracker directly.
+    await this.activityTracking.touch(userId);
     this.logger.log(
       `Issued Career Track certificate: user ${userId}, course ${courseId}.`,
     );

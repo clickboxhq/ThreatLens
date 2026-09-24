@@ -16,6 +16,7 @@ import {
 } from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // §16.7
@@ -25,6 +26,7 @@ export class EvidenceNotesController {
   constructor(private readonly service: EvidenceNotesService) {}
 
   @Post('evidence')
+  @TracksActivity()
   async pinEvidence(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -55,6 +57,7 @@ export class EvidenceNotesController {
   }
 
   @Post('notes')
+  @TracksActivity()
   async createNote(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -74,6 +77,7 @@ export class EvidenceNotesController {
   }
 
   @Post('actions')
+  @TracksActivity()
   async logResponseAction(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,

@@ -38,11 +38,16 @@ export interface RosterEntryDto {
   userId: string;
   displayName: string;
   email: string;
+  /** Cohort enrollment status (active/removed) — deliberately separate from presence below. */
   status: EnrollmentStatus;
   /** Null means enrolled in the cohort but not placed in any group. */
   groupId: string | null;
   groupName: string | null;
   enrolledAt: string;
+  /** Last genuine investigation/learning activity — not login. */
+  lastActiveAt: string | null;
+  /** Real-time presence, distinct from `status` — never conflate the two. */
+  presenceStatus: "active" | "inactive" | "never";
 }
 
 export interface AssignmentDto {

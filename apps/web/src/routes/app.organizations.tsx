@@ -5,6 +5,7 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
+import { PresenceDot } from "@/components/soc/ui/presence-dot";
 import {
   useMyOrganization,
   useCreateOrganization,
@@ -465,7 +466,10 @@ function OrgRoster({ organization }: { organization: OrganizationDto }) {
                       <MembershipStatusBadge status={m.orgMembershipStatus} />
                     </td>
                     <td className="px-4 py-3 text-[11.5px] text-muted-foreground">
-                      {m.lastActiveAt ? formatRelativeTime(m.lastActiveAt) : "Never"}
+                      <span className="inline-flex items-center gap-1.5">
+                        <PresenceDot status={m.presenceStatus} />
+                        {m.lastActiveAt ? formatRelativeTime(m.lastActiveAt) : "Never"}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-[11.5px] text-muted-foreground">
                       {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—"}
@@ -657,7 +661,8 @@ function MemberDetailDialog({
               </div>
               <div>
                 <dt className="t-label text-muted-foreground">Last active</dt>
-                <dd className="mt-0.5 text-foreground">
+                <dd className="mt-0.5 flex items-center gap-1.5 text-foreground">
+                  <PresenceDot status={member.presenceStatus} />
                   {member.lastActiveAt ? formatRelativeTime(member.lastActiveAt) : "Never"}
                 </dd>
               </div>

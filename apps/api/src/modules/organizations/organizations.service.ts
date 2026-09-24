@@ -12,6 +12,7 @@ import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrganizationScenariosService } from './organization-scenarios.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { presenceStatus } from '../../common/activity/presence';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   CreateAnnouncementDto,
@@ -418,7 +419,13 @@ export class OrganizationsService {
       accountStatus: m.status,
       orgMembershipStatus: m.orgMembershipStatus,
       joinedAt: m.orgJoinedAt,
-      lastActiveAt: m.lastLoginAt,
+      // "Last active" now means the last genuine investigation/learning activity, not login —
+      // login alone was a known-imperfect proxy (see admin-analytics.service.ts's own comment
+      // on the same tradeoff). presenceStatus is the real-time "recently active" signal the
+      // green/grey indicator is driven by; account status and presence are deliberately
+      // separate concepts, never conflated.
+      lastActiveAt: m.lastMeaningfulActivityAt,
+      presenceStatus: presenceStatus(m.lastMeaningfulActivityAt),
       avatarType: m.avatarType,
       avatarPresetKey: m.avatarPresetKey,
       avatarDataUrl: m.avatarDataUrl,
