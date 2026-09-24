@@ -897,22 +897,24 @@ export class AuthService {
       );
     }
 
-    if (existing.revokedAt || existing.expiresAt < new Date()) {
-      throw new AppException(
-        401,
-        'INVALID_REFRESH_TOKEN',
-        'Refresh token has been revoked or expired.',
-      );
-    }
-
     if (existing.replacedByTokenId) {
-      // §15.7: presenting an already-rotated-away token indicates theft/replay.
-      // Revoke the entire chain and force re-authentication.
+      // §15.7: presenting an already-rotated-away token indicates theft/replay. Checked
+      // before the generic revoked/expired check below — rotation itself also sets revokedAt
+      // on the old token, so without this ordering a rotated-away token was always caught by
+      // the generic branch first and this one (and its chain-revoking side effect) never ran.
       await this.revokeChainFrom(existing.id);
       throw new AppException(
         401,
         'REFRESH_TOKEN_REUSE_DETECTED',
         'This refresh token was already used. Please log in again.',
+      );
+    }
+
+    if (existing.revokedAt || existing.expiresAt < new Date()) {
+      throw new AppException(
+        401,
+        'INVALID_REFRESH_TOKEN',
+        'Refresh token has been revoked or expired.',
       );
     }
 

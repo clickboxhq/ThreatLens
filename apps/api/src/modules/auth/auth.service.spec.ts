@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { generateSecret, generate as generateTotp } from 'otplib';
 import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
@@ -136,7 +136,19 @@ class FakeLoginAttemptTracker {
   }
 }
 
-function buildService(users: Map<string, User>) {
+interface FakeRefreshToken {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  replacedByTokenId: string | null;
+}
+
+function buildService(
+  users: Map<string, User>,
+  refreshTokens: Map<string, FakeRefreshToken> = new Map(),
+) {
   const prisma = {
     user: {
       findUnique: jest.fn(
@@ -208,9 +220,77 @@ function buildService(users: Map<string, User>) {
       ),
     },
     refreshToken: {
-      create: jest.fn(async () => ({ id: randomUUID() })),
-      update: jest.fn(async () => ({})),
-      updateMany: jest.fn(async () => ({ count: 0 })),
+      create: jest.fn(
+        async ({
+          data,
+        }: {
+          data: { userId: string; tokenHash: string; expiresAt: Date };
+        }) => {
+          const created: FakeRefreshToken = {
+            id: randomUUID(),
+            userId: data.userId,
+            tokenHash: data.tokenHash,
+            expiresAt: data.expiresAt,
+            revokedAt: null,
+            replacedByTokenId: null,
+          };
+          refreshTokens.set(created.id, created);
+          return created;
+        },
+      ),
+      findUnique: jest.fn(
+        async ({ where }: { where: { tokenHash?: string; id?: string } }) => {
+          if (where.tokenHash) {
+            return (
+              [...refreshTokens.values()].find(
+                (t) => t.tokenHash === where.tokenHash,
+              ) ?? null
+            );
+          }
+          if (where.id) return refreshTokens.get(where.id) ?? null;
+          return null;
+        },
+      ),
+      update: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Partial<FakeRefreshToken>;
+        }) => {
+          const existing = refreshTokens.get(where.id);
+          if (!existing) throw new Error(`no refresh token ${where.id}`);
+          const updated = { ...existing, ...data };
+          refreshTokens.set(where.id, updated);
+          return updated;
+        },
+      ),
+      updateMany: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { tokenHash?: string; userId?: string; revokedAt?: null };
+          data: Partial<FakeRefreshToken>;
+        }) => {
+          let count = 0;
+          for (const [id, t] of refreshTokens) {
+            const matchesHash =
+              where.tokenHash === undefined || t.tokenHash === where.tokenHash;
+            const matchesUser =
+              where.userId === undefined || t.userId === where.userId;
+            const matchesRevoked =
+              !Object.prototype.hasOwnProperty.call(where, 'revokedAt') ||
+              t.revokedAt === where.revokedAt;
+            if (matchesHash && matchesUser && matchesRevoked) {
+              refreshTokens.set(id, { ...t, ...data });
+              count++;
+            }
+          }
+          return { count };
+        },
+      ),
     },
     // isAccountActive() only reaches this when a test user carries a non-null orgId (the
     // default `user()` factory leaves it null, so most tests never touch this) — 'active' so
@@ -222,7 +302,9 @@ function buildService(users: Map<string, User>) {
   };
 
   const jwt = { sign: jest.fn(() => 'signed.jwt.token') };
-  const config = { get: jest.fn(() => undefined) };
+  const config = {
+    get: jest.fn<unknown, [string]>(() => undefined),
+  };
   const mfaChallenges = new FakeMfaChallengeStore();
   const passwordResetTokens = new FakePasswordResetTokenStore();
   const emailVerificationTokens = new FakeEmailVerificationTokenStore();
@@ -244,6 +326,7 @@ function buildService(users: Map<string, User>) {
   return {
     service,
     prisma,
+    config,
     mfaChallenges,
     passwordResetTokens,
     emailVerificationTokens,
@@ -1245,5 +1328,246 @@ describe('mandatory MFA enrolment for privileged roles', () => {
     await expect(service.mfaEnrolSetup(challengeId)).rejects.toMatchObject({
       code: 'INVALID_MFA_CHALLENGE',
     });
+  });
+});
+
+// TTL is enforced two ways: the access token's own 15-minute expiry (covered by
+// jwt-auth.guard.spec.ts, checked on every request) and the refresh-token flow below, which is
+// what a client falls back to once the access token expires. These tests previously did not
+// exist at all — refresh()/logout() had zero coverage despite being the actual session-lifetime
+// enforcement. Covers every account type explicitly per the TTL audit's acceptance criteria,
+// even though the service itself never branches on role.
+describe('AuthService session lifecycle — refresh/logout (server-side TTL enforcement)', () => {
+  const RAW_TOKEN = 'a-raw-refresh-token-value';
+
+  function tokenHash(raw: string): string {
+    return createHash('sha256').update(raw).digest('hex');
+  }
+
+  function seedRefreshToken(
+    refreshTokens: Map<string, FakeRefreshToken>,
+    userId: string,
+    overrides: Partial<FakeRefreshToken> = {},
+  ): FakeRefreshToken {
+    const row: FakeRefreshToken = {
+      id: randomUUID(),
+      userId,
+      tokenHash: tokenHash(RAW_TOKEN),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      revokedAt: null,
+      replacedByTokenId: null,
+      ...overrides,
+    };
+    refreshTokens.set(row.id, row);
+    return row;
+  }
+
+  const ACCOUNT_TYPES: Array<{
+    label: string;
+    role: User['role'];
+    orgId: string | null;
+  }> = [
+    { label: 'individual account', role: 'student', orgId: null },
+    { label: 'organization student', role: 'student', orgId: randomUUID() },
+    { label: 'organization admin', role: 'org_admin', orgId: randomUUID() },
+    { label: 'platform admin', role: 'platform_admin', orgId: null },
+  ];
+
+  for (const account of ACCOUNT_TYPES) {
+    it(`rejects a refresh once the refresh token itself has expired, for a ${account.label}`, async () => {
+      const target = user({ role: account.role, orgId: account.orgId });
+      const users = new Map([[target.id, target]]);
+      const refreshTokens = new Map<string, FakeRefreshToken>();
+      seedRefreshToken(refreshTokens, target.id, {
+        expiresAt: new Date(Date.now() - 1000), // already past its 30-day TTL
+      });
+      const { service } = buildService(users, refreshTokens);
+
+      await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+        status: 401,
+        code: 'INVALID_REFRESH_TOKEN',
+      });
+    });
+
+    it(`rejects a refresh once the session has been explicitly revoked (logout), for a ${account.label}`, async () => {
+      const target = user({ role: account.role, orgId: account.orgId });
+      const users = new Map([[target.id, target]]);
+      const refreshTokens = new Map<string, FakeRefreshToken>();
+      seedRefreshToken(refreshTokens, target.id, { revokedAt: new Date() });
+      const { service } = buildService(users, refreshTokens);
+
+      await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+        status: 401,
+        code: 'INVALID_REFRESH_TOKEN',
+      });
+    });
+  }
+
+  it('rejects an unrecognized refresh token outright', async () => {
+    const users = new Map<string, User>();
+    const { service } = buildService(users, new Map());
+    await expect(service.refresh('never-issued')).rejects.toMatchObject({
+      status: 401,
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+  });
+
+  it('rejects refresh when the account is no longer active (suspended)', async () => {
+    const target = user({ status: 'suspended' });
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service } = buildService(users, refreshTokens);
+
+    await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+      status: 401,
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+  });
+
+  it("rejects refresh when the account's organization has been suspended", async () => {
+    const orgId = randomUUID();
+    const target = user({ orgId });
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service, prisma } = buildService(users, refreshTokens);
+    prisma.organization.findUnique = jest.fn(async () => ({
+      status: 'suspended',
+    }));
+
+    await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+      status: 401,
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+  });
+
+  it('rotates the token on a valid refresh: the old token is revoked and cannot be reused', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    const original = seedRefreshToken(refreshTokens, target.id);
+    const { service } = buildService(users, refreshTokens);
+
+    const result = await service.refresh(RAW_TOKEN);
+    expect(result.accessToken).toBeDefined();
+    expect(result.refreshToken).toBeDefined();
+    expect(result.refreshToken).not.toBe(RAW_TOKEN);
+
+    const stored = refreshTokens.get(original.id)!;
+    expect(stored.revokedAt).not.toBeNull();
+    expect(stored.replacedByTokenId).not.toBeNull();
+  });
+
+  it('a refresh token can be reused to extend a session repeatedly with no absolute ceiling (sliding session, by design)', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service } = buildService(users, refreshTokens);
+
+    const first = await service.refresh(RAW_TOKEN);
+    const second = await service.refresh(first.refreshToken);
+    const third = await service.refresh(second.refreshToken);
+
+    // Each hop issues a brand-new refresh token with a fresh full TTL from "now" — there is no
+    // field anywhere tracking the original session's start time or a max age. This is the
+    // confirmed, intended "sliding session" behavior (kept as-is per product decision), not a
+    // bug — this test exists so a future change to that policy shows up as a failing test here
+    // rather than an unnoticed regression either direction.
+    expect(third.accessToken).toBeDefined();
+    // 1 seeded + 3 rotations = 4 rows total; rotation never deletes a row, only marks the old
+    // one revoked and links it forward via replacedByTokenId.
+    expect(refreshTokens.size).toBe(4);
+  });
+
+  it('detects reuse of an already-rotated refresh token (theft/replay) and revokes the whole chain', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service } = buildService(users, refreshTokens);
+
+    const rotated = await service.refresh(RAW_TOKEN);
+    // The original raw token was already exchanged above; presenting it again simulates an
+    // attacker replaying a stolen refresh token after the legitimate client already rotated it.
+    await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+      status: 401,
+      code: 'REFRESH_TOKEN_REUSE_DETECTED',
+    });
+
+    // The whole chain — including the token issued by the legitimate rotation — must now be
+    // dead, so the attacker's replay can't be worked around by the legitimate client either.
+    const rotatedHash = tokenHash(rotated.refreshToken);
+    const rotatedRow = [...refreshTokens.values()].find(
+      (t) => t.tokenHash === rotatedHash,
+    )!;
+    expect(rotatedRow.revokedAt).not.toBeNull();
+    await expect(service.refresh(rotated.refreshToken)).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+
+  it('respects a configured JWT_ACCESS_TTL_SECONDS / JWT_REFRESH_TTL_DAYS rather than a hardcoded value', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service, config } = buildService(users, refreshTokens);
+    config.get = jest.fn((key: string) => {
+      if (key === 'JWT_ACCESS_TTL_SECONDS') return 60;
+      if (key === 'JWT_REFRESH_TTL_DAYS') return 1;
+      return undefined;
+    });
+
+    const before = Date.now();
+    const result = await service.refresh(RAW_TOKEN);
+    expect(result.expiresIn).toBe(60);
+
+    const newRow = [...refreshTokens.values()].find(
+      (t) => t.tokenHash === tokenHash(result.refreshToken),
+    )!;
+    const expectedExpiry = before + 1 * 24 * 60 * 60 * 1000;
+    // Allow a small window for test execution time rather than asserting an exact millisecond.
+    expect(newRow.expiresAt.getTime()).toBeGreaterThan(expectedExpiry - 5000);
+    expect(newRow.expiresAt.getTime()).toBeLessThan(expectedExpiry + 5000);
+  });
+
+  it('logout() revokes the refresh token so it can no longer be used, but does not error for an unknown token', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    seedRefreshToken(refreshTokens, target.id);
+    const { service } = buildService(users, refreshTokens);
+
+    await service.logout(RAW_TOKEN);
+    await expect(service.refresh(RAW_TOKEN)).rejects.toMatchObject({
+      status: 401,
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+
+    // Logging out with a token that was never issued (or already logged out) is a no-op, not
+    // an error — matches the real updateMany() semantics of "0 rows matched".
+    await expect(service.logout('never-issued-token')).resolves.toBeUndefined();
+  });
+
+  it('logoutAll() revokes every refresh token for the user and bumps sessionVersion, so already-issued access tokens stop working too', async () => {
+    const target = user();
+    const users = new Map([[target.id, target]]);
+    const refreshTokens = new Map<string, FakeRefreshToken>();
+    const tokenA = seedRefreshToken(refreshTokens, target.id, {
+      tokenHash: tokenHash('token-a'),
+    });
+    const tokenB = seedRefreshToken(refreshTokens, target.id, {
+      tokenHash: tokenHash('token-b'),
+    });
+    const { service } = buildService(users, refreshTokens);
+
+    const versionBefore = users.get(target.id)!.sessionVersion;
+    await service.logoutAll(target.id, TEST_IP);
+
+    expect(users.get(target.id)!.sessionVersion).toBe(versionBefore + 1);
+    expect(refreshTokens.get(tokenA.id)!.revokedAt).not.toBeNull();
+    expect(refreshTokens.get(tokenB.id)!.revokedAt).not.toBeNull();
   });
 });
