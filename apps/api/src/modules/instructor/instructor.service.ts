@@ -8,6 +8,7 @@ import { CohortAccessService } from './cohort-access.service';
 import type { CohortStaffRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { presenceStatus } from '../../common/activity/presence';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   CreateAssignmentDto,
@@ -92,10 +93,13 @@ export class InstructorService {
       userId: e.userId,
       displayName: e.user.displayName,
       email: e.user.email,
+      // Cohort enrollment status (active/removed) — deliberately separate from presence below.
       status: e.status,
       groupId: e.groupId,
       groupName: e.group?.name ?? null,
       enrolledAt: e.enrolledAt,
+      lastActiveAt: e.user.lastMeaningfulActivityAt,
+      presenceStatus: presenceStatus(e.user.lastMeaningfulActivityAt),
     }));
   }
 

@@ -96,7 +96,10 @@ export interface AdminUserRow {
   mfaEnabled: boolean;
   emailVerified: boolean;
   joinedAt: string;
+  /** Last genuine investigation/learning activity — not login. */
   lastActiveAt: string | null;
+  /** Real-time presence, distinct from `status` (account state) — never conflate the two. */
+  presenceStatus: "active" | "inactive" | "never";
   avatarType: "initials" | "preset" | "upload";
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;

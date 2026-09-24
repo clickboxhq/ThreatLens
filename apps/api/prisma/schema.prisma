@@ -156,6 +156,11 @@ model User {
   emailVerifiedAt      DateTime?           @map("email_verified_at")
   sessionVersion       Int                 @default(1) @map("session_version")
   lastLoginAt          DateTime?           @map("last_login_at")
+  // Distinct from lastLoginAt: only touched by genuine investigation/learning work (see
+  // ActivityTrackingService), never by login/polling/token-refresh/notifications. This is the
+  // source of truth for both the "Active" presence indicator and inactivity-reminder emails —
+  // login alone does not count as meaningful activity for either.
+  lastMeaningfulActivityAt DateTime?        @map("last_meaningful_activity_at")
   // §15.1: TOTP-based MFA. mfaSecret is written at /auth/mfa/setup (pending) and only takes
   // effect once mfaEnabled flips true at /auth/mfa/enable. Recovery codes are stored hashed
   // (sha256) and consumed one-time, same spirit as the recovery-code pattern used elsewhere

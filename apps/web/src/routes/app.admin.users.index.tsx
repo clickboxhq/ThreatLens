@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AdminPage } from "@/components/soc/admin/admin-page";
 import { AdminTable, StatusPill, type Column } from "@/components/soc/admin/admin-table";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
+import { PresenceDot } from "@/components/soc/ui/presence-dot";
 import { useAdminUsers } from "@/hooks/use-admin";
 import { shortDate, relTime } from "@/lib/admin-format";
 import type { AdminUserRow } from "@/types/admin";
@@ -66,7 +67,16 @@ function AdminUsers() {
       ),
     },
     { key: "joined", header: "Joined", cell: (u) => shortDate(u.joinedAt) },
-    { key: "active", header: "Last Active", cell: (u) => relTime(u.lastActiveAt) },
+    {
+      key: "active",
+      header: "Last Active",
+      cell: (u) => (
+        <span className="inline-flex items-center gap-1.5">
+          <PresenceDot status={u.presenceStatus} />
+          {relTime(u.lastActiveAt)}
+        </span>
+      ),
+    },
   ];
 
   const setAndReset = (fn: (v: string) => void) => (v: string) => {

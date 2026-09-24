@@ -29,8 +29,13 @@ export interface OrganizationMemberDto {
   orgMembershipStatus: OrgMembershipStatus;
   /** When this membership began. Null for rows that predate this field. */
   joinedAt: string | null;
-  /** Last successful login, platform-wide — not org-specific activity. Null if never. */
+  /** Last genuine investigation/learning activity, platform-wide. Null if never. */
   lastActiveAt: string | null;
+  /**
+   * Real-time presence, distinct from account status — a member can be Enabled + Inactive.
+   * "never" means no activity record exists yet (distinct from "inactive" for a while).
+   */
+  presenceStatus: "active" | "inactive" | "never";
   avatarType: "initials" | "preset" | "upload";
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;

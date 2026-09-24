@@ -12,6 +12,7 @@ import { AlertsService } from './alerts.service';
 import { UpdateAlertStatusDto } from './dto/dismiss-alert.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { AlertSeverity, AlertStatus } from '@prisma/client';
 
@@ -41,6 +42,7 @@ export class AlertsController {
   }
 
   @Patch(':id')
+  @TracksActivity()
   async updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,

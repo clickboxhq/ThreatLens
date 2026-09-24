@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AppException } from '../../../common/exceptions/app-exception';
 import { AuditLogService } from '../../../common/audit-log/audit-log.service';
+import { presenceStatus } from '../../../common/activity/presence';
 import { toNumber } from '../../../common/dto/decimal';
 import { ADMIN_AUDIT } from '../admin-audit';
 import { toPage, type Page } from '../dto/pagination.query';
@@ -22,7 +23,10 @@ export interface AdminUserRow {
   mfaEnabled: boolean;
   emailVerified: boolean;
   joinedAt: string;
+  /** Last genuine investigation/learning activity — not login. See ../../../common/activity. */
   lastActiveAt: string | null;
+  /** Real-time presence, distinct from `status` (account state) — never conflate the two. */
+  presenceStatus: 'active' | 'inactive' | 'never';
   avatarType: string;
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;
@@ -55,7 +59,7 @@ export class AdminUsersService {
         : query.sort === 'name'
           ? { displayName: 'asc' }
           : query.sort === 'lastActive'
-            ? { lastLoginAt: { sort: 'desc', nulls: 'last' } }
+            ? { lastMeaningfulActivityAt: { sort: 'desc', nulls: 'last' } }
             : { createdAt: 'desc' };
 
     const [total, users] = await Promise.all([
@@ -74,7 +78,7 @@ export class AdminUsersService {
           mfaEnabled: true,
           emailVerifiedAt: true,
           createdAt: true,
-          lastLoginAt: true,
+          lastMeaningfulActivityAt: true,
           organization: { select: { id: true, name: true } },
           avatarType: true,
           avatarPresetKey: true,
@@ -95,7 +99,8 @@ export class AdminUsersService {
         mfaEnabled: u.mfaEnabled,
         emailVerified: u.emailVerifiedAt !== null,
         joinedAt: u.createdAt.toISOString(),
-        lastActiveAt: u.lastLoginAt?.toISOString() ?? null,
+        lastActiveAt: u.lastMeaningfulActivityAt?.toISOString() ?? null,
+        presenceStatus: presenceStatus(u.lastMeaningfulActivityAt),
         avatarType: u.avatarType,
         avatarPresetKey: u.avatarPresetKey,
         avatarDataUrl: u.avatarDataUrl,

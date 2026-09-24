@@ -3,6 +3,8 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { CohortPicker } from "@/components/soc/cohort-picker";
 import { NoCohorts } from "@/components/soc/no-cohorts";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
+import { PresenceDot } from "@/components/soc/ui/presence-dot";
+import { formatRelativeTime } from "@/lib/format-relative-time";
 import {
   useSelectedCohort,
   useRoster,
@@ -60,9 +62,11 @@ function InstructorPortal() {
           <div className="mt-1 text-2xl font-semibold tabular-nums">{roster.length}</div>
         </Panel>
         <Panel>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Active</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Active now
+          </div>
           <div className="mt-1 text-2xl font-semibold tabular-nums text-[color:var(--success)]">
-            {roster.filter((r) => r.status === "active").length}
+            {roster.filter((r) => r.presenceStatus === "active").length}
           </div>
         </Panel>
         <Panel>
@@ -112,6 +116,7 @@ function InstructorPortal() {
                   <th className="px-4 py-2.5 text-left">Analyst</th>
                   <th className="px-4 py-2.5 text-left">Email</th>
                   <th className="px-4 py-2.5 text-left">Status</th>
+                  <th className="px-4 py-2.5 text-left">Last active</th>
                   {groups.length > 0 && <th className="px-4 py-2.5 text-left">Group</th>}
                   <th className="px-4 py-2.5 text-right">Enrolled</th>
                 </tr>
@@ -126,6 +131,12 @@ function InstructorPortal() {
                     </td>
                     <td className="px-4 py-3 font-mono text-[11.5px] text-secondary">{r.email}</td>
                     <td className="px-4 py-3 capitalize text-secondary">{r.status}</td>
+                    <td className="px-4 py-3 text-[11.5px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <PresenceDot status={r.presenceStatus} />
+                        {r.lastActiveAt ? formatRelativeTime(r.lastActiveAt) : "Never"}
+                      </span>
+                    </td>
                     {/* Placement lives on the roster because that is where you are looking when
                      * you decide it — the alternative is naming students from the groups panel,
                      * which is the wrong way round. */}
