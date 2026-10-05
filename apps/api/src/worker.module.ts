@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { HealthController } from './common/health/health.controller';
+import { HealthService } from './common/health/health.service';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaModule } from './prisma/prisma.module';
@@ -40,7 +41,12 @@ import { ActivityModule } from './common/activity/activity.module';
     ActivityModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
+  // HealthService but not HealthWatcherService: the worker needs its own /ready probe, and a
+  // second process emailing the same alert would just double every message.
+  providers: [
+    HealthService,
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
 export class WorkerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

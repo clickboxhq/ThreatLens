@@ -2,6 +2,9 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { HealthController } from './common/health/health.controller';
+import { HealthService } from './common/health/health.service';
+import { HealthWatcherService } from './common/health/health-watcher.service';
+import { EmailService } from './common/email/email.service';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaModule } from './prisma/prisma.module';
@@ -84,7 +87,14 @@ import { MaintenanceMiddleware } from './common/middleware/maintenance.middlewar
     PlatformSettingsModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
+  providers: [
+    HealthService,
+    // Alerts live in the API process, not the worker: the worker's scheduler is Redis-backed,
+    // so a Redis outage would silence the alert about Redis being down.
+    HealthWatcherService,
+    EmailService,
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
