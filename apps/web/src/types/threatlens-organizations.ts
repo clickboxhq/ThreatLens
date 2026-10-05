@@ -7,19 +7,38 @@ export interface OrganizationDto {
   name: string;
   teamSize?: number | null;
   industry?: string | null;
+  /** Base64 data URL, or null when no logo is set. */
+  logoDataUrl?: string | null;
   memberCount: number;
   createdAt: string;
 }
 
 export type OrgMemberRole = "student" | "instructor" | "org_admin" | "platform_admin";
-export type OrgMemberStatus = "active" | "suspended" | "pending_verification";
+/** The ThreatLens *account's* own status — platform-wide, not org-specific. */
+export type AccountStatus = "active" | "suspended" | "pending_verification";
+/** Standing within *this* organization. A removed member simply stops appearing in the
+ * roster (their `orgId` is cleared), so this only ever holds these two values here. */
+export type OrgMembershipStatus = "active" | "suspended";
 
 export interface OrganizationMemberDto {
   userId: string;
   displayName: string;
   email: string;
   role: OrgMemberRole;
-  status: OrgMemberStatus;
+  accountStatus: AccountStatus;
+  orgMembershipStatus: OrgMembershipStatus;
+  /** When this membership began. Null for rows that predate this field. */
+  joinedAt: string | null;
+  /** Last genuine investigation/learning activity, platform-wide. Null if never. */
+  lastActiveAt: string | null;
+  /**
+   * Real-time presence, distinct from account status — a member can be Enabled + Inactive.
+   * "never" means no activity record exists yet (distinct from "inactive" for a while).
+   */
+  presenceStatus: "active" | "inactive" | "never";
+  avatarType: "initials" | "preset" | "upload";
+  avatarPresetKey: string | null;
+  avatarDataUrl: string | null;
 }
 
 export type InviteRole = "student" | "instructor";
@@ -42,4 +61,22 @@ export interface InvitePreviewDto {
   email: string;
   role: InviteRole;
   status: InviteStatus;
+}
+
+export interface AnnouncementDto {
+  id: string;
+  title: string;
+  body: string;
+  /** Who it went to. `cohortName` is set only when `scope` is "cohort". */
+  audience: { scope: "organization" | "cohort"; cohortName: string | null };
+  authorName: string;
+  recipientCount: number;
+  createdAt: string;
+}
+
+export interface CreateAnnouncementInput {
+  title: string;
+  body: string;
+  /** Omit for the whole organisation. */
+  cohortId?: string;
 }

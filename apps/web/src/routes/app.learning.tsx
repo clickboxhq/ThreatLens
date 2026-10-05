@@ -105,9 +105,9 @@ function LearningPage() {
           ) : (
             <ul className="divide-y divide-border">
               {certificates.map((c) => (
-                <li key={c.id} className="flex items-center gap-3 px-4 py-3">
+                <li key={c.publicId} className="flex items-center gap-3 px-4 py-3">
                   <Award className="size-4 text-[color:var(--info)]" />
-                  <div className="flex-1 text-[13px] font-medium">{c.learningPathTitle}</div>
+                  <div className="flex-1 text-[13px] font-medium">{c.careerTrackName}</div>
                   <div className="text-[11px] text-muted-foreground">
                     {new Date(c.issuedAt).toLocaleDateString()}
                   </div>

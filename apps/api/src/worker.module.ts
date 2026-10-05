@@ -12,6 +12,7 @@ import { AlertEngineModule } from './modules/alert-engine/alert-engine.module';
 import { ScoringModule } from './modules/scoring/scoring.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ActivityModule } from './common/activity/activity.module';
 
 // §19.1: the background-job counterpart to AppModule, bootstrapped separately via
 // worker-main.ts. Deliberately excludes every REST-facing module (auth, all the
@@ -36,6 +37,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ScoringModule,
     MetricsModule,
     NotificationsModule,
+    ActivityModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

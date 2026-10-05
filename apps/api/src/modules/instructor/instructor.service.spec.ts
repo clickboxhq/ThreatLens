@@ -47,6 +47,23 @@ function buildService(
         scenario,
         group: group ?? null,
       })),
+      findUnique: jest.fn(
+        async (): Promise<{
+          id: string;
+          cohortId: string;
+          scenarioId: string;
+          groupId: string | null;
+          removedAt: Date | null;
+        } | null> => ({
+          id: 'assignment-1',
+          cohortId: 'cohort-1',
+          scenarioId: scenario.id,
+          groupId: group?.id ?? null,
+          removedAt: null,
+        }),
+      ),
+      findMany: jest.fn(async () => []),
+      update: jest.fn(async () => undefined),
     },
     cohortEnrollment: {
       findMany: jest.fn(async () => [
@@ -97,7 +114,7 @@ function buildService(
     }) as never,
     notificationsService as never,
   );
-  return { service, prisma, realtimeEvents, notificationsService };
+  return { service, prisma, realtimeEvents, notificationsService, auditLog };
 }
 
 describe('InstructorService.createAssignment', () => {
@@ -157,6 +174,114 @@ describe('InstructorService.createAssignment', () => {
     expect(prisma.cohortEnrollment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { cohortId: 'cohort-1', status: 'active' },
+      }),
+    );
+  });
+});
+
+describe('InstructorService.removeAssignment', () => {
+  it('soft-removes an assignment: sets removedAt, never deletes the row', async () => {
+    const { service, prisma } = buildService();
+    await service.removeAssignment(buildUser(), 'cohort-1', 'assignment-1');
+
+    expect(prisma.cohortScenarioAssignment.update).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+      data: { removedAt: expect.any(Date) },
+    });
+  });
+
+  it('404s an assignment id belonging to a different cohort', async () => {
+    const { service, prisma } = buildService();
+    prisma.cohortScenarioAssignment.findUnique = jest.fn(async () => ({
+      id: 'assignment-1',
+      cohortId: 'some-other-cohort',
+      scenarioId: 'scenario-1',
+      groupId: null,
+      removedAt: null,
+    }));
+
+    await expect(
+      service.removeAssignment(buildUser(), 'cohort-1', 'assignment-1'),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(prisma.cohortScenarioAssignment.update).not.toHaveBeenCalled();
+  });
+
+  it('a group_tutor may remove an assignment scoped to their own group', async () => {
+    const { service, prisma } = buildService({
+      requireAccess: jest.fn().mockResolvedValue({
+        cohortId: 'cohort-1',
+        role: 'group_tutor',
+        groupScoped: true,
+        groupIds: ['group-1'],
+        canWrite: true,
+        canManageStaff: false,
+        archived: false,
+      }),
+      assertNotArchived: jest.fn(),
+    });
+    prisma.cohortScenarioAssignment.findUnique = jest.fn(async () => ({
+      id: 'assignment-1',
+      cohortId: 'cohort-1',
+      scenarioId: 'scenario-1',
+      groupId: 'group-1',
+      removedAt: null,
+    }));
+
+    await service.removeAssignment(buildUser(), 'cohort-1', 'assignment-1');
+    expect(prisma.cohortScenarioAssignment.update).toHaveBeenCalled();
+  });
+
+  it("refuses a group_tutor removing a cohort-wide assignment, or another group's", async () => {
+    const { service, prisma } = buildService({
+      requireAccess: jest.fn().mockResolvedValue({
+        cohortId: 'cohort-1',
+        role: 'group_tutor',
+        groupScoped: true,
+        groupIds: ['group-1'],
+        canWrite: true,
+        canManageStaff: false,
+        archived: false,
+      }),
+      assertNotArchived: jest.fn(),
+    });
+    prisma.cohortScenarioAssignment.findUnique = jest.fn(async () => ({
+      id: 'assignment-1',
+      cohortId: 'cohort-1',
+      scenarioId: 'scenario-1',
+      groupId: null, // cohort-wide
+      removedAt: null,
+    }));
+
+    await expect(
+      service.removeAssignment(buildUser(), 'cohort-1', 'assignment-1'),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.cohortScenarioAssignment.update).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent against a repeat removal — no error, no second audit entry', async () => {
+    const { service, prisma, auditLog } = buildService();
+    prisma.cohortScenarioAssignment.findUnique = jest.fn(async () => ({
+      id: 'assignment-1',
+      cohortId: 'cohort-1',
+      scenarioId: 'scenario-1',
+      groupId: null,
+      removedAt: new Date('2026-09-01'),
+    }));
+
+    await service.removeAssignment(buildUser(), 'cohort-1', 'assignment-1');
+    expect(prisma.cohortScenarioAssignment.update).not.toHaveBeenCalled();
+    expect(auditLog.record).not.toHaveBeenCalled();
+  });
+});
+
+describe('InstructorService.listAssignments', () => {
+  it('excludes removed assignments', async () => {
+    const { service, prisma } = buildService();
+    await service.listAssignments(buildUser(), 'cohort-1');
+
+    expect(prisma.cohortScenarioAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { cohortId: 'cohort-1', removedAt: null },
       }),
     );
   });

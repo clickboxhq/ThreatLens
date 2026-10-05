@@ -4,6 +4,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -38,4 +40,22 @@ export class CreateInviteDto {
   // only by directly creating an organization (which promotes the creator themselves).
   @IsIn(['student', 'instructor'])
   role!: 'student' | 'instructor';
+}
+
+export class CreateAnnouncementDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  title!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  body!: string;
+
+  // Omitted/null => the whole organisation. Set => one cohort, which the service
+  // verifies belongs to the sender's own org before fanning anything out.
+  @IsOptional()
+  @IsUUID()
+  cohortId?: string;
 }

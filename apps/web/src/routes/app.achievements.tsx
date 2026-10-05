@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { useAchievements } from "@/hooks/use-achievements";
-import type { AchievementKey } from "@/types/threatlens-achievements";
+import { ACHIEVEMENT_BADGES } from "@/lib/achievement-badges";
 
 export const Route = createFileRoute("/app/achievements")({
   component: Achievements,
@@ -21,20 +21,6 @@ export const Route = createFileRoute("/app/achievements")({
     ],
   }),
 });
-
-// One illustrated emblem per achievement — real artwork, not a UI icon standing in for one.
-// Each ships on a solid black backing; `mix-blend-mode: screen` in the badge below drops that
-// black to nothing against the card's own dark background rather than showing as a mismatched
-// square, so the hexagon reads as sitting directly on the card.
-const BADGES: Record<AchievementKey, string> = {
-  first_blood: "/badges/first-blood.jpg",
-  perfect_score: "/badges/perfect-score.jpg",
-  sharpshooter: "/badges/sharpshooter.jpg",
-  technique_master: "/badges/technique-master.jpg",
-  verdict_veteran: "/badges/verdict-veteran.jpg",
-  no_hints_needed: "/badges/no-hints-needed.jpg",
-  category_explorer: "/badges/category-explorer.jpg",
-};
 
 function Achievements() {
   const { achievements, state } = useAchievements();
@@ -61,7 +47,7 @@ function Achievements() {
               <Panel key={a.key}>
                 <div className="flex items-start gap-4">
                   <img
-                    src={BADGES[a.key]}
+                    src={ACHIEVEMENT_BADGES[a.key]}
                     alt=""
                     aria-hidden="true"
                     className="size-20 shrink-0 mix-blend-screen transition-[filter,opacity] duration-300"

@@ -7,7 +7,11 @@ import { Skeleton } from "@/components/soc/ui/skeleton";
 export const Route = createFileRoute("/app")({
   component: ProtectedAppShell,
   head: () => ({
-    meta: [{ title: "ThreatLens · Console" }],
+    // Defense in depth: the console is a client-only authed area with no
+    // indexable content, but make the directive explicit for any crawler that
+    // reaches an /app/* URL. The X-Robots-Tag header on non-production hosts
+    // (see src/server.ts) covers the SSR shell too.
+    meta: [{ title: "ThreatLens · Console" }, { name: "robots", content: "noindex, nofollow" }],
   }),
 });
 

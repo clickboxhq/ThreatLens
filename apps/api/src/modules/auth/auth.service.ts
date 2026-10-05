@@ -59,6 +59,7 @@ export interface AuthUserDto {
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;
   careerLevel: string;
+  timezone: string | null;
 }
 
 /** The one place the signed-in user's shape is defined, so login and GET /auth/me cannot drift. */
@@ -79,6 +80,7 @@ function toAuthUserDto(user: {
   avatarPresetKey: string | null;
   avatarDataUrl: string | null;
   careerLevel: string;
+  timezone: string | null;
 }): AuthUserDto {
   return {
     id: user.id,
@@ -97,6 +99,7 @@ function toAuthUserDto(user: {
     avatarPresetKey: user.avatarPresetKey,
     avatarDataUrl: user.avatarDataUrl,
     careerLevel: user.careerLevel,
+    timezone: user.timezone,
   };
 }
 
@@ -306,7 +309,7 @@ export class AuthService {
       );
     }
 
-    if (user.status !== 'active') {
+    if (!(await this.isAccountActive(user))) {
       throw new AppException(
         403,
         'ACCOUNT_NOT_ACTIVE',
@@ -353,6 +356,27 @@ export class AuthService {
       ...tokens,
       user: toAuthUserDto(user),
     };
+  }
+
+  /**
+   * The account-level half of "can this session be issued/kept": the account itself must be
+   * `active`, and — when it belongs to an organisation — that organisation must not be
+   * `suspended`. Org suspension previously had zero effect here (Organization.status was a
+   * pure admin-facing flag; only User.status was ever checked), so a platform admin suspending
+   * an org did not actually block anyone. Same ACCOUNT_NOT_ACTIVE-shaped outcome as an
+   * individually-suspended account, so this never distinguishes "your org was suspended" from
+   * "your account was suspended" to the client.
+   */
+  private async isAccountActive(
+    user: Pick<User, 'status' | 'orgId'>,
+  ): Promise<boolean> {
+    if (user.status !== 'active') return false;
+    if (!user.orgId) return true;
+    const org = await this.prisma.organization.findUnique({
+      where: { id: user.orgId },
+      select: { status: true },
+    });
+    return org?.status !== 'suspended';
   }
 
   /**
@@ -412,12 +436,14 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (
-      !user ||
-      !user.mfaEnabled ||
-      !user.mfaSecret ||
-      user.status !== 'active'
-    ) {
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      throw new AppException(
+        401,
+        'INVALID_CREDENTIALS',
+        'Unable to complete sign-in.',
+      );
+    }
+    if (!(await this.isAccountActive(user))) {
       throw new AppException(
         401,
         'INVALID_CREDENTIALS',
@@ -427,6 +453,16 @@ export class AuthService {
 
     const usedRecoveryCode = await this.tryConsumeRecoveryCode(user, code);
     if (!usedRecoveryCode && !(await verifyTotpCode(code, user.mfaSecret))) {
+      // Recorded for the admin Security Events view — a run of these on one account is a
+      // signal worth surfacing.
+      await this.auditLog.record({
+        actorUserId: user.id,
+        actorIp: sourceIp,
+        action: 'mfa_challenge_failed',
+        targetType: 'user',
+        targetId: user.id,
+        correlationId,
+      });
       throw new AppException(
         401,
         'INVALID_MFA_CODE',
@@ -659,6 +695,7 @@ export class AuthService {
       bio?: string;
       careerGoal?: string;
       experienceLevel?: string;
+      timezone?: string;
     },
   ) {
     // displayName is what the app shows in the header, the roster, the leaderboard and every
@@ -694,6 +731,7 @@ export class AuthService {
         ...(dto.experienceLevel !== undefined && {
           experienceLevel: dto.experienceLevel as never,
         }),
+        ...(dto.timezone !== undefined && { timezone: dto.timezone }),
       },
     });
     return this.getMe(user.id);
@@ -750,7 +788,7 @@ export class AuthService {
    */
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.passwordHash || user.status !== 'active') {
+    if (!user || !user.passwordHash || !(await this.isAccountActive(user))) {
       return;
     }
 
@@ -859,17 +897,11 @@ export class AuthService {
       );
     }
 
-    if (existing.revokedAt || existing.expiresAt < new Date()) {
-      throw new AppException(
-        401,
-        'INVALID_REFRESH_TOKEN',
-        'Refresh token has been revoked or expired.',
-      );
-    }
-
     if (existing.replacedByTokenId) {
-      // §15.7: presenting an already-rotated-away token indicates theft/replay.
-      // Revoke the entire chain and force re-authentication.
+      // §15.7: presenting an already-rotated-away token indicates theft/replay. Checked
+      // before the generic revoked/expired check below — rotation itself also sets revokedAt
+      // on the old token, so without this ordering a rotated-away token was always caught by
+      // the generic branch first and this one (and its chain-revoking side effect) never ran.
       await this.revokeChainFrom(existing.id);
       throw new AppException(
         401,
@@ -878,10 +910,18 @@ export class AuthService {
       );
     }
 
+    if (existing.revokedAt || existing.expiresAt < new Date()) {
+      throw new AppException(
+        401,
+        'INVALID_REFRESH_TOKEN',
+        'Refresh token has been revoked or expired.',
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: existing.userId },
     });
-    if (!user || user.status !== 'active') {
+    if (!user || !(await this.isAccountActive(user))) {
       throw new AppException(
         401,
         'INVALID_REFRESH_TOKEN',

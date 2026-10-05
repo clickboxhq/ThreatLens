@@ -8,6 +8,7 @@ import { CohortAccessService } from './cohort-access.service';
 import type { CohortStaffRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { presenceStatus } from '../../common/activity/presence';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   CreateAssignmentDto,
@@ -92,10 +93,13 @@ export class InstructorService {
       userId: e.userId,
       displayName: e.user.displayName,
       email: e.user.email,
+      // Cohort enrollment status (active/removed) — deliberately separate from presence below.
       status: e.status,
       groupId: e.groupId,
       groupName: e.group?.name ?? null,
       enrolledAt: e.enrolledAt,
+      lastActiveAt: e.user.lastMeaningfulActivityAt,
+      presenceStatus: presenceStatus(e.user.lastMeaningfulActivityAt),
     }));
   }
 
@@ -211,7 +215,10 @@ export class InstructorService {
           category: 'assignment',
           title: `New assignment: ${scenario.title}`,
           body: `Assigned to ${cohort.name}${dto.dueAt ? `, due ${new Date(dto.dueAt).toLocaleDateString()}` : ''}.`,
-          link: '/app/assessments',
+          // Not '/app/assessments' — that page is instructor-tier-gated, so a plain student
+          // clicking their own assignment notification would 403. This is the student-facing
+          // page that already folds cohort assignments in (organization-scenarios.service.ts).
+          link: '/app/assigned-scenarios',
         }),
       ),
     );
@@ -222,11 +229,68 @@ export class InstructorService {
   async listAssignments(user: AuthenticatedUser, cohortId: string) {
     await this.cohortAccess.requireAccess(cohortId, user);
     const assignments = await this.prisma.cohortScenarioAssignment.findMany({
-      where: { cohortId },
+      where: { cohortId, removedAt: null },
       include: { scenario: true, group: true },
       orderBy: { createdAt: 'desc' },
     });
     return assignments.map(mapAssignment);
+  }
+
+  /**
+   * Pulls a sent assignment back. Soft, matching OrganizationScenario's removeScenario: the
+   * scenario, the cohort, and every session/score already produced against this assignment are
+   * untouched — only its "currently assigned" visibility (here, and on a student's own Assigned
+   * Scenarios page) goes away.
+   */
+  async removeAssignment(
+    user: AuthenticatedUser,
+    cohortId: string,
+    assignmentId: string,
+  ) {
+    const access = await this.cohortAccess.requireAccess(
+      cohortId,
+      user,
+      'tutor',
+    );
+    this.cohortAccess.assertNotArchived(access);
+
+    const assignment = await this.prisma.cohortScenarioAssignment.findUnique({
+      where: { id: assignmentId },
+    });
+    if (!assignment || assignment.cohortId !== cohortId) {
+      throw new AppException(404, 'NOT_FOUND', 'Assignment not found.');
+    }
+    // Same group-scope boundary as creating one: a group_tutor may only reach into their own
+    // groups' work, never a cohort-wide assignment or another group's.
+    if (access.groupScoped) {
+      if (
+        !assignment.groupId ||
+        !access.groupIds.includes(assignment.groupId)
+      ) {
+        throw new AppException(
+          403,
+          'FORBIDDEN',
+          'You can only remove assignments for groups you run.',
+        );
+      }
+    }
+
+    if (!assignment.removedAt) {
+      await this.prisma.cohortScenarioAssignment.update({
+        where: { id: assignmentId },
+        data: { removedAt: new Date() },
+      });
+
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: 'cohort_assignment_removed',
+        targetType: 'cohort',
+        targetId: cohortId,
+        metadata: { assignmentId, scenarioId: assignment.scenarioId },
+      });
+    }
+
+    return this.listAssignments(user, cohortId);
   }
 
   async reviewQueue(user: AuthenticatedUser, cohortId: string) {

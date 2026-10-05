@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { SITE_NAME, PUBLISHER_NAME, DEFAULT_OG_IMAGE, DEFAULT_OG_IMAGE_ALT } from "../lib/seo";
 import { CookieConsent } from "@/components/soc/marketing/cookie-consent";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuthHydration } from "@/lib/auth-store";
@@ -77,54 +78,55 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
+    // Only page-invariant metadata lives here. Anything page-specific — title,
+    // description, canonical, og:url, og:title/description — comes from the
+    // `seo()` helper in each route so there is exactly one authoritative value
+    // per page (see src/lib/seo.ts). The entries below are fallbacks for routes
+    // that don't call `seo()` (e.g. the authenticated /app console).
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "ThreatLens — Security Investigation & Analyst Development Platform" },
+      { title: `${SITE_NAME} — SOC & Cybersecurity Investigation Training Platform` },
       {
         name: "description",
         content:
-          "ThreatLens is a security investigation and analyst development platform. Practice realistic threat hunting and incident investigation against synthetic telemetry — graded against a hidden ground truth.",
+          "ThreatLens is a SOC and cybersecurity investigation training platform. Practice realistic threat hunting and incident investigation across identity, endpoint, email, and cloud — graded against a hidden ground truth.",
       },
-      { name: "author", content: "ClickBox" },
-      { property: "og:site_name", content: "ThreatLens" },
+      { name: "author", content: PUBLISHER_NAME },
+      { property: "og:site_name", content: SITE_NAME },
+      { property: "og:type", content: "website" },
       {
         property: "og:title",
-        content: "ThreatLens — Security Investigation & Analyst Development Platform",
+        content: `${SITE_NAME} — SOC & Cybersecurity Investigation Training Platform`,
       },
       {
         property: "og:description",
         content:
           "Realistic SOC investigations across identity, endpoint, email, and cloud — graded against a hidden ground truth.",
       },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://threatlensapp.com/" },
-      { property: "og:image", content: "https://threatlensapp.com/og-image.png" },
+      { property: "og:image", content: DEFAULT_OG_IMAGE },
       { property: "og:image:type", content: "image/png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      {
-        property: "og:image:alt",
-        content: "ThreatLens — Security Investigation & Analyst Development Platform",
-      },
+      { property: "og:image:alt", content: DEFAULT_OG_IMAGE_ALT },
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:title",
-        content: "ThreatLens — Security Investigation & Analyst Development Platform",
+        content: `${SITE_NAME} — SOC & Cybersecurity Investigation Training Platform`,
       },
       {
         name: "twitter:description",
         content:
           "Realistic SOC investigations across identity, endpoint, email, and cloud — graded against a hidden ground truth.",
       },
-      { name: "twitter:image", content: "https://threatlensapp.com/og-image.png" },
+      { name: "twitter:image", content: DEFAULT_OG_IMAGE },
     ],
     links: [
-      { rel: "canonical", href: "https://threatlensapp.com/" },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "apple-touch-icon", href: "/brand-mark.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
       {

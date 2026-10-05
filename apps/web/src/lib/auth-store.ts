@@ -24,12 +24,19 @@ export type AuthUser = {
   avatarPresetKey?: string | null;
   avatarDataUrl?: string | null;
   careerLevel?: CareerLevel;
+  timezone?: string | null;
 };
 
 export type ProfileUpdateInput = Partial<
   Pick<
     AuthUser,
-    "firstName" | "lastName" | "professionalRole" | "bio" | "careerGoal" | "experienceLevel"
+    | "firstName"
+    | "lastName"
+    | "professionalRole"
+    | "bio"
+    | "careerGoal"
+    | "experienceLevel"
+    | "timezone"
   >
 >;
 

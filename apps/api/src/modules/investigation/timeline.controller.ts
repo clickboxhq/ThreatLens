@@ -12,6 +12,7 @@ import { TimelineService } from './timeline.service';
 import { AddToTimelineDto } from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // §16.7/§2.9
@@ -21,6 +22,7 @@ export class TimelineController {
   constructor(private readonly service: TimelineService) {}
 
   @Post()
+  @TracksActivity()
   async addToTimeline(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,

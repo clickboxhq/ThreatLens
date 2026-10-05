@@ -55,6 +55,8 @@ export interface EmailLayoutInput {
   fallbackUrl?: string;
   /** Optional closing note above the signature. */
   footnote?: string;
+  /** Sign-off line(s). Raw HTML (a `<br>` is fine). Defaults to the team line. */
+  signoff?: string;
 }
 
 function button(label: string, url: string): string {
@@ -79,8 +81,16 @@ function button(label: string, url: string): string {
 }
 
 export function renderEmail(input: EmailLayoutInput): string {
-  const { preheader, heading, paragraphs, cta, meta, fallbackUrl, footnote } =
-    input;
+  const {
+    preheader,
+    heading,
+    paragraphs,
+    cta,
+    meta,
+    fallbackUrl,
+    footnote,
+    signoff,
+  } = input;
 
   const body = paragraphs
     .map(
@@ -173,7 +183,7 @@ export function renderEmail(input: EmailLayoutInput): string {
           <td class="tl-pad" style="padding:28px 36px 32px;">
             <div class="tl-rule" style="border-top:1px solid ${HAIRLINE};padding-top:18px;">
               <p class="tl-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:1.6;color:${MUTED};">
-                — The ThreatLens team
+                ${signoff ?? '— The ThreatLens team'}
               </p>
             </div>
           </td>
@@ -223,17 +233,34 @@ export function welcomeEmail(input: { displayName: string; appUrl: string }): {
   // Not escaped here: renderEmail escapes the heading, and escaping twice would show a
   // reader called O'Brien their own name as "O&#39;Brien".
   const name = input.displayName.trim().split(/\s+/)[0] || 'there';
+
+  // An <ol> is one of the few block elements Outlook/Word renders predictably, so the
+  // getting-started steps go in as a real list rather than four numbered paragraphs.
+  const steps = `
+    <ol style="margin:4px 0 4px;padding-left:20px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">
+      <li style="margin:0 0 10px;"><strong>Choose an investigation.</strong> Browse the scenarios and pick one that matches your experience. New to this? Start with a scenario tagged <em>Beginner</em>.</li>
+      <li style="margin:0 0 10px;"><strong>Analyze the scenario.</strong> Read the incident carefully, examine what you're given, and get a picture of what happened.</li>
+      <li style="margin:0 0 10px;"><strong>Investigate and decide.</strong> Work the evidence with the investigation tools, follow the leads, and document what you find.</li>
+      <li style="margin:0;"><strong>Submit your verdict.</strong> When you're confident, submit. Your analysis and decisions are graded, and you get a scored breakdown of how you did.</li>
+    </ol>`;
+
   return {
-    subject: 'Welcome to ThreatLens',
+    subject: 'Welcome to ThreatLens — Your Investigation Journey Starts Here',
     html: renderEmail({
-      preheader: 'Your email is verified — pick a scenario and start.',
+      preheader:
+        'Your account is ready — choose a scenario and start investigating.',
       heading: `Welcome to ThreatLens, ${name}`,
       paragraphs: [
-        'Your email is confirmed, so scored investigations are open to you.',
-        'Pick a scenario, work the incident, and commit to a verdict. You get a scored breakdown when you submit.',
+        "We're glad to have you here. Your email is confirmed and your ThreatLens account is ready.",
+        'ThreatLens builds practical cybersecurity investigation skills through realistic, interactive scenarios. Instead of reading about security incidents, you work through them — analyse the evidence, make decisions, and commit to a verdict.',
+        "<strong>Here's how to get started:</strong>",
+        steps,
+        '<strong>Learn by investigating.</strong> ThreatLens is built to take you past theory and into the practical thinking a real incident demands. Take your time. Follow the evidence. Think critically.',
+        'Your first investigation is waiting.',
       ],
       cta: { label: 'Start your first investigation', url: input.appUrl },
-      meta: 'New to this? Start with a scenario tagged Beginner.',
+      meta: 'New here? Start with a scenario tagged Beginner.',
+      signoff: '— The ThreatLens Team<br>A ClickBox product',
     }),
   };
 }
@@ -260,6 +287,137 @@ export function passwordResetEmail(resetUrl: string): {
       fallbackUrl: resetUrl,
       footnote:
         'If you did not request this, you can safely ignore this email — nothing changes unless you open the link and set a new password.',
+    }),
+  };
+}
+
+const ORG_ROLE_LABEL: Record<string, string> = {
+  student: 'Student',
+  instructor: 'Instructor',
+};
+
+/**
+ * §1: an organisation's invite to join it. Distinct from cohortInviteEmail — an org invite
+ * grants membership in the tenant itself (org-wide access, no specific cohort yet), sent by
+ * organizations.service.ts's createInvite. Every value here is caller-supplied at send time;
+ * nothing about a specific org/role/inviter is hardcoded.
+ */
+export function organizationInviteEmail(input: {
+  orgName: string;
+  inviterName: string;
+  role: string;
+  inviteUrl: string;
+}): { subject: string; html: string } {
+  const org = escapeHtml(input.orgName);
+  const inviter = escapeHtml(input.inviterName);
+  const roleLabel = ORG_ROLE_LABEL[input.role] ?? 'Member';
+
+  return {
+    subject: `You're invited to join ${input.orgName} on ThreatLens`,
+    html: renderEmail({
+      preheader: `${input.inviterName} invited you to join ${input.orgName} as ${roleLabel.toLowerCase() === 'instructor' ? 'an' : 'a'} ${roleLabel.toLowerCase()} on ThreatLens.`,
+      heading: `You're invited to join ${input.orgName}`,
+      paragraphs: [
+        `<strong>${inviter}</strong> has invited you to join <strong>${org}</strong> on ThreatLens as ${
+          roleLabel.toLowerCase() === 'instructor' ? 'an' : 'a'
+        } <strong>${roleLabel}</strong>.`,
+        'ThreatLens is where you can build and demonstrate practical cybersecurity investigation skills through realistic security scenarios.',
+        `<strong>Invitation details</strong><br>Organization: <strong>${org}</strong><br>Role: <strong>${roleLabel}</strong><br>Invited by: <strong>${inviter}</strong>`,
+        `<strong>What happens next</strong><br>
+          <ol style="margin:4px 0 4px;padding-left:20px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">
+            <li style="margin:0 0 8px;">Accept the invitation below.</li>
+            <li style="margin:0 0 8px;">Create or sign in to your ThreatLens account.</li>
+            <li style="margin:0 0 8px;">You'll join <strong>${org}</strong> automatically, with the role above.</li>
+            <li style="margin:0;">Access the organization's assigned learning activities and resources.</li>
+          </ol>`,
+      ],
+      cta: { label: 'Accept Invitation', url: input.inviteUrl },
+      meta: 'This invitation expires in 7 days.',
+      fallbackUrl: input.inviteUrl,
+      footnote:
+        'Security notice: if you were not expecting this invitation, you can safely ignore this email — nothing happens unless you accept it.',
+    }),
+  };
+}
+
+/**
+ * §Task 1: sent to an org_admin the moment an invited student/instructor's membership is
+ * actually created (organizations.service.ts's acceptInvite, after the transaction commits) —
+ * never on invite-sent or invite-viewed. Works whether or not the admin is currently signed
+ * in, which is the whole point of an email rather than relying on the in-app notification alone.
+ */
+export function organizationMemberJoinedEmail(input: {
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  orgName: string;
+  role: string;
+  joinedAt: Date;
+  membersUrl: string;
+}): { subject: string; html: string } {
+  const admin = escapeHtml(input.adminName.trim().split(/\s+/)[0] || 'there');
+  const member = escapeHtml(input.memberName);
+  const email = escapeHtml(input.memberEmail);
+  const org = escapeHtml(input.orgName);
+  const roleLabel = ORG_ROLE_LABEL[input.role] ?? 'Member';
+  const joined = input.joinedAt.toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  return {
+    subject: `New student joined your organization — ThreatLens`,
+    html: renderEmail({
+      preheader: `${input.memberName} accepted the invitation and joined ${input.orgName}.`,
+      heading: `New member joined ${input.orgName}`,
+      paragraphs: [
+        `Hello ${admin},`,
+        `<strong>${member}</strong> has successfully joined <strong>${org}</strong> on ThreatLens.`,
+        `<strong>Member details</strong><br>Name: <strong>${member}</strong><br>Email: <strong>${email}</strong><br>Role: <strong>${roleLabel}</strong><br>Joined: <strong>${escapeHtml(joined)}</strong>`,
+        `${member} can now access the scenarios and resources assigned to them by your organization.`,
+      ],
+      cta: { label: 'View Organization Members', url: input.membersUrl },
+      meta: 'You can manage your organization’s members, assignments, and learning activities from your ThreatLens organization dashboard.',
+      fallbackUrl: input.membersUrl,
+    }),
+  };
+}
+
+/**
+ * An organisation's announcement, emailed to every recipient alongside the in-app notification
+ * — organizations.service.ts's createAnnouncement sends both from the same event, so an
+ * announcement reaches a student even if they're not signed in when it goes out.
+ */
+export function organizationAnnouncementEmail(input: {
+  recipientName: string;
+  orgName: string;
+  authorName: string;
+  title: string;
+  body: string;
+  announcementsUrl: string;
+}): { subject: string; html: string } {
+  const recipient = escapeHtml(
+    input.recipientName.trim().split(/\s+/)[0] || 'there',
+  );
+  const org = escapeHtml(input.orgName);
+  const author = escapeHtml(input.authorName);
+  const title = escapeHtml(input.title);
+  // Line breaks are meaningful in an admin-written announcement; escape first, then restore
+  // them as <br> so nothing else in the body can inject markup.
+  const body = escapeHtml(input.body).replace(/\n/g, '<br>');
+
+  return {
+    subject: `${input.title} — ${input.orgName} announcement`,
+    html: renderEmail({
+      preheader: `${input.authorName} posted an announcement in ${input.orgName}: ${input.title}`,
+      heading: title,
+      paragraphs: [
+        `Hello ${recipient},`,
+        `<strong>${author}</strong> posted a new announcement in <strong>${org}</strong> on ThreatLens.`,
+        `<div style="margin:4px 0;padding:14px 16px;background-color:${PAGE_BG};border-radius:8px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY_TEXT};">${body}</div>`,
+      ],
+      cta: { label: 'View Announcements', url: input.announcementsUrl },
+      fallbackUrl: input.announcementsUrl,
     }),
   };
 }

@@ -15,19 +15,19 @@ import {
 
 import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/institutions")({
   component: InstitutionsPage,
-  head: () => ({
-    meta: [
-      { title: "For Organizations — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Universities, bootcamps, enterprises, government agencies, MSSPs, and workforce development programs — cohort-based SOC investigation training.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/institutions",
+      title: "For Organizations — ThreatLens",
+      description:
+        "Universities, bootcamps, enterprises, government agencies, MSSPs, and workforce development programs — cohort-based SOC investigation training.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const SEGMENTS = [

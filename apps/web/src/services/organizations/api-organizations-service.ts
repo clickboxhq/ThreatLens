@@ -1,6 +1,7 @@
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { OrganizationsService } from "./organizations-service";
 import type {
+  AnnouncementDto,
   InvitePreviewDto,
   InviteRole,
   OrganizationDto,
@@ -23,12 +24,41 @@ export const apiOrganizationsService: OrganizationsService = {
   rename: (name, opts) =>
     apiClient.patch<OrganizationDto>("/organizations/mine", { name, ...opts }),
 
+  setLogo: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient.upload<OrganizationDto>("/organizations/mine/logo", form);
+  },
+
+  removeLogo: () => apiClient.delete<OrganizationDto>("/organizations/mine/logo"),
+
   listMembers: () => apiClient.get<OrganizationMemberDto[]>("/organizations/mine/members"),
+
+  suspendMember: async (userId) => {
+    await apiClient.post(`/organizations/mine/members/${encodeURIComponent(userId)}/suspend`);
+  },
+
+  restoreMember: async (userId) => {
+    await apiClient.post(`/organizations/mine/members/${encodeURIComponent(userId)}/restore`);
+  },
+
+  removeMember: async (userId) => {
+    await apiClient.delete(`/organizations/mine/members/${encodeURIComponent(userId)}`);
+  },
 
   listInvites: () => apiClient.get<OrganizationInviteDto[]>("/organizations/mine/invites"),
 
   createInvite: (email, role) =>
     apiClient.post<OrganizationInviteDto>("/organizations/mine/invites", { email, role }),
+
+  resendInvite: (inviteId) =>
+    apiClient.post<OrganizationInviteDto>(
+      `/organizations/mine/invites/${encodeURIComponent(inviteId)}/resend`,
+    ),
+
+  revokeInvite: async (inviteId) => {
+    await apiClient.delete(`/organizations/mine/invites/${encodeURIComponent(inviteId)}`);
+  },
 
   previewInvite: async (token) => {
     try {
@@ -41,4 +71,16 @@ export const apiOrganizationsService: OrganizationsService = {
 
   acceptInvite: (token) =>
     apiClient.post<OrganizationDto>(`/organizations/invites/${token}/accept`),
+
+  createAnnouncement: (input) =>
+    apiClient.post<AnnouncementDto>("/organizations/mine/announcements", input),
+
+  listSentAnnouncements: () =>
+    apiClient.get<AnnouncementDto[]>("/organizations/mine/announcements"),
+
+  listMyAnnouncements: () => apiClient.get<AnnouncementDto[]>("/announcements/mine"),
+
+  deleteAnnouncement: async (id) => {
+    await apiClient.delete(`/organizations/mine/announcements/${encodeURIComponent(id)}`);
+  },
 };

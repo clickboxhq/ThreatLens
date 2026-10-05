@@ -25,6 +25,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ScoringRouteImport } from './routes/scoring'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudentsRouteImport } from './routes/students'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WelcomeRouteImport } from './routes/welcome'
@@ -33,7 +34,9 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAchievementsRouteImport } from './routes/app.achievements'
 import { Route as AppAlertsRouteImport } from './routes/app.alerts'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
+import { Route as AppAnnouncementsRouteImport } from './routes/app.announcements'
 import { Route as AppAssessmentsRouteImport } from './routes/app.assessments'
+import { Route as AppAssignedScenariosRouteImport } from './routes/app.assigned-scenarios'
 import { Route as AppAuditLogsRouteImport } from './routes/app.audit-logs'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppCertificatesRouteImport } from './routes/app.certificates'
@@ -50,6 +53,8 @@ import { Route as AppLearningRouteImport } from './routes/app.learning'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppMitreRouteImport } from './routes/app.mitre'
 import { Route as AppNetworkRouteImport } from './routes/app.network'
+import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
+import { Route as AppOrganizationScenariosRouteImport } from './routes/app.organization-scenarios'
 import { Route as AppOrganizationsRouteImport } from './routes/app.organizations'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppScenarioBuilderRouteImport } from './routes/app.scenario-builder'
@@ -63,12 +68,26 @@ import { Route as JoinCohortTokenRouteImport } from './routes/join-cohort.$token
 import { Route as ResetPasswordTokenRouteImport } from './routes/reset-password.$token'
 import { Route as VerifyEmailTokenRouteImport } from './routes/verify-email.$token'
 import { Route as VerifyIdRouteImport } from './routes/verify.$id'
+import { Route as AppAdminIndexRouteImport } from './routes/app.admin.index'
+import { Route as AppAdminAdministratorsRouteImport } from './routes/app.admin.administrators'
+import { Route as AppAdminAnalyticsRouteImport } from './routes/app.admin.analytics'
+import { Route as AppAdminCertificatesRouteImport } from './routes/app.admin.certificates'
+import { Route as AppAdminRevenueRouteImport } from './routes/app.admin.revenue'
+import { Route as AppAdminSecurityRouteImport } from './routes/app.admin.security'
+import { Route as AppAdminSettingsRouteImport } from './routes/app.admin.settings'
+import { Route as AppAdminSubscriptionsRouteImport } from './routes/app.admin.subscriptions'
 import { Route as AppCasesIndexRouteImport } from './routes/app.cases.index'
 import { Route as AppCasesIdRouteImport } from './routes/app.cases.$id'
+import { Route as AppCertificatesIdRouteImport } from './routes/app.certificates.$id'
 import { Route as AppEmailIndexRouteImport } from './routes/app.email.index'
 import { Route as AppEndpointsIndexRouteImport } from './routes/app.endpoints.index'
 import { Route as AppIdentityIndexRouteImport } from './routes/app.identity.index'
 import { Route as AppReportsIndexRouteImport } from './routes/app.reports.index'
+import { Route as CertificatesIdPrintRouteImport } from './routes/certificates.$id.print'
+import { Route as AppAdminOrganizationsIndexRouteImport } from './routes/app.admin.organizations.index'
+import { Route as AppAdminOrganizationsOrgIdRouteImport } from './routes/app.admin.organizations.$orgId'
+import { Route as AppAdminUsersIndexRouteImport } from './routes/app.admin.users.index'
+import { Route as AppAdminUsersUserIdRouteImport } from './routes/app.admin.users.$userId'
 import { Route as AppEmailSessionIdMessageIdRouteImport } from './routes/app.email.$sessionId.$messageId'
 import { Route as AppEndpointsSessionIdDeviceIdRouteImport } from './routes/app.endpoints.$sessionId.$deviceId'
 import { Route as AppIdentitySessionIdIdentityIdRouteImport } from './routes/app.identity.$sessionId.$identityId'
@@ -154,6 +173,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudentsRoute = StudentsRouteImport.update({
   id: '/students',
   path: '/students',
@@ -194,9 +218,19 @@ const AppAnalyticsRoute = AppAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAnnouncementsRoute = AppAnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAssessmentsRoute = AppAssessmentsRouteImport.update({
   id: '/assessments',
   path: '/assessments',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAssignedScenariosRoute = AppAssignedScenariosRouteImport.update({
+  id: '/assigned-scenarios',
+  path: '/assigned-scenarios',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAuditLogsRoute = AppAuditLogsRouteImport.update({
@@ -279,6 +313,17 @@ const AppNetworkRoute = AppNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrganizationScenariosRoute =
+  AppOrganizationScenariosRouteImport.update({
+    id: '/organization-scenarios',
+    path: '/organization-scenarios',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppOrganizationsRoute = AppOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -344,6 +389,46 @@ const VerifyIdRoute = VerifyIdRouteImport.update({
   path: '/verify/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminAdministratorsRoute = AppAdminAdministratorsRouteImport.update({
+  id: '/admin/administrators',
+  path: '/admin/administrators',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminAnalyticsRoute = AppAdminAnalyticsRouteImport.update({
+  id: '/admin/analytics',
+  path: '/admin/analytics',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminCertificatesRoute = AppAdminCertificatesRouteImport.update({
+  id: '/admin/certificates',
+  path: '/admin/certificates',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRevenueRoute = AppAdminRevenueRouteImport.update({
+  id: '/admin/revenue',
+  path: '/admin/revenue',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSecurityRoute = AppAdminSecurityRouteImport.update({
+  id: '/admin/security',
+  path: '/admin/security',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSubscriptionsRoute = AppAdminSubscriptionsRouteImport.update({
+  id: '/admin/subscriptions',
+  path: '/admin/subscriptions',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCasesIndexRoute = AppCasesIndexRouteImport.update({
   id: '/cases/',
   path: '/cases/',
@@ -353,6 +438,11 @@ const AppCasesIdRoute = AppCasesIdRouteImport.update({
   id: '/cases/$id',
   path: '/cases/$id',
   getParentRoute: () => AppRoute,
+} as any)
+const AppCertificatesIdRoute = AppCertificatesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppCertificatesRoute,
 } as any)
 const AppEmailIndexRoute = AppEmailIndexRouteImport.update({
   id: '/email/',
@@ -372,6 +462,33 @@ const AppIdentityIndexRoute = AppIdentityIndexRouteImport.update({
 const AppReportsIndexRoute = AppReportsIndexRouteImport.update({
   id: '/reports/',
   path: '/reports/',
+  getParentRoute: () => AppRoute,
+} as any)
+const CertificatesIdPrintRoute = CertificatesIdPrintRouteImport.update({
+  id: '/certificates/$id/print',
+  path: '/certificates/$id/print',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppAdminOrganizationsIndexRoute =
+  AppAdminOrganizationsIndexRouteImport.update({
+    id: '/admin/organizations/',
+    path: '/admin/organizations/',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppAdminOrganizationsOrgIdRoute =
+  AppAdminOrganizationsOrgIdRouteImport.update({
+    id: '/admin/organizations/$orgId',
+    path: '/admin/organizations/$orgId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppAdminUsersIndexRoute = AppAdminUsersIndexRouteImport.update({
+  id: '/admin/users/',
+  path: '/admin/users/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminUsersUserIdRoute = AppAdminUsersUserIdRouteImport.update({
+  id: '/admin/users/$userId',
+  path: '/admin/users/$userId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppEmailSessionIdMessageIdRoute =
@@ -416,6 +533,7 @@ export interface FileRoutesByFullPath {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -423,10 +541,12 @@ export interface FileRoutesByFullPath {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -440,6 +560,8 @@ export interface FileRoutesByFullPath {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -454,16 +576,30 @@ export interface FileRoutesByFullPath {
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
   '/app/': typeof AppIndexRoute
+  '/app/admin/administrators': typeof AppAdminAdministratorsRoute
+  '/app/admin/analytics': typeof AppAdminAnalyticsRoute
+  '/app/admin/certificates': typeof AppAdminCertificatesRoute
+  '/app/admin/revenue': typeof AppAdminRevenueRoute
+  '/app/admin/security': typeof AppAdminSecurityRoute
+  '/app/admin/settings': typeof AppAdminSettingsRoute
+  '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
+  '/app/admin/': typeof AppAdminIndexRoute
   '/app/cases/': typeof AppCasesIndexRoute
   '/app/email/': typeof AppEmailIndexRoute
   '/app/endpoints/': typeof AppEndpointsIndexRoute
   '/app/identity/': typeof AppIdentityIndexRoute
   '/app/reports/': typeof AppReportsIndexRoute
+  '/app/admin/organizations/$orgId': typeof AppAdminOrganizationsOrgIdRoute
+  '/app/admin/users/$userId': typeof AppAdminUsersUserIdRoute
   '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
   '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
   '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
+  '/app/admin/organizations/': typeof AppAdminOrganizationsIndexRoute
+  '/app/admin/users/': typeof AppAdminUsersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -481,6 +617,7 @@ export interface FileRoutesByTo {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -488,10 +625,12 @@ export interface FileRoutesByTo {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -505,6 +644,8 @@ export interface FileRoutesByTo {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -519,16 +660,30 @@ export interface FileRoutesByTo {
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
   '/app': typeof AppIndexRoute
+  '/app/admin/administrators': typeof AppAdminAdministratorsRoute
+  '/app/admin/analytics': typeof AppAdminAnalyticsRoute
+  '/app/admin/certificates': typeof AppAdminCertificatesRoute
+  '/app/admin/revenue': typeof AppAdminRevenueRoute
+  '/app/admin/security': typeof AppAdminSecurityRoute
+  '/app/admin/settings': typeof AppAdminSettingsRoute
+  '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
+  '/app/admin': typeof AppAdminIndexRoute
   '/app/cases': typeof AppCasesIndexRoute
   '/app/email': typeof AppEmailIndexRoute
   '/app/endpoints': typeof AppEndpointsIndexRoute
   '/app/identity': typeof AppIdentityIndexRoute
   '/app/reports': typeof AppReportsIndexRoute
+  '/app/admin/organizations/$orgId': typeof AppAdminOrganizationsOrgIdRoute
+  '/app/admin/users/$userId': typeof AppAdminUsersUserIdRoute
   '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
   '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
   '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
+  '/app/admin/organizations': typeof AppAdminOrganizationsIndexRoute
+  '/app/admin/users': typeof AppAdminUsersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -548,6 +703,7 @@ export interface FileRoutesById {
   '/scoring': typeof ScoringRoute
   '/security': typeof SecurityRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/students': typeof StudentsRoute
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
@@ -555,10 +711,12 @@ export interface FileRoutesById {
   '/app/achievements': typeof AppAchievementsRoute
   '/app/alerts': typeof AppAlertsRoute
   '/app/analytics': typeof AppAnalyticsRoute
+  '/app/announcements': typeof AppAnnouncementsRoute
   '/app/assessments': typeof AppAssessmentsRoute
+  '/app/assigned-scenarios': typeof AppAssignedScenariosRoute
   '/app/audit-logs': typeof AppAuditLogsRoute
   '/app/billing': typeof AppBillingRoute
-  '/app/certificates': typeof AppCertificatesRoute
+  '/app/certificates': typeof AppCertificatesRouteWithChildren
   '/app/closed': typeof AppClosedRoute
   '/app/cohorts': typeof AppCohortsRoute
   '/app/docs': typeof AppDocsRoute
@@ -572,6 +730,8 @@ export interface FileRoutesById {
   '/app/logs': typeof AppLogsRoute
   '/app/mitre': typeof AppMitreRoute
   '/app/network': typeof AppNetworkRoute
+  '/app/notifications': typeof AppNotificationsRoute
+  '/app/organization-scenarios': typeof AppOrganizationScenariosRoute
   '/app/organizations': typeof AppOrganizationsRoute
   '/app/profile': typeof AppProfileRoute
   '/app/scenario-builder': typeof AppScenarioBuilderRoute
@@ -586,16 +746,30 @@ export interface FileRoutesById {
   '/verify-email/$token': typeof VerifyEmailTokenRoute
   '/verify/$id': typeof VerifyIdRoute
   '/app/': typeof AppIndexRoute
+  '/app/admin/administrators': typeof AppAdminAdministratorsRoute
+  '/app/admin/analytics': typeof AppAdminAnalyticsRoute
+  '/app/admin/certificates': typeof AppAdminCertificatesRoute
+  '/app/admin/revenue': typeof AppAdminRevenueRoute
+  '/app/admin/security': typeof AppAdminSecurityRoute
+  '/app/admin/settings': typeof AppAdminSettingsRoute
+  '/app/admin/subscriptions': typeof AppAdminSubscriptionsRoute
   '/app/cases/$id': typeof AppCasesIdRoute
+  '/app/certificates/$id': typeof AppCertificatesIdRoute
+  '/certificates/$id/print': typeof CertificatesIdPrintRoute
+  '/app/admin/': typeof AppAdminIndexRoute
   '/app/cases/': typeof AppCasesIndexRoute
   '/app/email/': typeof AppEmailIndexRoute
   '/app/endpoints/': typeof AppEndpointsIndexRoute
   '/app/identity/': typeof AppIdentityIndexRoute
   '/app/reports/': typeof AppReportsIndexRoute
+  '/app/admin/organizations/$orgId': typeof AppAdminOrganizationsOrgIdRoute
+  '/app/admin/users/$userId': typeof AppAdminUsersUserIdRoute
   '/app/email/$sessionId/$messageId': typeof AppEmailSessionIdMessageIdRoute
   '/app/endpoints/$sessionId/$deviceId': typeof AppEndpointsSessionIdDeviceIdRoute
   '/app/identity/$sessionId/$identityId': typeof AppIdentitySessionIdIdentityIdRoute
   '/app/reports/$sessionId/$incidentId': typeof AppReportsSessionIdIncidentIdRoute
+  '/app/admin/organizations/': typeof AppAdminOrganizationsIndexRoute
+  '/app/admin/users/': typeof AppAdminUsersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -616,6 +790,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -623,7 +798,9 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -640,6 +817,8 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -654,16 +833,30 @@ export interface FileRouteTypes {
     | '/verify-email/$token'
     | '/verify/$id'
     | '/app/'
+    | '/app/admin/administrators'
+    | '/app/admin/analytics'
+    | '/app/admin/certificates'
+    | '/app/admin/revenue'
+    | '/app/admin/security'
+    | '/app/admin/settings'
+    | '/app/admin/subscriptions'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
+    | '/app/admin/'
     | '/app/cases/'
     | '/app/email/'
     | '/app/endpoints/'
     | '/app/identity/'
     | '/app/reports/'
+    | '/app/admin/organizations/$orgId'
+    | '/app/admin/users/$userId'
     | '/app/email/$sessionId/$messageId'
     | '/app/endpoints/$sessionId/$deviceId'
     | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
+    | '/app/admin/organizations/'
+    | '/app/admin/users/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -681,6 +874,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -688,7 +882,9 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -705,6 +901,8 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -719,16 +917,30 @@ export interface FileRouteTypes {
     | '/verify-email/$token'
     | '/verify/$id'
     | '/app'
+    | '/app/admin/administrators'
+    | '/app/admin/analytics'
+    | '/app/admin/certificates'
+    | '/app/admin/revenue'
+    | '/app/admin/security'
+    | '/app/admin/settings'
+    | '/app/admin/subscriptions'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
+    | '/app/admin'
     | '/app/cases'
     | '/app/email'
     | '/app/endpoints'
     | '/app/identity'
     | '/app/reports'
+    | '/app/admin/organizations/$orgId'
+    | '/app/admin/users/$userId'
     | '/app/email/$sessionId/$messageId'
     | '/app/endpoints/$sessionId/$deviceId'
     | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
+    | '/app/admin/organizations'
+    | '/app/admin/users'
   id:
     | '__root__'
     | '/'
@@ -747,6 +959,7 @@ export interface FileRouteTypes {
     | '/scoring'
     | '/security'
     | '/signup'
+    | '/sitemap.xml'
     | '/students'
     | '/terms'
     | '/welcome'
@@ -754,7 +967,9 @@ export interface FileRouteTypes {
     | '/app/achievements'
     | '/app/alerts'
     | '/app/analytics'
+    | '/app/announcements'
     | '/app/assessments'
+    | '/app/assigned-scenarios'
     | '/app/audit-logs'
     | '/app/billing'
     | '/app/certificates'
@@ -771,6 +986,8 @@ export interface FileRouteTypes {
     | '/app/logs'
     | '/app/mitre'
     | '/app/network'
+    | '/app/notifications'
+    | '/app/organization-scenarios'
     | '/app/organizations'
     | '/app/profile'
     | '/app/scenario-builder'
@@ -785,16 +1002,30 @@ export interface FileRouteTypes {
     | '/verify-email/$token'
     | '/verify/$id'
     | '/app/'
+    | '/app/admin/administrators'
+    | '/app/admin/analytics'
+    | '/app/admin/certificates'
+    | '/app/admin/revenue'
+    | '/app/admin/security'
+    | '/app/admin/settings'
+    | '/app/admin/subscriptions'
     | '/app/cases/$id'
+    | '/app/certificates/$id'
+    | '/certificates/$id/print'
+    | '/app/admin/'
     | '/app/cases/'
     | '/app/email/'
     | '/app/endpoints/'
     | '/app/identity/'
     | '/app/reports/'
+    | '/app/admin/organizations/$orgId'
+    | '/app/admin/users/$userId'
     | '/app/email/$sessionId/$messageId'
     | '/app/endpoints/$sessionId/$deviceId'
     | '/app/identity/$sessionId/$identityId'
     | '/app/reports/$sessionId/$incidentId'
+    | '/app/admin/organizations/'
+    | '/app/admin/users/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -814,6 +1045,7 @@ export interface RootRouteChildren {
   ScoringRoute: typeof ScoringRoute
   SecurityRoute: typeof SecurityRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudentsRoute: typeof StudentsRoute
   TermsRoute: typeof TermsRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -822,6 +1054,7 @@ export interface RootRouteChildren {
   ResetPasswordTokenRoute: typeof ResetPasswordTokenRoute
   VerifyEmailTokenRoute: typeof VerifyEmailTokenRoute
   VerifyIdRoute: typeof VerifyIdRoute
+  CertificatesIdPrintRoute: typeof CertificatesIdPrintRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -938,6 +1171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/students': {
       id: '/students'
       path: '/students'
@@ -994,11 +1234,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAnalyticsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/announcements': {
+      id: '/app/announcements'
+      path: '/announcements'
+      fullPath: '/app/announcements'
+      preLoaderRoute: typeof AppAnnouncementsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/assessments': {
       id: '/app/assessments'
       path: '/assessments'
       fullPath: '/app/assessments'
       preLoaderRoute: typeof AppAssessmentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/assigned-scenarios': {
+      id: '/app/assigned-scenarios'
+      path: '/assigned-scenarios'
+      fullPath: '/app/assigned-scenarios'
+      preLoaderRoute: typeof AppAssignedScenariosRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/audit-logs': {
@@ -1113,6 +1367,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNetworkRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/notifications': {
+      id: '/app/notifications'
+      path: '/notifications'
+      fullPath: '/app/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/organization-scenarios': {
+      id: '/app/organization-scenarios'
+      path: '/organization-scenarios'
+      fullPath: '/app/organization-scenarios'
+      preLoaderRoute: typeof AppOrganizationScenariosRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/organizations': {
       id: '/app/organizations'
       path: '/organizations'
@@ -1204,6 +1472,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/admin/': {
+      id: '/app/admin/'
+      path: '/admin'
+      fullPath: '/app/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/administrators': {
+      id: '/app/admin/administrators'
+      path: '/admin/administrators'
+      fullPath: '/app/admin/administrators'
+      preLoaderRoute: typeof AppAdminAdministratorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/analytics': {
+      id: '/app/admin/analytics'
+      path: '/admin/analytics'
+      fullPath: '/app/admin/analytics'
+      preLoaderRoute: typeof AppAdminAnalyticsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/certificates': {
+      id: '/app/admin/certificates'
+      path: '/admin/certificates'
+      fullPath: '/app/admin/certificates'
+      preLoaderRoute: typeof AppAdminCertificatesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/revenue': {
+      id: '/app/admin/revenue'
+      path: '/admin/revenue'
+      fullPath: '/app/admin/revenue'
+      preLoaderRoute: typeof AppAdminRevenueRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/security': {
+      id: '/app/admin/security'
+      path: '/admin/security'
+      fullPath: '/app/admin/security'
+      preLoaderRoute: typeof AppAdminSecurityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/settings': {
+      id: '/app/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/app/admin/settings'
+      preLoaderRoute: typeof AppAdminSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/subscriptions': {
+      id: '/app/admin/subscriptions'
+      path: '/admin/subscriptions'
+      fullPath: '/app/admin/subscriptions'
+      preLoaderRoute: typeof AppAdminSubscriptionsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/cases/': {
       id: '/app/cases/'
       path: '/cases'
@@ -1217,6 +1541,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/cases/$id'
       preLoaderRoute: typeof AppCasesIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/app/certificates/$id': {
+      id: '/app/certificates/$id'
+      path: '/$id'
+      fullPath: '/app/certificates/$id'
+      preLoaderRoute: typeof AppCertificatesIdRouteImport
+      parentRoute: typeof AppCertificatesRoute
     }
     '/app/email/': {
       id: '/app/email/'
@@ -1244,6 +1575,41 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/app/reports/'
       preLoaderRoute: typeof AppReportsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/certificates/$id/print': {
+      id: '/certificates/$id/print'
+      path: '/certificates/$id/print'
+      fullPath: '/certificates/$id/print'
+      preLoaderRoute: typeof CertificatesIdPrintRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/admin/organizations/': {
+      id: '/app/admin/organizations/'
+      path: '/admin/organizations'
+      fullPath: '/app/admin/organizations/'
+      preLoaderRoute: typeof AppAdminOrganizationsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/organizations/$orgId': {
+      id: '/app/admin/organizations/$orgId'
+      path: '/admin/organizations/$orgId'
+      fullPath: '/app/admin/organizations/$orgId'
+      preLoaderRoute: typeof AppAdminOrganizationsOrgIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/users/': {
+      id: '/app/admin/users/'
+      path: '/admin/users'
+      fullPath: '/app/admin/users/'
+      preLoaderRoute: typeof AppAdminUsersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/users/$userId': {
+      id: '/app/admin/users/$userId'
+      path: '/admin/users/$userId'
+      fullPath: '/app/admin/users/$userId'
+      preLoaderRoute: typeof AppAdminUsersUserIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/email/$sessionId/$messageId': {
@@ -1277,14 +1643,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppCertificatesRouteChildren {
+  AppCertificatesIdRoute: typeof AppCertificatesIdRoute
+}
+
+const AppCertificatesRouteChildren: AppCertificatesRouteChildren = {
+  AppCertificatesIdRoute: AppCertificatesIdRoute,
+}
+
+const AppCertificatesRouteWithChildren = AppCertificatesRoute._addFileChildren(
+  AppCertificatesRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
   AppAlertsRoute: typeof AppAlertsRoute
   AppAnalyticsRoute: typeof AppAnalyticsRoute
+  AppAnnouncementsRoute: typeof AppAnnouncementsRoute
   AppAssessmentsRoute: typeof AppAssessmentsRoute
+  AppAssignedScenariosRoute: typeof AppAssignedScenariosRoute
   AppAuditLogsRoute: typeof AppAuditLogsRoute
   AppBillingRoute: typeof AppBillingRoute
-  AppCertificatesRoute: typeof AppCertificatesRoute
+  AppCertificatesRoute: typeof AppCertificatesRouteWithChildren
   AppClosedRoute: typeof AppClosedRoute
   AppCohortsRoute: typeof AppCohortsRoute
   AppDocsRoute: typeof AppDocsRoute
@@ -1298,6 +1678,8 @@ interface AppRouteChildren {
   AppLogsRoute: typeof AppLogsRoute
   AppMitreRoute: typeof AppMitreRoute
   AppNetworkRoute: typeof AppNetworkRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
+  AppOrganizationScenariosRoute: typeof AppOrganizationScenariosRoute
   AppOrganizationsRoute: typeof AppOrganizationsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppScenarioBuilderRoute: typeof AppScenarioBuilderRoute
@@ -1308,26 +1690,40 @@ interface AppRouteChildren {
   AppThreatIntelRoute: typeof AppThreatIntelRoute
   AppTimelineRoute: typeof AppTimelineRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppAdminAdministratorsRoute: typeof AppAdminAdministratorsRoute
+  AppAdminAnalyticsRoute: typeof AppAdminAnalyticsRoute
+  AppAdminCertificatesRoute: typeof AppAdminCertificatesRoute
+  AppAdminRevenueRoute: typeof AppAdminRevenueRoute
+  AppAdminSecurityRoute: typeof AppAdminSecurityRoute
+  AppAdminSettingsRoute: typeof AppAdminSettingsRoute
+  AppAdminSubscriptionsRoute: typeof AppAdminSubscriptionsRoute
   AppCasesIdRoute: typeof AppCasesIdRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppCasesIndexRoute: typeof AppCasesIndexRoute
   AppEmailIndexRoute: typeof AppEmailIndexRoute
   AppEndpointsIndexRoute: typeof AppEndpointsIndexRoute
   AppIdentityIndexRoute: typeof AppIdentityIndexRoute
   AppReportsIndexRoute: typeof AppReportsIndexRoute
+  AppAdminOrganizationsOrgIdRoute: typeof AppAdminOrganizationsOrgIdRoute
+  AppAdminUsersUserIdRoute: typeof AppAdminUsersUserIdRoute
   AppEmailSessionIdMessageIdRoute: typeof AppEmailSessionIdMessageIdRoute
   AppEndpointsSessionIdDeviceIdRoute: typeof AppEndpointsSessionIdDeviceIdRoute
   AppIdentitySessionIdIdentityIdRoute: typeof AppIdentitySessionIdIdentityIdRoute
   AppReportsSessionIdIncidentIdRoute: typeof AppReportsSessionIdIncidentIdRoute
+  AppAdminOrganizationsIndexRoute: typeof AppAdminOrganizationsIndexRoute
+  AppAdminUsersIndexRoute: typeof AppAdminUsersIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAlertsRoute: AppAlertsRoute,
   AppAnalyticsRoute: AppAnalyticsRoute,
+  AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppAssessmentsRoute: AppAssessmentsRoute,
+  AppAssignedScenariosRoute: AppAssignedScenariosRoute,
   AppAuditLogsRoute: AppAuditLogsRoute,
   AppBillingRoute: AppBillingRoute,
-  AppCertificatesRoute: AppCertificatesRoute,
+  AppCertificatesRoute: AppCertificatesRouteWithChildren,
   AppClosedRoute: AppClosedRoute,
   AppCohortsRoute: AppCohortsRoute,
   AppDocsRoute: AppDocsRoute,
@@ -1341,6 +1737,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppLogsRoute: AppLogsRoute,
   AppMitreRoute: AppMitreRoute,
   AppNetworkRoute: AppNetworkRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
+  AppOrganizationScenariosRoute: AppOrganizationScenariosRoute,
   AppOrganizationsRoute: AppOrganizationsRoute,
   AppProfileRoute: AppProfileRoute,
   AppScenarioBuilderRoute: AppScenarioBuilderRoute,
@@ -1351,16 +1749,28 @@ const AppRouteChildren: AppRouteChildren = {
   AppThreatIntelRoute: AppThreatIntelRoute,
   AppTimelineRoute: AppTimelineRoute,
   AppIndexRoute: AppIndexRoute,
+  AppAdminAdministratorsRoute: AppAdminAdministratorsRoute,
+  AppAdminAnalyticsRoute: AppAdminAnalyticsRoute,
+  AppAdminCertificatesRoute: AppAdminCertificatesRoute,
+  AppAdminRevenueRoute: AppAdminRevenueRoute,
+  AppAdminSecurityRoute: AppAdminSecurityRoute,
+  AppAdminSettingsRoute: AppAdminSettingsRoute,
+  AppAdminSubscriptionsRoute: AppAdminSubscriptionsRoute,
   AppCasesIdRoute: AppCasesIdRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
   AppCasesIndexRoute: AppCasesIndexRoute,
   AppEmailIndexRoute: AppEmailIndexRoute,
   AppEndpointsIndexRoute: AppEndpointsIndexRoute,
   AppIdentityIndexRoute: AppIdentityIndexRoute,
   AppReportsIndexRoute: AppReportsIndexRoute,
+  AppAdminOrganizationsOrgIdRoute: AppAdminOrganizationsOrgIdRoute,
+  AppAdminUsersUserIdRoute: AppAdminUsersUserIdRoute,
   AppEmailSessionIdMessageIdRoute: AppEmailSessionIdMessageIdRoute,
   AppEndpointsSessionIdDeviceIdRoute: AppEndpointsSessionIdDeviceIdRoute,
   AppIdentitySessionIdIdentityIdRoute: AppIdentitySessionIdIdentityIdRoute,
   AppReportsSessionIdIncidentIdRoute: AppReportsSessionIdIncidentIdRoute,
+  AppAdminOrganizationsIndexRoute: AppAdminOrganizationsIndexRoute,
+  AppAdminUsersIndexRoute: AppAdminUsersIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -1382,6 +1792,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScoringRoute: ScoringRoute,
   SecurityRoute: SecurityRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudentsRoute: StudentsRoute,
   TermsRoute: TermsRoute,
   WelcomeRoute: WelcomeRoute,
@@ -1390,6 +1801,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordTokenRoute: ResetPasswordTokenRoute,
   VerifyEmailTokenRoute: VerifyEmailTokenRoute,
   VerifyIdRoute: VerifyIdRoute,
+  CertificatesIdPrintRoute: CertificatesIdPrintRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

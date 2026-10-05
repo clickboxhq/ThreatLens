@@ -1,6 +1,7 @@
 import { IsIn, IsOptional } from 'class-validator';
 
-// Mirrors the geometric role-badge set on the frontend (avatar-presets.tsx).
+// Mirrors the role-avatar set on the frontend (avatar-presets.tsx); each key
+// also names an image file at apps/web/public/avatars/<key>.webp.
 // Kept in sync by hand rather than shared across packages — small, stable list.
 export const AVATAR_PRESET_KEYS = [
   'soc_analyst',

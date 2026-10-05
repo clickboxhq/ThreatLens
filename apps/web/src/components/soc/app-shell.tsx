@@ -29,6 +29,7 @@ import {
   Sparkles,
   Crosshair,
   Medal,
+  Megaphone,
   Trophy,
   Wrench,
   Users,
@@ -45,6 +46,8 @@ import {
   Terminal,
   Network as NetworkIcon,
   Waypoints,
+  Banknote,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -57,6 +60,7 @@ import { PageTransition } from "@/components/soc/ui/motion";
 import { EmailVerificationBanner } from "@/components/soc/email-verification-banner";
 import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
+import { useMyOrganization } from "@/hooks/use-organizations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,6 +127,7 @@ const learning: NavItem[] = [
 // (admin.threatlens.useclickbox.com), not something linked from this nav.
 const instructorTools: NavItem[] = [
   { to: "/app/instructor", label: "Instructor Portal", icon: Presentation },
+  { to: "/app/organization-scenarios", label: "Organization Scenarios", icon: ClipboardCheck },
   { to: "/app/student-analytics", label: "Student Analytics", icon: BarChart3 },
   { to: "/app/scenario-builder", label: "Scenario Builder", icon: Wrench },
   { to: "/app/cohorts", label: "Cohorts", icon: Users },
@@ -132,16 +137,42 @@ const instructorTools: NavItem[] = [
 
 const organization: NavItem[] = [
   { to: "/app/organizations", label: "My Organization", icon: Building2 },
+  { to: "/app/announcements", label: "Announcements", icon: Megaphone },
   { to: "/app/reports", label: "Reports", icon: FileText },
   { to: "/app/analytics", label: "Analytics", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-// Separate from `organization` — the backend gates GET /admin/audit-logs to platform_admin
-// specifically (RolesGuard), a stricter, distinct role from instructor/org_admin. Every
-// instructor account seeing this link would just get a 403 the moment they clicked it.
-const platformAdminTools: NavItem[] = [
+// A student/instructor's own org-assigned work — shown only while an active organization
+// membership exists (see hasActiveOrg below), independent of the org_admin-only `isOrg` gate:
+// an individual account must never see this, per §Task 2's critical access rule.
+const orgLearning: NavItem[] = [
+  { to: "/app/assigned-scenarios", label: "Assigned Scenarios", icon: ClipboardCheck },
+];
+
+// Platform-operator surface — every route below is gated to platform_admin specifically on
+// the backend (RolesGuard); an instructor or org_admin clicking any of them gets a 403. The
+// five groups mirror the admin panel's own information architecture.
+const adminOverview: NavItem[] = [
+  { to: "/app/admin", label: "Overview", icon: LayoutGrid },
+  { to: "/app/admin/analytics", label: "Platform Analytics", icon: BarChart3 },
+];
+const adminManagement: NavItem[] = [
+  { to: "/app/admin/users", label: "Users", icon: Users },
+  { to: "/app/admin/organizations", label: "Organizations", icon: Building2 },
+  { to: "/app/admin/certificates", label: "Certificates", icon: Award },
+];
+const adminBusiness: NavItem[] = [
+  { to: "/app/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { to: "/app/admin/revenue", label: "Revenue", icon: Banknote },
+];
+const adminSecurity: NavItem[] = [
+  { to: "/app/admin/security", label: "Security Events", icon: ShieldAlert },
   { to: "/app/audit-logs", label: "Audit Logs", icon: ScrollText },
+  { to: "/app/admin/administrators", label: "Administrators", icon: ShieldCheck },
+];
+const adminSystem: NavItem[] = [
+  { to: "/app/admin/settings", label: "Platform Settings", icon: SettingsIcon },
 ];
 
 function NavGroup({
@@ -164,7 +195,10 @@ function NavGroup({
       {label && collapsed && <div className="pt-4" aria-hidden />}
       <ul className="flex flex-col gap-0.5">
         {items.map((it) => {
-          const active = it.to === "/app" ? path === "/app" : path.startsWith(it.to);
+          // "/app" and "/app/admin" are exact-match — otherwise "/app/admin" would light up
+          // for every /app/admin/* sub-route alongside the actual page.
+          const active =
+            it.to === "/app" || it.to === "/app/admin" ? path === it.to : path.startsWith(it.to);
           const Icon = it.icon;
           const link = (
             <Link
@@ -229,6 +263,12 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
   // real admin-provisioned account (no self-serve path) logs in.
   const isOrg = user?.role === "instructor" || user?.role === "org_admin";
   const isPlatformAdmin = user?.role === "platform_admin";
+  // Any authenticated user with a current organization — including a plain student, who
+  // `isOrg` above deliberately excludes — gets the Assigned Scenarios link. An individual
+  // account (organization === null) never does; the backend enforces this independently
+  // (organization-scenarios.service.ts), this is just the matching nav visibility.
+  const { organization: myOrganization } = useMyOrganization();
+  const hasActiveOrg = myOrganization !== null;
   const accountName = user?.displayName ?? "Account";
 
   return (
@@ -258,20 +298,72 @@ function SidebarBody({ onNavigate, collapsed }: { onNavigate?: () => void; colla
         </button>
       </div>
 
+      {/* Role-specific order, one branch per role rather than independent flags — a platform
+          admin must never see Organization/Instructor Tools/Organization Learning even if
+          `hasActiveOrg` were ever true for an admin account, and an org student's Assigned
+          Scenarios must lead the sidebar rather than trailing after Workspace. Mutually
+          exclusive branches make both guarantees structural instead of relying on flag
+          combinations staying correct as more roles are added. */}
       <nav className="flex-1 overflow-y-auto pb-4" onClick={onNavigate}>
-        <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
-        <NavGroup
-          label="Investigation Centers"
-          items={investigationCenters}
-          collapsed={collapsed}
-        />
-        <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
-        {isOrg && (
-          <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
-        )}
-        {isOrg && <NavGroup label="Organization" items={organization} collapsed={collapsed} />}
-        {isPlatformAdmin && (
-          <NavGroup label="Platform Admin" items={platformAdminTools} collapsed={collapsed} />
+        {isPlatformAdmin ? (
+          <>
+            <div className="mx-2 mt-2 border-t border-sidebar-border pt-3">
+              {!collapsed && (
+                <div className="flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-secondary">
+                  <ShieldCheck className="size-3.5 text-[color:var(--info)]" />
+                  Admin Panel
+                </div>
+              )}
+            </div>
+            <NavGroup label="Overview" items={adminOverview} collapsed={collapsed} />
+            <NavGroup label="Management" items={adminManagement} collapsed={collapsed} />
+            <NavGroup label="Business" items={adminBusiness} collapsed={collapsed} />
+            <NavGroup label="Security" items={adminSecurity} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+            <NavGroup label="System" items={adminSystem} collapsed={collapsed} />
+          </>
+        ) : isOrg ? (
+          <>
+            <NavGroup label="Organization" items={organization} collapsed={collapsed} />
+            <NavGroup label="Instructor Tools" items={instructorTools} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+            {hasActiveOrg && (
+              <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
+            )}
+          </>
+        ) : hasActiveOrg ? (
+          <>
+            <NavGroup label="Organization Learning" items={orgLearning} collapsed={collapsed} />
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+          </>
+        ) : (
+          <>
+            <NavGroup label="Workspace" items={workspace} collapsed={collapsed} />
+            <NavGroup
+              label="Investigation Centers"
+              items={investigationCenters}
+              collapsed={collapsed}
+            />
+            <NavGroup label="Learning & Practice" items={learning} collapsed={collapsed} />
+          </>
         )}
       </nav>
 
@@ -525,13 +617,18 @@ const crumbMap: Record<string, string> = {
   "/app/assessments": "Assessments",
   "/app/feedback": "Feedback Center",
   "/app/organizations": "My Organization",
+  "/app/organization-scenarios": "Organization Scenarios",
+  "/app/assigned-scenarios": "Assigned Scenarios",
+  "/app/announcements": "Announcements",
   "/app/settings": "Settings",
+  "/app/notifications": "Notifications",
   "/app/audit-logs": "Audit Logs",
   "/app/billing": "Billing",
   "/app/profile": "Profile",
 };
 
 export function AppShell({ children }: { children?: ReactNode }) {
+  const user = useAuthUser();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const crumb =
     crumbMap[path] ??
@@ -565,6 +662,25 @@ export function AppShell({ children }: { children?: ReactNode }) {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [path]);
+
+  // Lazily captures the streak feature's timezone, once, the first time this account is seen
+  // with none recorded — never at signup, so there's no added friction there, and this
+  // self-heals every existing account without a backfill migration. Silent and best-effort:
+  // a failure here just means streak date boundaries fall back to UTC a little longer, never
+  // something worth surfacing to the user.
+  useEffect(() => {
+    if (!user || user.timezone) return;
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timezone)
+        void useAuthStore
+          .getState()
+          .updateProfile({ timezone })
+          .catch(() => {});
+    } catch {
+      // Intl unavailable or threw — leave timezone unset, UTC fallback still works.
+    }
+  }, [user]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {

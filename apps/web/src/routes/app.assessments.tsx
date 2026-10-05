@@ -1,18 +1,22 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { CohortPicker } from "@/components/soc/cohort-picker";
 import { NoCohorts } from "@/components/soc/no-cohorts";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
+import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import {
   useSelectedCohort,
   useAssignments,
   useCreateAssignment,
+  useRemoveAssignment,
   useCohortGroups,
 } from "@/hooks/use-instructor";
 import { listRealScenarios } from "@/services/scenario-catalog/scenario-catalog-service";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import type { AssignmentDto } from "@/types/threatlens-instructor";
 
 export const Route = createFileRoute("/app/assessments")({
   component: Assessments,
@@ -35,6 +39,7 @@ function Assessments() {
   const assignmentsQuery = useAssignments(selectedCohortId);
   const groupsQuery = useCohortGroups(selectedCohortId);
   const createAssignment = useCreateAssignment(selectedCohortId);
+  const removeAssignment = useRemoveAssignment(selectedCohortId);
   const scenariosQuery = useQuery({
     queryKey: ["scenarios", "catalog"],
     queryFn: listRealScenarios,
@@ -47,6 +52,7 @@ function Assessments() {
   // "" targets the whole cohort. Groups are optional, so this stays out of the way until the
   // instructor has actually created one.
   const [groupId, setGroupId] = useState("");
+  const [toRemove, setToRemove] = useState<AssignmentDto | null>(null);
 
   if (isLoading) {
     return (
@@ -212,6 +218,7 @@ function Assessments() {
                   <th className="px-4 py-2.5 text-left">Due</th>
                   <th className="px-4 py-2.5 text-left">Attempt limit</th>
                   <th className="px-4 py-2.5 text-right">Assigned</th>
+                  <th className="px-4 py-2.5 text-right">&nbsp;</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -228,6 +235,15 @@ function Assessments() {
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {new Date(a.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setToRemove(a)}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground hover:text-[color:var(--critical)]"
+                      >
+                        <Trash2 className="size-3" /> Remove
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -235,6 +251,22 @@ function Assessments() {
           </div>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={toRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setToRemove(null);
+        }}
+        title="Remove assignment?"
+        description="This will remove this assignment from the cohort. It will not delete the scenario, and any investigation work already submitted against it is kept."
+        target={toRemove?.scenarioTitle}
+        confirmLabel="Remove Assignment"
+        onConfirm={async () => {
+          if (!toRemove) return;
+          await removeAssignment.mutateAsync(toRemove.id);
+          toast.success(`${toRemove.scenarioTitle} was removed.`);
+        }}
+      />
     </div>
   );
 }

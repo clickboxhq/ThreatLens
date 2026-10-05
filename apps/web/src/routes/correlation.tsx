@@ -6,19 +6,19 @@ import { CorrelationEngine } from "@/components/soc/marketing/demos";
 import { MobileDemoCrop } from "@/components/soc/marketing/chrome";
 import { Correlation } from "@/components/soc/marketing/narrative";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/correlation")({
   component: CorrelationPage,
-  head: () => ({
-    meta: [
-      { title: "Correlation — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Correlate identity, endpoint, email, and cloud signals into a defensible incident narrative. Practice reading the evidence graph in ThreatLens.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/correlation",
+      title: "Correlation — ThreatLens",
+      description:
+        "Correlate identity, endpoint, email, and cloud signals into a defensible incident narrative. Practice reading the evidence graph in ThreatLens.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 function CorrelationPage() {

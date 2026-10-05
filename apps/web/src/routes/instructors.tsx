@@ -5,19 +5,19 @@ import { MarketingPage, Section } from "@/components/soc/marketing/page-shell";
 import { ExecutiveDashboard } from "@/components/soc/marketing/demos";
 import { MobileDemoCrop } from "@/components/soc/marketing/chrome";
 import { Reveal, SectionHead, displayFont, monoFont } from "@/components/soc/marketing/atmos";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/instructors")({
   component: InstructorsPage,
-  head: () => ({
-    meta: [
-      { title: "For Instructors — ThreatLens" },
-      {
-        name: "description",
-        content:
-          "Rosters, grading overrides, scenario assignment, and cohort progress — the instructor side of ThreatLens.",
-      },
-    ],
-  }),
+  head: () => {
+    const s = seo({
+      path: "/instructors",
+      title: "For Instructors — ThreatLens",
+      description:
+        "Rosters, grading overrides, scenario assignment, and cohort progress — the instructor side of ThreatLens.",
+    });
+    return { meta: s.meta, links: s.links };
+  },
 });
 
 const FEATURES = [

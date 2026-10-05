@@ -1,6 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { Award, Bell, Building2, ClipboardCheck, MessageSquare, Target } from "lucide-react";
+import {
+  Award,
+  Bell,
+  Building2,
+  ClipboardCheck,
+  Megaphone,
+  MessageSquare,
+  Target,
+  Users,
+  X,
+} from "lucide-react";
 import { IconTile } from "@/components/soc/ui/icon-tile";
 import { EmptyState, Skeleton } from "@/components/soc/ui/skeleton";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -12,11 +22,13 @@ const categoryIcon: Record<NotificationCategory, typeof Bell> = {
   score_available: Target,
   instructor_feedback: MessageSquare,
   certificate_issued: Award,
+  announcement: Megaphone,
   org_invitation: Building2,
+  cohort_invitation: Users,
 };
 
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
-  const { notifications, state, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, state, markAsRead, markAllAsRead, clear, clearAll } = useNotifications();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,12 +53,22 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
         <h3 className="text-[13px] font-medium">Notifications</h3>
-        <button
-          onClick={() => markAllAsRead()}
-          className="text-[11.5px] text-secondary hover:text-foreground"
-        >
-          Mark all read
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => markAllAsRead()}
+            className="text-[11.5px] text-secondary hover:text-foreground"
+          >
+            Mark all read
+          </button>
+          {notifications.length > 0 && (
+            <button
+              onClick={() => clearAll()}
+              className="text-[11.5px] text-secondary hover:text-[color:var(--critical)]"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       {state === "loading" && (
@@ -54,6 +76,16 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           <Skeleton className="h-14" />
           <Skeleton className="h-14" />
           <Skeleton className="h-14" />
+        </div>
+      )}
+
+      {state === "error" && (
+        <div className="p-2">
+          <EmptyState
+            title="Couldn't load notifications"
+            description="Try reloading the page."
+            icon={<Bell className="size-5" />}
+          />
         </div>
       )}
 
@@ -70,7 +102,10 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
       {state === "ready" && (
         <ul className="max-h-[420px] divide-y divide-border overflow-y-auto">
           {notifications.map((n) => {
-            const Icon = categoryIcon[n.category];
+            // Fall back to a generic bell rather than rendering `undefined` (which throws
+            // "Element type is invalid" and takes the whole panel down) if the API ever
+            // sends a category this build doesn't know yet.
+            const Icon = categoryIcon[n.category] ?? Bell;
             const content = (
               <div className="flex items-start gap-2.5 px-3.5 py-3">
                 <IconTile tone={n.read ? "neutral" : "info"} size="sm">
@@ -91,7 +126,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
               </div>
             );
             return (
-              <li key={n.id} className="transition-colors hover:bg-background/60">
+              <li key={n.id} className="group relative transition-colors hover:bg-background/60">
                 {n.link ? (
                   <Link
                     to={n.link}
@@ -107,11 +142,30 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
                     {content}
                   </button>
                 )}
+                <button
+                  aria-label="Clear notification"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clear(n.id);
+                  }}
+                  className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 hover:text-[color:var(--critical)] group-hover:opacity-100"
+                >
+                  <X className="size-3" />
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      <Link
+        to="/app/notifications"
+        onClick={onClose}
+        className="block border-t border-border px-3.5 py-2.5 text-center text-[12px] text-secondary hover:bg-background/60 hover:text-foreground"
+      >
+        View all notifications
+      </Link>
     </div>
   );
 }

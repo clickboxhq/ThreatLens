@@ -29,11 +29,17 @@ import { AuditLogModule } from './common/audit-log/audit-log.module';
 import { RateLimiterModule } from './common/rate-limiter/rate-limiter.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { ActivityModule } from './common/activity/activity.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { AchievementsApiModule } from './modules/achievements/achievements-api.module';
+import { StreaksApiModule } from './modules/streaks/streaks-api.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationsApiModule } from './modules/notifications/notifications-api.module';
 import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-builder.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { PlatformSettingsModule } from './modules/admin/platform-settings/platform-settings.module';
+import { MaintenanceMiddleware } from './common/middleware/maintenance.middleware';
 
 @Module({
   imports: [
@@ -66,17 +72,24 @@ import { ScenarioBuilderModule } from './modules/scenario-builder/scenario-build
     RateLimiterModule,
     AdminModule,
     MetricsModule,
+    ActivityModule,
     OrganizationsModule,
     AchievementsApiModule,
+    StreaksApiModule,
     NotificationsModule,
     NotificationsApiModule,
     ScenarioBuilderModule,
+    ProfileModule,
+    BillingModule,
+    PlatformSettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer
+      .apply(CorrelationIdMiddleware, MaintenanceMiddleware)
+      .forRoutes('*');
   }
 }

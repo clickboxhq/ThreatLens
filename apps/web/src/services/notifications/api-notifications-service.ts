@@ -6,4 +6,6 @@ export const apiNotificationsService: NotificationsService = {
   listNotifications: () => apiClient.get<Notification[]>("/notifications/mine"),
   markAsRead: (id) => apiClient.patch<void>(`/notifications/${id}/read`),
   markAllAsRead: () => apiClient.post<void>("/notifications/read-all"),
+  clear: (id) => apiClient.delete<void>(`/notifications/${id}`),
+  clearAll: () => apiClient.delete<void>("/notifications"),
 };

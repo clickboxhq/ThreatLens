@@ -117,7 +117,7 @@ function WelcomePage() {
   return (
     <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-black px-6 py-12 text-[#EDEDED]">
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.28]">
-        <TopologyDiagram />
+        <TopologyDiagram showCore={false} />
       </div>
       <div
         aria-hidden

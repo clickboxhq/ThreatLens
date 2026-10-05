@@ -34,6 +34,30 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Fan the same notification out to many users in one insert — for
+   * broadcasts (org announcements) where a per-recipient loop would be a
+   * round-trip each.
+   */
+  async createMany(params: {
+    userIds: string[];
+    category: NotificationCategory;
+    title: string;
+    body: string;
+    link?: string;
+  }): Promise<void> {
+    if (params.userIds.length === 0) return;
+    await this.prisma.notification.createMany({
+      data: params.userIds.map((userId) => ({
+        userId,
+        category: params.category,
+        title: params.title,
+        body: params.body,
+        link: params.link ?? null,
+      })),
+    });
+  }
+
   async listMine(user: AuthenticatedUser) {
     const notifications = await this.prisma.notification.findMany({
       where: { userId: user.id },
@@ -62,6 +86,24 @@ export class NotificationsService {
       where: { userId: user.id, read: false },
       data: { read: true },
     });
+  }
+
+  /** §13: a user clearing one of their own notifications. Same ownership check as
+   * markAsRead — a 404 either way, so this can't be used to probe another user's ids. */
+  async clearOne(user: AuthenticatedUser, id: string): Promise<void> {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id },
+    });
+    if (!notification || notification.userId !== user.id) {
+      throw new AppException(404, 'NOT_FOUND', 'Notification not found.');
+    }
+    await this.prisma.notification.delete({ where: { id } });
+  }
+
+  /** §13: "Clear all" — scoped to `userId` in the query itself, not a loop over ids the
+   * client supplied, so there is no path from this call to another user's rows. */
+  async clearAll(user: AuthenticatedUser): Promise<void> {
+    await this.prisma.notification.deleteMany({ where: { userId: user.id } });
   }
 }
 

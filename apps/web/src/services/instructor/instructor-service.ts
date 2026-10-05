@@ -37,6 +37,8 @@ export interface InstructorService {
       attemptLimit?: number;
     },
   ): Promise<AssignmentDto>;
+  /** Soft — the scenario, cohort, and any sessions/scores already produced are untouched. */
+  removeAssignment(cohortId: string, assignmentId: string): Promise<AssignmentDto[]>;
   reviewQueue(cohortId: string): Promise<ReviewQueueItemDto[]>;
   submitFeedback(
     incidentId: string,

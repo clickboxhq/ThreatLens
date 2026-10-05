@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AVATAR_PRESETS } from "@/components/soc/ui/avatar-presets";
+import { AVATAR_PRESETS, avatarPresetSrc } from "@/components/soc/ui/avatar-presets";
 import { UserAvatar } from "@/components/soc/ui/user-avatar";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api-client";
@@ -116,10 +116,9 @@ export function AvatarPickerDialog({
           </div>
 
           <div>
-            <span className="t-label mb-2 block">ThreatLens Cybersecurity Avatars</span>
+            <span className="t-label mb-2 block">ThreatLens Avatars</span>
             <div className="grid grid-cols-3 gap-2">
               {AVATAR_PRESETS.map((preset) => {
-                const Icon = preset.icon;
                 const active = user.avatarType === "preset" && user.avatarPresetKey === preset.key;
                 return (
                   <button
@@ -127,22 +126,27 @@ export function AvatarPickerDialog({
                     type="button"
                     disabled={pending !== null}
                     onClick={() => choosePreset(preset.key)}
-                    className="transition-app relative flex flex-col items-center gap-1.5 rounded-md border border-border bg-background/40 p-2.5 hover:border-[color:var(--info)]/50"
+                    aria-pressed={active}
+                    className={`transition-app relative flex flex-col items-center gap-1.5 rounded-md border bg-background/40 p-2.5 hover:border-[color:var(--info)]/50 ${
+                      active ? "border-[color:var(--info)]" : "border-border"
+                    }`}
                   >
                     {active && (
                       <Check className="absolute right-1.5 top-1.5 size-3.5 text-[color:var(--info)]" />
                     )}
-                    <span
-                      className="grid size-9 place-items-center rounded-md"
-                      style={{
-                        background: `color-mix(in oklab, ${preset.tone} 16%, var(--card))`,
-                        color: preset.tone,
-                      }}
-                    >
-                      {pending === preset.key ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Icon className="size-4" />
+                    <span className="relative grid size-11 place-items-center">
+                      <img
+                        src={avatarPresetSrc(preset.key)}
+                        alt=""
+                        width={44}
+                        height={44}
+                        className="size-11 rounded-full object-cover"
+                        draggable={false}
+                      />
+                      {pending === preset.key && (
+                        <span className="absolute inset-0 grid place-items-center rounded-full bg-background/60">
+                          <Loader2 className="size-4 animate-spin" />
+                        </span>
                       )}
                     </span>
                     <span className="text-center text-[10.5px] leading-tight text-secondary">

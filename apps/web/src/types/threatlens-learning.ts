@@ -42,21 +42,35 @@ export interface LearningPathDto {
 }
 
 export interface MyCertificateDto {
-  id: string;
-  learningPathId: string;
-  learningPathTitle: string;
+  publicId: string;
+  careerTrackName: string;
   issuedAt: string;
   revoked: boolean;
 }
 
-/** Deliberately minimal-PII (apps/api's own comment on why) — no email, no per-scenario
- * scores, just enough to confirm a credential is real. */
-export interface PublicCertificateDto {
-  id: string;
-  learnerDisplayName: string;
-  learningPathTitle: string;
+/**
+ * The full certificate payload used to render the document — on the owner's view
+ * page and on the public /verify page (same shape, deliberately minimal-PII: no
+ * email, no per-scenario scores).
+ */
+export interface CertificateDto {
+  certificateId: string;
+  recipientName: string;
+  careerTrackName: string;
+  completedAt: string;
   issuedAt: string;
-  valid: boolean;
+  status: "active" | "revoked";
+  verifyUrl: string;
+  qrDataUrl: string;
+}
+
+export interface CareerTrackProgressDto {
+  courseId: string;
+  careerTrackName: string;
+  requiredCount: number;
+  completedCount: number;
+  eligible: boolean;
+  certificate: { publicId: string; revoked: boolean } | null;
 }
 
 export type LeaderboardPeriod = "weekly" | "monthly" | "all_time";

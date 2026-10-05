@@ -18,6 +18,7 @@ import {
 } from './dto/incident.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // §16.6
@@ -27,6 +28,7 @@ export class IncidentsController {
   constructor(private readonly incidentsService: IncidentsService) {}
 
   @Post()
+  @TracksActivity()
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -53,6 +55,7 @@ export class IncidentsController {
   }
 
   @Post(':id/alerts')
+  @TracksActivity()
   async linkAlerts(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -63,6 +66,7 @@ export class IncidentsController {
   }
 
   @Patch(':id')
+  @TracksActivity()
   async updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -84,6 +88,7 @@ export class IncidentsController {
   }
 
   @Patch(':id/tasks/:taskKey')
+  @TracksActivity()
   async setTaskCompletion(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
@@ -101,6 +106,7 @@ export class IncidentsController {
   }
 
   @Post(':id/close')
+  @TracksActivity()
   async close(
     @CurrentUser() user: AuthenticatedUser,
     @Param('sessionId', ParseUUIDPipe) sessionId: string,

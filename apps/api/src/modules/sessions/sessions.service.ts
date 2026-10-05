@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
+import { StreaksService } from '../streaks/streaks.service';
 import {
   TELEMETRY_GENERATION_QUEUE,
   SCORING_QUEUE,
@@ -29,6 +30,7 @@ export class SessionsService {
     private readonly telemetryQueue: Queue<TelemetryGenerationJobData>,
     @InjectQueue(SCORING_QUEUE)
     private readonly scoringQueue: Queue<ScoringJobData>,
+    private readonly streaks: StreaksService,
   ) {}
 
   async createSession(
@@ -260,6 +262,11 @@ export class SessionsService {
       { sessionId },
       { jobId: `scoring-${sessionId}` },
     );
+
+    // Last statement, deliberately — recordQualifyingActivity() never throws (it catches and
+    // only logs internally), but even so this must never sit between the queue add above and
+    // the real success response.
+    await this.streaks.recordQualifyingActivity(user.id);
 
     return { scoringStatus: 'queued' };
   }

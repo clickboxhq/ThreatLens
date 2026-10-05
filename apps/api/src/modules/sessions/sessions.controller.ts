@@ -12,6 +12,7 @@ import { CreateSessionDto } from './dto/create-session.dto';
 import { SubmitSessionDto } from './dto/submit-session.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import { RateLimiterService } from '../../common/rate-limiter/rate-limiter.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
@@ -36,6 +37,7 @@ export class SessionsController {
   ) {}
 
   @Post()
+  @TracksActivity()
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateSessionDto,
@@ -87,6 +89,7 @@ export class SessionsController {
   }
 
   @Post(':id/submit')
+  @TracksActivity()
   async submit(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

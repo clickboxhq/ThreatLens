@@ -2,6 +2,7 @@ import {
   verificationEmail,
   welcomeEmail,
   passwordResetEmail,
+  organizationInviteEmail,
   escapeHtml,
 } from './email-templates';
 
@@ -39,6 +40,67 @@ describe('email templates', () => {
         'Welcome to ThreatLens, there',
       );
     });
+
+    it('carries the getting-started steps, the CTA and the ClickBox sign-off', () => {
+      const { html } = welcomeEmail({
+        displayName: 'Dana',
+        appUrl: 'https://threatlensapp.com/app/scenarios',
+      });
+      expect(html).toContain('<ol');
+      expect(html).toContain('Submit your verdict');
+      expect(html).toContain('Start your first investigation');
+      expect(html).toContain('https://threatlensapp.com/app/scenarios');
+      expect(html).toContain('A ClickBox product');
+    });
+  });
+
+  describe('organization invitation email', () => {
+    const input = {
+      orgName: 'ClickBox',
+      inviterName: 'Ada Admin',
+      role: 'student',
+      inviteUrl: 'https://threatlensapp.com/accept-invite/tok123',
+    };
+
+    it('is dynamic — nothing about ClickBox specifically is hardcoded', () => {
+      const { subject, html } = organizationInviteEmail({
+        ...input,
+        orgName: 'A Totally Different Org',
+        inviterName: 'Someone Else',
+        role: 'instructor',
+      });
+      expect(subject).toContain('A Totally Different Org');
+      expect(html).toContain('A Totally Different Org');
+      expect(html).toContain('Someone Else');
+      expect(html).toContain('Instructor');
+      expect(html).not.toContain('ClickBox');
+    });
+
+    it('carries the org, role, inviter, CTA, and expiry', () => {
+      const { subject, html } = organizationInviteEmail(input);
+      expect(subject).toContain('ClickBox');
+      expect(html).toContain('ClickBox');
+      expect(html).toContain('Ada Admin');
+      expect(html).toContain('Student');
+      expect(html).toContain('Accept Invitation');
+      expect(html).toContain('This invitation expires in 7 days.');
+      expect(html).toContain(input.inviteUrl);
+    });
+
+    it('includes a security notice for an unexpected invite', () => {
+      const { html } = organizationInviteEmail(input);
+      expect(html.toLowerCase()).toContain('if you were not expecting');
+    });
+
+    it('neutralises markup in an inviter or org name', () => {
+      const { html } = organizationInviteEmail({
+        ...input,
+        orgName: '<img src=x onerror=alert(1)>',
+        inviterName: '<script>alert(1)</script>',
+      });
+      expect(html).not.toContain('<img src=x onerror=alert(1)>');
+      expect(html).not.toContain('<script>alert(1)</script>');
+    });
   });
 
   describe('structure every client depends on', () => {
@@ -46,6 +108,15 @@ describe('email templates', () => {
       ['verification', verificationEmail(URL).html],
       ['welcome', welcomeEmail({ displayName: 'Dana', appUrl: URL }).html],
       ['password reset', passwordResetEmail(URL).html],
+      [
+        'organization invite',
+        organizationInviteEmail({
+          orgName: 'ClickBox',
+          inviterName: 'Ada Admin',
+          role: 'student',
+          inviteUrl: URL,
+        }).html,
+      ],
     ])('%s email is a complete table-based document', (_name, html) => {
       expect(html).toContain('<!doctype html>');
       // Outlook renders through Word: no flexbox or grid survives, so layout has to be tables.
@@ -69,7 +140,7 @@ describe('email templates', () => {
         'Verify your ThreatLens email address',
       );
       expect(welcomeEmail({ displayName: 'D', appUrl: 'x' }).subject).toBe(
-        'Welcome to ThreatLens',
+        'Welcome to ThreatLens — Your Investigation Journey Starts Here',
       );
       expect(passwordResetEmail(URL).subject).toBe(
         'Reset your ThreatLens password',

@@ -13,8 +13,12 @@ export default defineConfig({
     server: { entry: "server" },
   },
   // Originally built for Lovable's own Cloudflare Workers hosting (this package's default
-  // preset). SOCVerse deploys everything as a plain Docker image on Railway — no Workers
-  // runtime — so this runs as an ordinary long-lived Node process instead (see
-  // apps/web/Dockerfile.prod). `node-server` is Nitro's preset for exactly that shape.
-  nitro: { preset: "node-server" },
+  // preset). ThreatLens deploys the web app two ways, so the Nitro output preset follows the
+  // build environment:
+  //   - Railway (apps/web/Dockerfile.prod, GitHub Actions, local): a plain Docker image / long-
+  //     lived Node process — `node-server`, which writes `.output/server/index.mjs`.
+  //   - Vercel (git-connected project, Framework Preset "TanStack Start"): the platform sets
+  //     `VERCEL=1` during every build — `vercel`, which writes Vercel's Build Output API tree.
+  // Nothing outside Vercel ever sets `VERCEL`, so the Railway path is unchanged.
+  nitro: { preset: process.env.VERCEL ? "vercel" : "node-server" },
 });

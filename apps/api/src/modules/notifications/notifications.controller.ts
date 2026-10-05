@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -36,5 +37,20 @@ export class NotificationsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async markAllAsRead(@CurrentUser() user: AuthenticatedUser) {
     await this.notificationsService.markAllAsRead(user);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async clearOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    await this.notificationsService.clearOne(user, id);
+  }
+
+  @Delete()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async clearAll(@CurrentUser() user: AuthenticatedUser) {
+    await this.notificationsService.clearAll(user);
   }
 }
