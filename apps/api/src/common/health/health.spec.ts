@@ -12,6 +12,7 @@ jest.mock('ioredis', () => ({
 }));
 
 import { HealthService } from './health.service';
+import { HealthController } from './health.controller';
 import { HealthWatcherService } from './health-watcher.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
@@ -211,5 +212,47 @@ describe('HealthWatcherService alerting', () => {
     const { w, send } = watcher(jest.fn().mockRejectedValue(new Error('boom')));
     await expect(w.tick()).resolves.toBeUndefined();
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('HealthController', () => {
+  function res() {
+    return { status: jest.fn().mockReturnThis() } as never;
+  }
+
+  it('returns 200 and the report when everything is up', async () => {
+    const report = { ok: true, checkedAt: 'now', dependencies: {} };
+    const c = new HealthController({ readiness: async () => report } as never);
+    const r = res();
+    // passthrough means the handler sets the status and Nest still serialises the return
+    // value. Worth asserting both, since getting it wrong yields a 200 with an empty body —
+    // which a monitor would read as healthy.
+    await expect(c.getReady(r)).resolves.toBe(report);
+    expect((r as unknown as { status: jest.Mock }).status).toHaveBeenCalledWith(
+      200,
+    );
+  });
+
+  it('returns 503 when a dependency is down', async () => {
+    const report = {
+      ok: false,
+      checkedAt: 'now',
+      dependencies: { redis: { ok: false, detail: 'MISCONF', ms: 1 } },
+    };
+    const c = new HealthController({ readiness: async () => report } as never);
+    const r = res();
+    await expect(c.getReady(r)).resolves.toBe(report);
+    expect((r as unknown as { status: jest.Mock }).status).toHaveBeenCalledWith(
+      503,
+    );
+  });
+
+  it('keeps /health as a liveness check that does not touch dependencies', () => {
+    // If this ever starts probing, Railway will restart the container whenever a dependency
+    // is sick — a restart loop on top of an outage.
+    const readiness = jest.fn();
+    const c = new HealthController({ readiness } as never);
+    expect(c.getHealth()).toEqual({ status: 'ok' });
+    expect(readiness).not.toHaveBeenCalled();
   });
 });

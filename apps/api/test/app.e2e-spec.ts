@@ -22,10 +22,18 @@ describe('Health (e2e)', () => {
       .expect({ status: 'ok' });
   });
 
-  it('GET /ready', () => {
-    return request(app.getHttpServer())
-      .get('/ready')
-      .expect(200)
-      .expect({ status: 'ok' });
+  // /ready used to return {status:'ok'} like /health, which is what let it stay green through
+  // the 2026-10-04 outage. It now probes each dependency for real — this suite runs against a
+  // live Postgres and Redis, so a healthy run is the right expectation here, and the failure
+  // paths are covered in health.spec.ts where the dependencies can be made to misbehave.
+  it('GET /ready reports each dependency, not a fixed literal', async () => {
+    const res = await request(app.getHttpServer()).get('/ready').expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.dependencies.postgres.ok).toBe(true);
+    expect(res.body.dependencies.redis.ok).toBe(true);
+    // Timings are the early warning: a dependency usually slows before it fails outright.
+    expect(typeof res.body.dependencies.redis.ms).toBe('number');
+    expect(typeof res.body.checkedAt).toBe('string');
   });
 });
