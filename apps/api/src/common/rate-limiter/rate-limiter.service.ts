@@ -1,7 +1,8 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { AppException } from '../exceptions/app-exception';
+import { withoutRedis } from '../redis/redis-availability';
 
 // §15.5: "unauthenticated endpoints (login, signup, password reset) limited per-IP tightly
 // (e.g., 10/minute) given their abuse potential"; "authenticated endpoints limited per-user...
@@ -11,6 +12,7 @@ import { AppException } from '../exceptions/app-exception';
 // the windowing precision ever matters more than it does here.
 @Injectable()
 export class RateLimiterService implements OnModuleDestroy {
+  private readonly logger = new Logger(RateLimiterService.name);
   private readonly redis: Redis;
 
   constructor(config: ConfigService) {
@@ -26,13 +28,33 @@ export class RateLimiterService implements OnModuleDestroy {
     windowSeconds: number,
   ): Promise<void> {
     const redisKey = `rate-limit:${key}`;
-    const count = await this.redis.incr(redisKey);
-    if (count === 1) {
-      await this.redis.expire(redisKey, windowSeconds);
-    }
+
+    // Rate limiting is a defence, not a precondition. When Redis cannot answer, the choice is
+    // between an unmetered endpoint and an unreachable one — and an unreachable login is the
+    // worse failure, as a day of 500s on 2026-10-04 demonstrated. The counter is skipped and
+    // the request proceeds; everything that actually protects the account is in Postgres.
+    const count = await withoutRedis(
+      this.logger,
+      `rate limit for ${key}`,
+      // 1 reads as "first request in the window": under every limit, and the expire below is
+      // skipped with it, so nothing is half-applied.
+      1,
+      async () => {
+        const n = await this.redis.incr(redisKey);
+        if (n === 1) {
+          await this.redis.expire(redisKey, windowSeconds);
+        }
+        return n;
+      },
+    );
 
     if (count > limit) {
-      const ttl = await this.redis.ttl(redisKey);
+      const ttl = await withoutRedis(
+        this.logger,
+        `retry-after for ${key}`,
+        windowSeconds,
+        () => this.redis.ttl(redisKey),
+      );
       const retryAfterSeconds = ttl > 0 ? ttl : windowSeconds;
       throw new AppException(
         429,

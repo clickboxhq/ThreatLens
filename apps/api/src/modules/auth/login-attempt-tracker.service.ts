@@ -1,6 +1,7 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { withoutRedis } from '../../common/redis/redis-availability';
 
 // §15.1: "progressive delay + eventual temporary lockout after repeated failed attempts
 // (Redis-backed counter keyed by account + IP)". The first THRESHOLD-1 failures are free;
@@ -24,6 +25,7 @@ export function computeLockoutSeconds(
 
 @Injectable()
 export class LoginAttemptTracker implements OnModuleDestroy {
+  private readonly logger = new Logger(LoginAttemptTracker.name);
   private readonly redis: Redis;
 
   constructor(config: ConfigService) {
@@ -37,32 +39,47 @@ export class LoginAttemptTracker implements OnModuleDestroy {
     email: string,
     sourceIp: string,
   ): Promise<number> {
-    const ttl = await this.redis.ttl(this.lockKey(email, sourceIp));
+    // 0 means "not locked out". Failing open here is what keeps login reachable when Redis is
+    // down; the lockout is a defence against guessing, not a correctness requirement.
+    const ttl = await withoutRedis(this.logger, 'login lockout check', 0, () =>
+      this.redis.ttl(this.lockKey(email, sourceIp)),
+    );
     return ttl > 0 ? ttl : 0;
   }
 
   /** Records a failed attempt and, past the threshold, (re-)applies an escalating lockout. */
   async recordFailure(email: string, sourceIp: string): Promise<void> {
     const countKey = this.countKey(email, sourceIp);
-    const count = await this.redis.incr(countKey);
-    await this.redis.expire(countKey, ATTEMPT_WINDOW_SECONDS); // sliding window: refreshed on every attempt
+    await withoutRedis(
+      this.logger,
+      'login failure tally',
+      undefined,
+      async () => {
+        const count = await this.redis.incr(countKey);
+        await this.redis.expire(countKey, ATTEMPT_WINDOW_SECONDS); // sliding window: refreshed on every attempt
 
-    const lockoutSeconds = computeLockoutSeconds(count);
-    if (lockoutSeconds > 0) {
-      await this.redis.set(
-        this.lockKey(email, sourceIp),
-        '1',
-        'EX',
-        lockoutSeconds,
-      );
-    }
+        const lockoutSeconds = computeLockoutSeconds(count);
+        if (lockoutSeconds > 0) {
+          await this.redis.set(
+            this.lockKey(email, sourceIp),
+            '1',
+            'EX',
+            lockoutSeconds,
+          );
+        }
+      },
+    );
   }
 
   /** Clears the failure count and any active lockout — called on a successful login. */
   async clear(email: string, sourceIp: string): Promise<void> {
-    await this.redis.del(
-      this.countKey(email, sourceIp),
-      this.lockKey(email, sourceIp),
+    // Already authenticated by this point, so a failure to clear the tally must not turn a
+    // successful login into an error.
+    await withoutRedis(this.logger, 'login tally reset', undefined, () =>
+      this.redis.del(
+        this.countKey(email, sourceIp),
+        this.lockKey(email, sourceIp),
+      ),
     );
   }
 
