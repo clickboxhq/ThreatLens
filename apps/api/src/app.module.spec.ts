@@ -1,7 +1,3 @@
-import { Test } from '@nestjs/testing';
-import { AppModule } from './app.module';
-import { PrismaService } from './prisma/prisma.service';
-
 /**
  * Builds the real dependency-injection graph.
  *
@@ -12,15 +8,42 @@ import { PrismaService } from './prisma/prisma.service';
  * and the only thing that noticed was the e2e job, which hung for forty minutes on an app that
  * never came up rather than failing with the error Nest had already produced.
  *
- * compile() resolves the graph without calling onModuleInit, so no database or Redis is
- * needed and this runs in the fast suite alongside everything else.
+ * The transport is mocked rather than reached. compile() instantiates every provider, and
+ * several of them open a Redis connection in their constructor, so an earlier version of this
+ * file opened real sockets to verify something that has nothing to do with connectivity — and
+ * left a Jest worker alive doing it. What is under test is whether Nest can resolve the graph,
+ * which needs no server at the other end.
  */
+
+// A permissive stub: any method returns a resolved promise. bullmq and ioredis between them
+// call a long tail of methods during construction, and enumerating them would make this file
+// break every time a dependency adds one.
+const redisStub = new Proxy(
+  {},
+  {
+    get: (_target, prop) => {
+      if (prop === 'then') return undefined; // not a thenable
+      if (prop === 'status') return 'ready';
+      return jest.fn().mockResolvedValue(undefined);
+    },
+  },
+);
+
+jest.mock('ioredis', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => redisStub),
+  Redis: jest.fn().mockImplementation(() => redisStub),
+}));
+
+import { Test } from '@nestjs/testing';
+import { AppModule } from './app.module';
+import { PrismaService } from './prisma/prisma.service';
+
 describe('AppModule', () => {
   it('resolves every provider — no module is missing a dependency', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
-      // The one provider that reaches outside the process during construction.
       .overrideProvider(PrismaService)
       .useValue({ $connect: jest.fn(), $disconnect: jest.fn() })
       .compile();
