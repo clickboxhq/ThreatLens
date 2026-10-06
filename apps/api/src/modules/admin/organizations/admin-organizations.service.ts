@@ -183,13 +183,37 @@ export class AdminOrganizationsService {
       throw new AppException(404, 'NOT_FOUND', 'Organization not found.');
     if (org.status === status) return { id: orgId, status };
 
-    await this.prisma.organization.update({
-      where: { id: orgId },
-      data: {
-        status,
-        suspendedAt: status === 'suspended' ? new Date() : null,
-      },
-    });
+    // Suspending ends the members' sessions as well as blocking new ones. Without this the
+    // organisation is suspended but everyone already signed in keeps working until their
+    // access token expires — up to fifteen minutes of an org that is supposed to be cut off.
+    // Suspending a single user already works this way; this makes the two agree.
+    //
+    // Only on the way in. Reactivating does not need to log anybody out, and bumping again
+    // would sign out people who had since signed back in.
+    const revokeMemberSessions =
+      status === 'suspended'
+        ? [
+            this.prisma.user.updateMany({
+              where: { orgId, deletedAt: null },
+              data: { sessionVersion: { increment: 1 } },
+            }),
+            this.prisma.refreshToken.updateMany({
+              where: { user: { orgId }, revokedAt: null },
+              data: { revokedAt: new Date() },
+            }),
+          ]
+        : [];
+
+    await this.prisma.$transaction([
+      this.prisma.organization.update({
+        where: { id: orgId },
+        data: {
+          status,
+          suspendedAt: status === 'suspended' ? new Date() : null,
+        },
+      }),
+      ...revokeMemberSessions,
+    ]);
 
     await this.auditLog.record({
       actorUserId: admin.id,
