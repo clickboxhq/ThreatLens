@@ -61,7 +61,7 @@ export class JwtAuthGuard implements CanActivate {
     // primary-key lookup per authenticated request, which is the honest price of the claim.
     const current = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { sessionVersion: true, status: true },
+      select: { sessionVersion: true, status: true, deletedAt: true },
     });
 
     if (!current || current.sessionVersion !== payload.session_version) {
@@ -74,6 +74,17 @@ export class JwtAuthGuard implements CanActivate {
 
     // Checked here too, so disabling an account takes effect on the next request rather than
     // when its current token happens to expire.
+    // Belt and braces alongside the login check: sessionVersion already invalidates the tokens
+    // a deleted account was holding, but this makes any token for a deleted account useless
+    // however it was obtained.
+    if (current.deletedAt) {
+      throw new AppException(
+        403,
+        'ACCOUNT_NOT_ACTIVE',
+        'This account is no longer active.',
+      );
+    }
+
     if (current.status !== 'active') {
       throw new AppException(
         403,

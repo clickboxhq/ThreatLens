@@ -515,6 +515,44 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     expect('accessToken' in result && result.accessToken).toBeTruthy();
   });
 
+  // Deleting a user set deletedAt and bumped sessionVersion, which ended the sessions they
+  // already had — and nothing stopped them signing straight back in. A platform admin
+  // "deleting" somebody hid them from the admin list and left their access untouched. Verified
+  // against production before fixing: the account logged in and used the API normally.
+  it('login() refuses a soft-deleted account', async () => {
+    const argon2 = await import('argon2');
+    const passwordHash = await argon2.hash('correct horse battery staple', {
+      type: argon2.argon2id,
+    });
+    // status stays 'active' on purpose — that is exactly what deleteUser leaves behind, and
+    // checking status alone is what missed this.
+    const deleted = user({
+      passwordHash,
+      deletedAt: new Date(),
+      status: 'active',
+    });
+    const users = new Map([[deleted.id, deleted]]);
+    const { service } = buildService(users);
+
+    await expect(
+      service.login(
+        { email: deleted.email, password: 'correct horse battery staple' },
+        TEST_IP,
+      ),
+    ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
+  });
+
+  it('requestPasswordReset() issues nothing for a soft-deleted account', async () => {
+    // Otherwise deletion is reversible by whoever still has the mailbox.
+    const deleted = user({ deletedAt: new Date(), status: 'active' });
+    const users = new Map([[deleted.id, deleted]]);
+    const { service, emailService } = buildService(users);
+    emailService.send.mockClear();
+
+    await service.requestPasswordReset(deleted.email);
+    expect(emailService.send).not.toHaveBeenCalled();
+  });
+
   it('mfaVerify() completes login with a valid TOTP code and rejects a bad one', async () => {
     const secret = generateSecret();
     const enrolled = user({ mfaEnabled: true, mfaSecret: secret });

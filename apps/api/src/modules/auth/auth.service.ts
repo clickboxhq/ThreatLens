@@ -376,8 +376,13 @@ export class AuthService {
    * "your account was suspended" to the client.
    */
   private async isAccountActive(
-    user: Pick<User, 'status' | 'orgId'>,
+    user: Pick<User, 'status' | 'orgId' | 'deletedAt'>,
   ): Promise<boolean> {
+    // A deleted account must not be able to sign back in. deleteUser sets deletedAt and bumps
+    // sessionVersion, which ends the sessions it already had — but nothing stopped it simply
+    // logging in again, so deleting somebody hid them from the admin list and left their
+    // access entirely intact. Checked before status because it is the stronger statement.
+    if (user.deletedAt) return false;
     if (user.status !== 'active') return false;
     if (!user.orgId) return true;
     const org = await this.prisma.organization.findUnique({
