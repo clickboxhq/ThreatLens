@@ -220,14 +220,22 @@ export class AuthService {
     sourceIp?: string,
     correlationId?: string,
   ): Promise<void> {
-    const userId = await this.emailVerificationTokens.consume(token);
-    if (!userId) {
+    const consumed = await this.emailVerificationTokens.consume(token);
+    if (!consumed) {
       throw new AppException(
         401,
         'INVALID_VERIFICATION_TOKEN',
         'This verification link is invalid or has expired.',
       );
     }
+    const { userId, alreadyUsed } = consumed;
+
+    // Opening the same link twice is not an error. It happens constantly — a refresh, a second
+    // click, a mail scanner pre-fetching the URL — and telling somebody their link is invalid
+    // immediately after telling them their address is confirmed is worse than saying nothing.
+    // Returning here keeps it honest and does no work twice: no second audit entry, and
+    // certainly no second welcome email.
+    if (alreadyUsed) return;
 
     // updateMany with emailVerifiedAt: null in the where clause, rather than update by id,
     // so the row itself decides whether this is the first verification. A user who requested

@@ -93,8 +93,11 @@ class FakePasswordResetTokenStore {
 }
 
 // Same rationale as FakePasswordResetTokenStore — deliberately not extending EmailVerificationTokenStore.
+// Mirrors the real store's two-map behaviour: a live token moves to a used marker rather than
+// vanishing, so a second visit to the same link can be told apart from a forged one.
 class FakeEmailVerificationTokenStore {
   private readonly byToken = new Map<string, string>();
+  private readonly used = new Map<string, string>();
 
   async create(userId: string): Promise<string> {
     const token = randomUUID();
@@ -102,10 +105,17 @@ class FakeEmailVerificationTokenStore {
     return token;
   }
 
-  async consume(token: string): Promise<string | null> {
-    const userId = this.byToken.get(token) ?? null;
-    this.byToken.delete(token);
-    return userId;
+  async consume(
+    token: string,
+  ): Promise<{ userId: string; alreadyUsed: boolean } | null> {
+    const live = this.byToken.get(token);
+    if (live) {
+      this.byToken.delete(token);
+      this.used.set(token, live);
+      return { userId: live, alreadyUsed: false };
+    }
+    const previous = this.used.get(token);
+    return previous ? { userId: previous, alreadyUsed: true } : null;
   }
 }
 
@@ -907,7 +917,12 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     });
   });
 
-  it('confirmEmailVerification() rejects a token that was already used (one-time use)', async () => {
+  // This used to assert that a second use threw, and that is what a tester hit: they verified
+  // successfully, received the "your email is confirmed" message, and the page then told them
+  // the link was invalid or expired. Opening the same link twice is ordinary — a refresh, a
+  // second click, a mail scanner pre-fetching the URL — and the honest answer is that they are
+  // verified, not that something is broken.
+  it('confirmEmailVerification() accepts a second visit to an already-used link', async () => {
     const target = user({ emailVerifiedAt: null });
     const users = new Map([[target.id, target]]);
     const { service, emailVerificationTokens } = buildService(users);
@@ -915,9 +930,36 @@ describe('AuthService email verification (§15.1, §16.2)', () => {
     const token = await emailVerificationTokens.create(target.id);
     await service.confirmEmailVerification(token);
 
-    await expect(service.confirmEmailVerification(token)).rejects.toThrow(
-      AppException,
-    );
+    await expect(
+      service.confirmEmailVerification(token),
+    ).resolves.toBeUndefined();
+  });
+
+  it('confirmEmailVerification() does no work twice on a repeat visit', async () => {
+    // Idempotent has to mean "nothing happens", not "it succeeds again" — a second welcome
+    // email would be the visible symptom of getting that wrong.
+    const target = user({ emailVerifiedAt: null });
+    const users = new Map([[target.id, target]]);
+    const { service, emailVerificationTokens, emailService } =
+      buildService(users);
+
+    const token = await emailVerificationTokens.create(target.id);
+    await service.confirmEmailVerification(token);
+    emailService.send.mockClear();
+
+    await service.confirmEmailVerification(token);
+    expect(emailService.send).not.toHaveBeenCalled();
+  });
+
+  it('confirmEmailVerification() still rejects a token that never existed', async () => {
+    // The point of remembering used tokens is to tell a repeat visit from a forgery. Forgeries
+    // must still be refused, or the first half of that sentence is worthless.
+    const target = user({ emailVerifiedAt: null });
+    const { service } = buildService(new Map([[target.id, target]]));
+
+    await expect(
+      service.confirmEmailVerification('never-issued'),
+    ).rejects.toMatchObject({ code: 'INVALID_VERIFICATION_TOKEN' });
   });
 });
 

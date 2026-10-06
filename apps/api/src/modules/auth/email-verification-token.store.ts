@@ -40,16 +40,48 @@ export class EmailVerificationTokenStore implements OnModuleDestroy {
     return token;
   }
 
-  /** One-time use: consumed whether or not the caller goes on to successfully verify. */
-  async consume(token: string): Promise<string | null> {
+  /**
+   * One-time use, but it remembers that it was used.
+   *
+   * Deleting outright made the second visit to a link indistinguishable from a forged one, so
+   * anybody who refreshed the page, clicked the link twice, or had it pre-fetched by a mail
+   * scanner was told "this link is invalid or has expired" — moments after being emailed that
+   * their address was confirmed. It had worked; the page just could not tell.
+   *
+   * The token now moves to a used marker instead, for the same lifetime it would have had. A
+   * repeat visit resolves to the same person, and the caller can answer honestly: you are
+   * verified. The marker grants nothing — the only thing this token can do is set a flag that
+   * is already set.
+   */
+  async consume(
+    token: string,
+  ): Promise<{ userId: string; alreadyUsed: boolean } | null> {
     const key = `email-verification:${token}`;
+    const usedKey = `email-verification-used:${token}`;
+
     const userId = await requireRedis(
       this.logger,
       'reading the email verification token',
       () => this.redis.get(key),
     );
-    if (userId) await this.redis.del(key);
-    return userId;
+
+    if (userId) {
+      // Mark used and remove the live token in one round trip, so two simultaneous clicks
+      // cannot both see it as live.
+      await this.redis
+        .multi()
+        .set(usedKey, userId, 'EX', VERIFICATION_TOKEN_TTL_SECONDS)
+        .del(key)
+        .exec();
+      return { userId, alreadyUsed: false };
+    }
+
+    const previous = await requireRedis(
+      this.logger,
+      'reading the used email verification token',
+      () => this.redis.get(usedKey),
+    );
+    return previous ? { userId: previous, alreadyUsed: true } : null;
   }
 
   async onModuleDestroy(): Promise<void> {

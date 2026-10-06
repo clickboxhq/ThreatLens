@@ -35,6 +35,35 @@ jest.mock('ioredis', () => ({
   Redis: jest.fn().mockImplementation(() => redisStub),
 }));
 
+// bullmq builds its own connection and keeps timers alive for delayed jobs, which survived the
+// ioredis stub and left a Jest worker running on roughly half of full-suite runs. Queue
+// instances are still real objects so @InjectQueue resolves and the graph is genuinely
+// checked — they simply do nothing.
+jest.mock('bullmq', () => {
+  const noop = () => jest.fn().mockResolvedValue(undefined);
+  class FakeQueue {
+    add = noop();
+    close = noop();
+    on = jest.fn();
+    off = jest.fn();
+    waitUntilReady = noop();
+  }
+  class FakeWorker {
+    close = noop();
+    on = jest.fn();
+    off = jest.fn();
+    waitUntilReady = noop();
+  }
+  class FakeQueueEvents extends FakeWorker {}
+  return {
+    __esModule: true,
+    Queue: FakeQueue,
+    Worker: FakeWorker,
+    QueueEvents: FakeQueueEvents,
+    FlowProducer: FakeQueue,
+  };
+});
+
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
