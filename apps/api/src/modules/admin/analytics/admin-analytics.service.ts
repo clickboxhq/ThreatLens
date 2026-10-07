@@ -92,6 +92,10 @@ export class AdminAnalyticsService {
       now.getTime() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     );
     const notDeleted: Prisma.UserWhereInput = { deletedAt: null };
+    // Organizations gained deletedAt at the same time as the soft-delete feature, but only
+    // the user queries here were updated to respect it — so a deleted organisation kept
+    // counting towards platform totals and growth.
+    const orgNotDeleted: Prisma.OrganizationWhereInput = { deletedAt: null };
 
     const [
       totalUsers,
@@ -123,8 +127,10 @@ export class AdminAnalyticsService {
       this.prisma.user.count({
         where: { ...notDeleted, createdAt: { gte: thirtyDaysAgo } },
       }),
-      this.prisma.organization.count(),
-      this.prisma.organization.count({ where: { status: 'active' } }),
+      this.prisma.organization.count({ where: orgNotDeleted }),
+      this.prisma.organization.count({
+        where: { ...orgNotDeleted, status: 'active' },
+      }),
       this.prisma.investigationSession.count({
         where: { status: { in: ['submitted', 'scored'] } },
       }),
@@ -258,13 +264,17 @@ export class AdminAnalyticsService {
 
     const [rows, priorTotal, total, active, memberAgg] = await Promise.all([
       this.prisma.organization.findMany({
-        where: { createdAt: { gte: since } },
+        where: { deletedAt: null, createdAt: { gte: since } },
         select: { createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      this.prisma.organization.count({ where: { createdAt: { lt: since } } }),
-      this.prisma.organization.count(),
-      this.prisma.organization.count({ where: { status: 'active' } }),
+      this.prisma.organization.count({
+        where: { deletedAt: null, createdAt: { lt: since } },
+      }),
+      this.prisma.organization.count({ where: { deletedAt: null } }),
+      this.prisma.organization.count({
+        where: { deletedAt: null, status: 'active' },
+      }),
       this.prisma.user.groupBy({
         by: ['orgId'],
         where: { deletedAt: null, orgId: { not: null } },
@@ -404,8 +414,11 @@ export class AdminAnalyticsService {
   }
 
   private orgWhere(search?: string): Prisma.OrganizationWhereInput {
-    if (!search) return {};
-    return { name: { contains: search, mode: 'insensitive' } };
+    // Mirrors individualWhere below, which has always excluded deleted accounts. Without it a
+    // deleted organisation still appeared in the customers list beside live ones.
+    const base: Prisma.OrganizationWhereInput = { deletedAt: null };
+    if (!search) return base;
+    return { ...base, name: { contains: search, mode: 'insensitive' } };
   }
 
   private individualWhere(search?: string): Prisma.UserWhereInput {

@@ -32,6 +32,24 @@ function overviewPrisma(overrides: {
 }
 
 describe('AdminAnalyticsService.getOverview', () => {
+  // Organizations gained deletedAt with the soft-delete feature, and only the user queries in
+  // this file were updated to respect it — so a deleted organisation kept counting towards
+  // platform totals, growth and the customers list, right beside user counts that excluded
+  // deleted accounts. Asserting on the where clause rather than the number, because the number
+  // depends on the fixture while the filter is what was missing.
+  it('excludes deleted organizations from the platform totals', async () => {
+    const prisma = overviewPrisma({ orgCount: 3 });
+    const service = new AdminAnalyticsService(prisma, new BillingService());
+
+    await service.getOverview();
+
+    const calls = (prisma.organization.count as jest.Mock).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [args] of calls) {
+      expect(args?.where).toMatchObject({ deletedAt: null });
+    }
+  });
+
   it('maps grouped role counts onto every role, zero-filling the absent ones', async () => {
     const prisma = overviewPrisma({
       orgCount: 3,
