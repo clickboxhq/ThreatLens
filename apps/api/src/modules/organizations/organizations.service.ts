@@ -379,7 +379,15 @@ export class OrganizationsService {
           // is already known to belong to it — createAnnouncement checked) doesn't get this
           // send either. A cohort member unrelated to this org — no orgId, or a different
           // one — is untouched, same as everywhere else this distinction is made.
-          user: { NOT: { orgId, orgMembershipStatus: 'suspended' } },
+          //
+          // deletedAt matters as much here as it does in the org-wide branch below, which
+          // already filtered it. Without it a deleted account still enrolled in a cohort keeps
+          // receiving announcements by email — deletion that leaves someone on the mailing
+          // list is not deletion.
+          user: {
+            deletedAt: null,
+            NOT: { orgId, orgMembershipStatus: 'suspended' },
+          },
         },
         select: { userId: true },
       });

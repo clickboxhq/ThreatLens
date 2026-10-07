@@ -557,6 +557,32 @@ describe('OrganizationsService announcements', () => {
     );
   });
 
+  // The two branches of resolveAnnouncementRecipients applied different filters: the org-wide
+  // one excluded deletedAt, the cohort-scoped one did not. A deleted account still enrolled in
+  // a cohort kept receiving announcements by email. Deletion that leaves somebody on the
+  // mailing list is not deletion.
+  it('excludes deleted accounts from a cohort-scoped announcement', async () => {
+    const { service, prisma } = buildService({ orgId: 'org-1' });
+    prisma.cohortEnrollment.findMany = jest.fn(async () => []);
+
+    await service.createAnnouncement(
+      buildUser({ id: 'user-1', role: 'org_admin' }),
+      {
+        title: 'Reading week',
+        body: 'No sessions next week.',
+        cohortId: 'cohort-1',
+      } as never,
+    );
+
+    expect(prisma.cohortEnrollment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          user: expect.objectContaining({ deletedAt: null }),
+        }),
+      }),
+    );
+  });
+
   it("skips the email fan-out entirely when there's nobody to notify", async () => {
     const { service, prisma, emailService } = buildService({
       orgId: 'org-1',
