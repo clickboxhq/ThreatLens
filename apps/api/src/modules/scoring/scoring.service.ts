@@ -138,8 +138,9 @@ export class ScoringService {
       ...timelineItems,
     ]);
     const pinnedTotalEvidenceCount = curatedEvidence.length;
-    const pinnedGroundTruthEvidenceCount =
-      await this.countGroundTruthAmong(curatedEvidence);
+    const groundTruthAmongCurated =
+      await this.findGroundTruthAmong(curatedEvidence);
+    const pinnedGroundTruthEvidenceCount = groundTruthAmongCurated.size;
 
     const falsePositiveAlerts = await this.prisma.alert.findMany({
       where: { sessionId, isFalsePositiveByDesign: true },
@@ -220,6 +221,32 @@ export class ScoringService {
       ),
     );
 
+    // The other half of the debrief: what was wrong, not just what was absent.
+    //
+    // Everything above answers "what did you miss" — missed techniques, missed evidence — so a
+    // Student who missed nothing but over-tagged saw an empty debrief under a mark well short
+    // of full. That is the common case: tagging every plausible technique scores 100% recall
+    // and poor precision, and nothing on the results screen said which tags were wrong, which
+    // pinned items were not evidence, or what the verdict should have been. Three of the five
+    // rubric components could lose marks silently.
+    const incorrectTechniqueSlugs = taggedTechniqueIds.filter(
+      (t) => !rubric.required_techniques.includes(t),
+    );
+    const incorrectTechniques = incorrectTechniqueSlugs.length
+      ? await this.prisma.mitreTechnique.findMany({
+          where: { techniqueId: { in: incorrectTechniqueSlugs } },
+        })
+      : [];
+
+    const unnecessaryEvidenceRefs = curatedEvidence.filter(
+      (e) => !groundTruthAmongCurated.has(e.eventId),
+    );
+    const unnecessaryEvidence = await Promise.all(
+      unnecessaryEvidenceRefs.map((ref) =>
+        summarizeEvidenceRef(this.prisma, ref.eventTable, ref.eventId),
+      ),
+    );
+
     const rubricBreakdown = {
       ...breakdown,
       missedTechniques: missedTechniques.map((t) => ({
@@ -231,6 +258,24 @@ export class ScoringService {
         eventTable: e.eventTable,
         summary: e.summary,
       })),
+      // Tagged, but not part of this incident.
+      incorrectTechniques: incorrectTechniques.map((t) => ({
+        id: t.id,
+        techniqueId: t.techniqueId,
+        name: t.name,
+      })),
+      // Collected, but not evidence of anything — the noise the scenario planted.
+      unnecessaryEvidence: unnecessaryEvidence.map((e) => ({
+        eventTable: e.eventTable,
+        summary: e.summary,
+      })),
+      // Safe to state once the session is submitted and read-only, and it is the single thing
+      // a Student most needs told when this component scores zero.
+      verdict: {
+        submitted: submittedVerdicts,
+        required: rubric.required_verdict,
+        correct: breakdown.verdictCorrect,
+      },
     };
 
     await this.prisma.$transaction([
@@ -295,43 +340,57 @@ export class ScoringService {
   // Adding a new investigation surface (e.g. Device Portal's process/file/network tables)
   // means adding its table name and Prisma model here, or pinned evidence from it silently
   // never counts toward recall/precision — Device Portal's addition caught exactly this gap.
-  private readonly groundTruthCounters: Record<
+  //
+  // These return the matching ids rather than a count. The count is one `.length` away, and
+  // having the ids is what lets the debrief name the items a Student pinned that were not
+  // evidence — the precision half of the score, which until now was a bare percentage with
+  // nothing behind it. A third parallel copy of this table list, just to get the same rows
+  // back as ids, is exactly the maintenance trap the note above is warning about.
+  private readonly groundTruthIdFinders: Record<
     string,
-    (ids: string[]) => Promise<number>
+    (ids: string[]) => Promise<{ id: string }[]>
   > = {
     email_messages: (ids) =>
-      this.prisma.emailMessage.count({
+      this.prisma.emailMessage.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     sign_in_events: (ids) =>
-      this.prisma.signInEvent.count({
+      this.prisma.signInEvent.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     process_events: (ids) =>
-      this.prisma.processEvent.count({
+      this.prisma.processEvent.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     file_events: (ids) =>
-      this.prisma.fileEvent.count({
+      this.prisma.fileEvent.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     network_events: (ids) =>
-      this.prisma.networkEvent.count({
+      this.prisma.networkEvent.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     cloud_events: (ids) =>
-      this.prisma.cloudEvent.count({
+      this.prisma.cloudEvent.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
     http_requests: (ids) =>
-      this.prisma.httpRequest.count({
+      this.prisma.httpRequest.findMany({
         where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
       }),
   };
 
-  private async countGroundTruthAmong(
+  /** Which of the curated items are real evidence. Precision is this set's size over the whole. */
+  private async findGroundTruthAmong(
     pinnedEvidence: { eventTable: string; eventId: string }[],
-  ): Promise<number> {
+  ): Promise<Set<string>> {
     const idsByTable = new Map<string, string[]>();
     for (const item of pinnedEvidence) {
       const list = idsByTable.get(item.eventTable) ?? [];
@@ -339,14 +398,14 @@ export class ScoringService {
       idsByTable.set(item.eventTable, list);
     }
 
-    const counts = await Promise.all(
+    const found = await Promise.all(
       [...idsByTable.entries()].map(([table, ids]) => {
-        const counter = this.groundTruthCounters[table];
-        return counter ? counter(ids) : Promise.resolve(0);
+        const find = this.groundTruthIdFinders[table];
+        return find ? find(ids) : Promise.resolve([]);
       }),
     );
 
-    return counts.reduce((sum, count) => sum + count, 0);
+    return new Set(found.flat().map((row) => row.id));
   }
 
   // Mirrors groundTruthCounters above — same "add a new table here too" maintenance note
