@@ -154,6 +154,9 @@ export class SearchService {
                   SELECT 1 FROM unnest(recipient_addresses) AS r
                   WHERE r ILIKE ${'%' + freetext + '%'}
                 )
+              -- Same ordering as the findMany this feeds, so that when a session has more
+              -- matches than the limit, the ones kept here are the ones it would have kept.
+              ORDER BY occurred_at DESC
               LIMIT ${PER_TYPE_LIMIT}
             `
           ).map((r) => r.id)
