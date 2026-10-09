@@ -10,6 +10,26 @@
         "--workspace=apps/web"
       ],
       "port": 8080
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start:dev",
+        "--workspace=apps/api"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start:worker:dev",
+        "--workspace=apps/api"
+      ],
+      "port": 3100
     }
   ]
 }
