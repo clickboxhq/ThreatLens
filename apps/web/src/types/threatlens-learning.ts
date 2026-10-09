@@ -104,8 +104,11 @@ export interface AuditLogEntryDto {
   actorDisplayName: string | null;
   actorIp: string | null;
   action: string;
-  targetType: string;
-  targetId: string;
+  // Both nullable in the database and optional on the writer. Declaring them as plain
+  // strings here is what let a null reach `.slice()` in the audit log table without
+  // TypeScript saying a word.
+  targetType: string | null;
+  targetId: string | null;
   metadata: unknown;
   correlationId: string | null;
   occurredAt: string;

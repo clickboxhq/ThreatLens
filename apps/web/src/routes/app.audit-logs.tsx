@@ -17,6 +17,20 @@ export const Route = createFileRoute("/app/audit-logs")({
   }),
 });
 
+/**
+ * Not every audited event has a row to point at.
+ *
+ * A platform-settings change records targetType `platform_settings` with no id, because what
+ * it changed is not a record — and both columns are nullable for the same reason. This table
+ * assumed they were always present, so the first settings change any admin made took the
+ * whole page down with "Cannot read properties of null".
+ */
+function formatTarget(targetType: string | null, targetId: string | null): string {
+  const shortId = targetId ? targetId.slice(0, 8) : null;
+  if (targetType && shortId) return `${targetType}:${shortId}`;
+  return targetType ?? shortId ?? "—";
+}
+
 function AuditLogs() {
   const { entries: logs, isPending, isError } = useAuditLogs();
 
@@ -53,9 +67,7 @@ function AuditLogs() {
           </span>,
           <span className="font-medium">{l.actorDisplayName ?? "System"}</span>,
           <span className="font-mono text-[11px] text-[color:var(--info)]">{l.action}</span>,
-          <span className="font-mono text-[11px]">
-            {l.targetType}:{l.targetId.slice(0, 8)}
-          </span>,
+          <span className="font-mono text-[11px]">{formatTarget(l.targetType, l.targetId)}</span>,
           <span className="font-mono text-[11px] text-muted-foreground">{l.actorIp ?? "—"}</span>,
         ]),
       }}
