@@ -25,6 +25,9 @@ function buildService() {
     networkEvent: { findMany: findManyMock([]) },
     httpRequest: { findMany: findManyMock([]) },
     investigationSession: { findMany: findManyMock([]) },
+    // Recipient addresses are a String[]; Prisma's array filters only compare whole elements,
+    // so partial matching goes through one raw query.
+    $queryRaw: jest.fn(async () => [] as Array<{ id: string }>),
   };
   const sessionAccess = {
     getOwnedSession: jest.fn(async () => ({ id: SESSION_ID })),
@@ -285,5 +288,45 @@ describe('SearchService.searchMine', () => {
 
     await service.searchMine(USER, []);
     expect(investigationActions.record).not.toHaveBeenCalled();
+  });
+
+  // Reported from a live session: searching a recipient's name returned nothing while the
+  // email was plainly on screen, addressed to them. Every other party to a message was
+  // searchable — sender address, subject, body — but not the person it was sent to.
+  it('finds an email by its recipient, not just its sender', async () => {
+    const { service, prisma } = buildService();
+    prisma.$queryRaw = jest.fn(async () => [{ id: 'email-7' }]);
+
+    await service.search(SESSION_ID, USER, [], 'emma');
+
+    const args = prisma.emailMessage.findMany.mock.calls[0]?.[0] as {
+      where: { OR: Array<Record<string, unknown>> };
+    };
+    expect(args.where.OR).toContainEqual({ id: { in: ['email-7'] } });
+  });
+
+  it('scopes the recipient lookup to the session rather than relying on the outer filter', async () => {
+    // The ids feed a clause that sits beside sessionId, so the outer filter would hide
+    // another session's rows anyway. Isolation should not depend on that: it is the one
+    // property this search cannot afford to get wrong by accident.
+    const { service, prisma } = buildService();
+    prisma.$queryRaw = jest.fn(async () => []);
+
+    await service.search(SESSION_ID, USER, [], 'emma');
+
+    const params = (prisma.$queryRaw as jest.Mock).mock.calls[0];
+    expect(JSON.stringify(params)).toContain(SESSION_ID);
+  });
+
+  it("matches the sender's display name, which is what a reader actually sees", async () => {
+    const { service, prisma } = buildService();
+    await service.search(SESSION_ID, USER, [], 'Morgan Reyes');
+
+    const args = prisma.emailMessage.findMany.mock.calls[0]?.[0] as {
+      where: { OR: Array<Record<string, unknown>> };
+    };
+    expect(args.where.OR).toContainEqual({
+      senderDisplayName: { contains: 'Morgan Reyes', mode: 'insensitive' },
+    });
   });
 });

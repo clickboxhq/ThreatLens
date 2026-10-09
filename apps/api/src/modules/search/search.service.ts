@@ -133,6 +133,31 @@ export class SearchService {
       sessionId: sessionScope,
     };
     const fileWhere: Prisma.FileEventWhereInput = { sessionId: sessionScope };
+
+    // Partial matching inside a String[] is beyond Prisma's array filters — has/hasSome
+    // compare whole elements — so the ids come from one small raw query and feed the OR below.
+    // Searching for a recipient by name is the obvious thing to do when reading a phishing
+    // mail, and it was the one party to the message that could not be searched for.
+    //
+    // Scoped to the session here rather than leaning on the outer sessionId clause to filter
+    // the ids afterwards. That would work, but it would make session isolation depend on a
+    // condition in a different part of the function.
+    const scopeIds =
+      typeof sessionScope === 'string' ? [sessionScope] : sessionScope.in;
+    const recipientMatchIds =
+      freetext && scopeIds.length
+        ? (
+            await this.prisma.$queryRaw<Array<{ id: string }>>`
+              SELECT id FROM email_messages
+              WHERE session_id = ANY(${scopeIds}::uuid[])
+                AND EXISTS (
+                  SELECT 1 FROM unnest(recipient_addresses) AS r
+                  WHERE r ILIKE ${'%' + freetext + '%'}
+                )
+              LIMIT ${PER_TYPE_LIMIT}
+            `
+          ).map((r) => r.id)
+        : [];
     const networkWhere: Prisma.NetworkEventWhereInput = {
       sessionId: sessionScope,
     };
@@ -192,7 +217,14 @@ export class SearchService {
       emailWhere.OR = [
         { subject: { contains: freetext, mode: 'insensitive' } },
         { senderAddress: { contains: freetext, mode: 'insensitive' } },
+        // The sender's display name is what a person actually reads in their client, so it is
+        // what they type into a search box. "Morgan Reyes" matched nothing while m.reyes@…
+        // matched.
+        { senderDisplayName: { contains: freetext, mode: 'insensitive' } },
         { bodyHtml: { contains: freetext, mode: 'insensitive' } },
+        ...(recipientMatchIds.length
+          ? [{ id: { in: recipientMatchIds } }]
+          : []),
       ];
       cloudWhere.OR = [
         { actionName: { contains: freetext, mode: 'insensitive' } },
