@@ -52,6 +52,36 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+/**
+ * Re-reads the pair another tab may have rotated out from under this one.
+ *
+ * Each tab loads this module separately and caches the tokens in the variables above, but the
+ * pair they describe is shared. Refresh tokens rotate on every use, and the server treats a
+ * second presentation of a rotated-away token as theft — it revokes the whole chain, the token
+ * the other tab just received included. So a stale copy here does not merely fail: it signs
+ * every tab out.
+ */
+function syncTokensFromStorage(): void {
+  if (!isBrowser) return;
+  accessToken = localStorage.getItem("threatlens_access_token");
+  refreshToken = localStorage.getItem("threatlens_refresh_token");
+}
+
+if (isBrowser) {
+  // `storage` fires in the *other* tabs, which is exactly the ones holding the stale copy.
+  window.addEventListener("storage", (event) => {
+    if (
+      event.key !== null &&
+      event.key !== "threatlens_access_token" &&
+      event.key !== "threatlens_refresh_token"
+    ) {
+      return;
+    }
+    syncTokensFromStorage();
+    listeners.forEach((listener) => listener());
+  });
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -96,13 +126,43 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   return body as T;
 }
 
-// Exported so call sites that change the caller's own role server-side (creating an org,
-// accepting an invite) can force a fresh access token afterward — POST /auth/refresh always
-// re-reads the user from the DB (see auth.service.ts's refresh()), so this is the one existing
-// way to make the client's JWT reflect a role change without a full re-login. There's no
-// GET /auth/me to re-fetch the *user* object this way, hence auth-store.ts's updateRole()
-// patching the cached copy directly alongside this.
-export async function tryRefresh(): Promise<boolean> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Refreshes the token pair — one refresh at a time, shared by every caller that asks while
+ * one is already running.
+ *
+ * The access token lives fifteen minutes and the case workspace opens six queries at once
+ * (incident, evidence, timeline, notes, hints, MITRE). When it expired they all got a 401
+ * together and each started its own refresh holding the same token. The first rotated it; the
+ * other five then presented a token the server had just rotated away — which is precisely the
+ * signature of a stolen one, so it revoked the entire chain, the newly issued token included,
+ * and signed out a user who was sitting there working. Every fifteen minutes, reliably.
+ *
+ * Sharing the in-flight promise means the other five wait for the first one's answer and then
+ * retry with the token it got, which is what they wanted in the first place.
+ *
+ * Also exported so call sites that change the caller's own role server-side (creating an org,
+ * accepting an invite) can force a fresh access token afterward — POST /auth/refresh always
+ * re-reads the user from the DB (see auth.service.ts's refresh()), so this is the one existing
+ * way to make the client's JWT reflect a role change without a full re-login. There's no
+ * GET /auth/me to re-fetch the *user* object this way, hence auth-store.ts's updateRole()
+ * patching the cached copy directly alongside this.
+ */
+export function tryRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = performRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function performRefresh(): Promise<boolean> {
+  // Another tab may have rotated the pair since this module last wrote it.
+  syncTokensFromStorage();
+  if (!refreshToken) return false;
+
   let response: Response;
   try {
     response = await rawRequest("/auth/refresh", {
