@@ -20,6 +20,7 @@ import { StageIntelligence } from "@/components/soc/investigation/stage-intellig
 import { StageNotes } from "@/components/soc/investigation/stage-notes";
 import { StageReview } from "@/components/soc/investigation/stage-review";
 import { StageSubmit } from "@/components/soc/investigation/stage-submit";
+import { ScoreDebrief } from "@/components/soc/investigation/score-debrief";
 import {
   useInvestigation,
   useSessionIncident,
@@ -198,7 +199,6 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const locked = incident.status === "closed";
   const pinnedIds = new Set(evidence.map((e) => `${e.eventTable}:${e.eventId}`));
   const timelineIds = new Set(timeline.map((t) => `${t.eventTable}:${t.id}`));
-  const nextHint = hints.find((h) => !h.unlocked);
   const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
   const activeStage: Stage = stage ?? (locked ? "submit" : "investigate");
 
@@ -265,8 +265,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
         onNavigate={setStage}
         locked={locked}
         hints={hints}
-        nextHintCost={nextHint?.unlockCostPercent ?? null}
-        onUnlockHint={() => nextHint && unlockHint(nextHint.index)}
+        onUnlockHint={(index) => unlockHint(index)}
       />
 
       {activeStage === "investigate" && (
@@ -495,26 +494,7 @@ function ScoreResult({
         </div>
       )}
 
-      <div className="mt-4 flex flex-col gap-2 text-[11.5px]">
-        {score.rubricBreakdown.missedEvidence.length > 0 && (
-          <div className="rounded-md border border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 p-2">
-            <div className="font-medium">Missed evidence</div>
-            <ul className="mt-1 text-[10.5px]">
-              {score.rubricBreakdown.missedEvidence.map((e, i) => (
-                <li key={i}>{e.summary}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {score.rubricBreakdown.missedTechniques.length > 0 && (
-          <div className="rounded-md border border-border bg-background p-2">
-            <div className="font-medium">Techniques you did not tag</div>
-            <div className="mt-1 font-mono text-[10.5px]">
-              {score.rubricBreakdown.missedTechniques.map((t) => t.techniqueId).join(", ")}
-            </div>
-          </div>
-        )}
-      </div>
+      <ScoreDebrief breakdown={score.rubricBreakdown} />
     </div>
   );
 }

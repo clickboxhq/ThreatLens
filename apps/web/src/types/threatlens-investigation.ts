@@ -118,6 +118,13 @@ export type ResponseActionType = (typeof RESPONSE_ACTION_TYPES)[number];
 export interface ScoreRubricBreakdown {
   missedTechniques: { id: string; techniqueId: string; name: string }[];
   missedEvidence: { eventTable: string; summary: string }[];
+  /**
+   * The precision side of the debrief. Optional because scores written before it existed
+   * have no such key, and an old result must still render rather than crash.
+   */
+  incorrectTechniques?: { id: string; techniqueId: string; name: string }[];
+  unnecessaryEvidence?: { eventTable: string; summary: string }[];
+  verdict?: { submitted: string[]; required: string; correct: boolean };
   [key: string]: unknown;
 }
 

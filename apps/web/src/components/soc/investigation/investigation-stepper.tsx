@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
+import { HintsDialog } from "@/components/soc/investigation/hints-dialog";
 import type { HintDto } from "@/types/threatlens-investigation";
 
 export type Stage =
@@ -38,7 +38,6 @@ export function InvestigationStepper({
   onNavigate,
   locked,
   hints,
-  nextHintCost,
   onUnlockHint,
 }: {
   active: Stage;
@@ -46,10 +45,9 @@ export function InvestigationStepper({
   onNavigate: (stage: Stage) => void;
   locked: boolean;
   hints: HintDto[];
-  nextHintCost: number | null;
-  onUnlockHint: () => void;
+  onUnlockHint: (index: number) => Promise<unknown>;
 }) {
-  const [confirmHintOpen, setConfirmHintOpen] = useState(false);
+  const [hintsOpen, setHintsOpen] = useState(false);
   const unlockedCount = hints.filter((h) => h.unlocked).length;
 
   return (
@@ -80,11 +78,12 @@ export function InvestigationStepper({
         })}
 
         <div className="ml-auto shrink-0">
-          {!locked && (
+          {/* Shown once the session is locked too: hints already paid for stay readable, and
+              the count is part of how the score was reached. */}
+          {hints.length > 0 && (
             <button
-              onClick={() => setConfirmHintOpen(true)}
-              disabled={!nextHintCost}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-[11.5px] text-secondary hover:text-foreground disabled:opacity-50"
+              onClick={() => setHintsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-[11.5px] text-secondary hover:text-foreground"
             >
               <Lightbulb className="size-3.5" />
               Hints · {unlockedCount}/{hints.length} used
@@ -93,18 +92,12 @@ export function InvestigationStepper({
         </div>
       </div>
 
-      <ConfirmDialog
-        open={confirmHintOpen}
-        onOpenChange={setConfirmHintOpen}
-        tone="default"
-        title="Request investigation hint?"
-        description={
-          nextHintCost != null
-            ? `Using this hint will cost ${nextHintCost}% of your final score.`
-            : "Using a hint affects your final investigation score."
-        }
-        confirmLabel="Reveal hint"
-        onConfirm={onUnlockHint}
+      <HintsDialog
+        open={hintsOpen}
+        onOpenChange={setHintsOpen}
+        hints={hints}
+        locked={locked}
+        onUnlock={onUnlockHint}
       />
     </div>
   );
