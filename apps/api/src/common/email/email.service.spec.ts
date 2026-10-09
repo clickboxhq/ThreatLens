@@ -60,6 +60,45 @@ describe('EmailService', () => {
     });
   });
 
+  // Registration and reset mail was landing in spam, and HTML with no text/plain part is one
+  // of the things filters weight. Every template renders one; this is the hand-off that
+  // carries it to the provider.
+  it('forwards the text/plain alternative to Resend', async () => {
+    const fetchSpy = jest.fn<Promise<Response>, [string, { body: string }]>();
+    fetchSpy.mockResolvedValue({ ok: true } as Response);
+    global.fetch = fetchSpy as never;
+    const service = buildService({ RESEND_API_KEY: 're_test_key' });
+
+    await service.send({
+      to: 'a@example.com',
+      subject: 'Hi',
+      html: '<p>Hi</p>',
+      text: 'Hi\n',
+    });
+
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+      text: 'Hi\n',
+    });
+  });
+
+  it('omits text entirely rather than sending an empty one', async () => {
+    // An empty text part is treated as a real one, which is worse than having none at all.
+    const fetchSpy = jest.fn<Promise<Response>, [string, { body: string }]>();
+    fetchSpy.mockResolvedValue({ ok: true } as Response);
+    global.fetch = fetchSpy as never;
+    const service = buildService({ RESEND_API_KEY: 're_test_key' });
+
+    await service.send({
+      to: 'a@example.com',
+      subject: 'Hi',
+      html: '<p>Hi</p>',
+    });
+
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).not.toHaveProperty(
+      'text',
+    );
+  });
+
   it('does not throw when the Resend API call fails', async () => {
     global.fetch = jest.fn(async () => {
       throw new Error('network down');

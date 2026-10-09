@@ -116,6 +116,17 @@ export class HealthWatcherService implements OnModuleInit, OnModuleDestroy {
         '<p>Users are likely affected. Check the API logs and the dependency itself.</p>',
         '<p>This alert repeats only when the state changes, not every minute.</p>',
       ].join(''),
+      // An outage alert is the message that can least afford to be filtered, and HTML with no
+      // text part is one of the things filters hold against a sender.
+      text: [
+        'ThreatLens readiness check is failing.',
+        '',
+        broken,
+        '',
+        'Users are likely affected. Check the API logs and the dependency itself.',
+        'This alert repeats only when the state changes, not every minute.',
+        '',
+      ].join('\n'),
     });
     this.logger.error(`Dependency-down alert sent to ${to}: ${broken}`);
   }
@@ -131,6 +142,12 @@ export class HealthWatcherService implements OnModuleInit, OnModuleDestroy {
         '<p>The ThreatLens readiness check is passing again.</p>',
         `<p>Recovered at ${escapeBasic(report.checkedAt)}.</p>`,
       ].join(''),
+      text: [
+        'The ThreatLens readiness check is passing again.',
+        '',
+        `Recovered at ${report.checkedAt}.`,
+        '',
+      ].join('\n'),
     });
   }
 

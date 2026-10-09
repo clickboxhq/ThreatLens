@@ -20,6 +20,8 @@ const PAGE_BG = '#F3F5F7';
 const SURFACE = '#FFFFFF';
 const HAIRLINE = '#E3E6EA';
 
+const DEFAULT_SIGNOFF = '— The ThreatLens team';
+
 const FONT =
   "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const MONO =
@@ -183,7 +185,7 @@ export function renderEmail(input: EmailLayoutInput): string {
           <td class="tl-pad" style="padding:28px 36px 32px;">
             <div class="tl-rule" style="border-top:1px solid ${HAIRLINE};padding-top:18px;">
               <p class="tl-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:1.6;color:${MUTED};">
-                ${signoff ?? '— The ThreatLens team'}
+                ${signoff ?? DEFAULT_SIGNOFF}
               </p>
             </div>
           </td>
@@ -202,15 +204,93 @@ export function renderEmail(input: EmailLayoutInput): string {
 </html>`;
 }
 
-// ---------------------------------------------------------------- the emails
-
-export function verificationEmail(verifyUrl: string): {
+export interface RenderedEmail {
   subject: string;
   html: string;
-} {
+  text: string;
+}
+
+/**
+ * Converts the inline markup a paragraph is allowed to contain into plain text.
+ *
+ * Deliberately not a general HTML-to-text pass over the finished document. That document is
+ * table layout, mso conditionals, a <style> block and a hidden preheader; stripping it yields
+ * a page of whitespace with the copy scattered through it. Only the small, known set of inline
+ * tags the paragraphs actually use is handled, working from the same structured input the HTML
+ * is built from.
+ */
+function inlineToText(html: string): string {
+  return (
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|h[1-6])>/gi, '\n\n')
+      .replace(/<li[^>]*>/gi, '\n  - ')
+      .replace(/<\/(ol|ul)>/gi, '\n')
+      .replace(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+      .replace(/<[^>]+>/g, '')
+      // &amp; is decoded last: doing it first would turn a literal "&amp;lt;" into "<".
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .trim()
+  );
+}
+
+/**
+ * The plain-text alternative, rendered from the same input as the HTML.
+ *
+ * Every one of these went out as HTML only. A message with no text/plain part is a long-
+ * standing spam signal — it is what a bulk sender that never bothered looks like, and both
+ * Gmail and Outlook weight it — and it is also simply unreadable to anyone whose client or
+ * screen reader prefers text.
+ *
+ * The URL matters more than the prose here. A verification or reset link that exists only as
+ * the href of an <a> is gone the moment the markup is, so the raw URL is always written out
+ * on a line of its own.
+ */
+export function renderText(input: EmailLayoutInput): string {
+  const out: string[] = [input.heading, ''];
+
+  for (const paragraph of input.paragraphs) {
+    const text = inlineToText(paragraph);
+    if (text) out.push(text, '');
+  }
+
+  if (input.cta) {
+    out.push(input.cta.label + ':', input.cta.url, '');
+  } else if (input.fallbackUrl) {
+    // Only when there is no button — otherwise this is the same URL a second time.
+    out.push(input.fallbackUrl, '');
+  }
+
+  if (input.meta) out.push(inlineToText(input.meta), '');
+  if (input.footnote) out.push(inlineToText(input.footnote), '');
+  out.push(inlineToText(input.signoff ?? DEFAULT_SIGNOFF));
+
+  return (
+    out
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim() + '\n'
+  );
+}
+
+/** Both renderings of one email, so a template cannot add a paragraph to only one of them. */
+function renderBoth(input: EmailLayoutInput): { html: string; text: string } {
+  return { html: renderEmail(input), text: renderText(input) };
+}
+
+// ---------------------------------------------------------------- the emails
+
+export function verificationEmail(verifyUrl: string): RenderedEmail {
   return {
     subject: 'Verify your ThreatLens email address',
-    html: renderEmail({
+    ...renderBoth({
       preheader:
         'Confirm your address to start scored investigations — the link is good for 24 hours.',
       heading: 'Confirm your email address',
@@ -226,10 +306,10 @@ export function verificationEmail(verifyUrl: string): {
   };
 }
 
-export function welcomeEmail(input: { displayName: string; appUrl: string }): {
-  subject: string;
-  html: string;
-} {
+export function welcomeEmail(input: {
+  displayName: string;
+  appUrl: string;
+}): RenderedEmail {
   // Not escaped here: renderEmail escapes the heading, and escaping twice would show a
   // reader called O'Brien their own name as "O&#39;Brien".
   const name = input.displayName.trim().split(/\s+/)[0] || 'there';
@@ -246,7 +326,7 @@ export function welcomeEmail(input: { displayName: string; appUrl: string }): {
 
   return {
     subject: 'Welcome to ThreatLens — Your Investigation Journey Starts Here',
-    html: renderEmail({
+    ...renderBoth({
       preheader:
         'Your account is ready — choose a scenario and start investigating.',
       heading: `Welcome to ThreatLens, ${name}`,
@@ -265,13 +345,10 @@ export function welcomeEmail(input: { displayName: string; appUrl: string }): {
   };
 }
 
-export function passwordResetEmail(resetUrl: string): {
-  subject: string;
-  html: string;
-} {
+export function passwordResetEmail(resetUrl: string): RenderedEmail {
   return {
     subject: 'Reset your ThreatLens password',
-    html: renderEmail({
+    ...renderBoth({
       preheader:
         'Choose a new password. The link works once and expires in an hour.',
       heading: 'Reset your password',
@@ -307,14 +384,14 @@ export function organizationInviteEmail(input: {
   inviterName: string;
   role: string;
   inviteUrl: string;
-}): { subject: string; html: string } {
+}): RenderedEmail {
   const org = escapeHtml(input.orgName);
   const inviter = escapeHtml(input.inviterName);
   const roleLabel = ORG_ROLE_LABEL[input.role] ?? 'Member';
 
   return {
     subject: `You're invited to join ${input.orgName} on ThreatLens`,
-    html: renderEmail({
+    ...renderBoth({
       preheader: `${input.inviterName} invited you to join ${input.orgName} as ${roleLabel.toLowerCase() === 'instructor' ? 'an' : 'a'} ${roleLabel.toLowerCase()} on ThreatLens.`,
       heading: `You're invited to join ${input.orgName}`,
       paragraphs: [
@@ -354,7 +431,7 @@ export function organizationMemberJoinedEmail(input: {
   role: string;
   joinedAt: Date;
   membersUrl: string;
-}): { subject: string; html: string } {
+}): RenderedEmail {
   const admin = escapeHtml(input.adminName.trim().split(/\s+/)[0] || 'there');
   const member = escapeHtml(input.memberName);
   const email = escapeHtml(input.memberEmail);
@@ -367,7 +444,7 @@ export function organizationMemberJoinedEmail(input: {
 
   return {
     subject: `New student joined your organization — ThreatLens`,
-    html: renderEmail({
+    ...renderBoth({
       preheader: `${input.memberName} accepted the invitation and joined ${input.orgName}.`,
       heading: `New member joined ${input.orgName}`,
       paragraphs: [
@@ -395,7 +472,7 @@ export function organizationAnnouncementEmail(input: {
   title: string;
   body: string;
   announcementsUrl: string;
-}): { subject: string; html: string } {
+}): RenderedEmail {
   const recipient = escapeHtml(
     input.recipientName.trim().split(/\s+/)[0] || 'there',
   );
@@ -408,7 +485,7 @@ export function organizationAnnouncementEmail(input: {
 
   return {
     subject: `${input.title} — ${input.orgName} announcement`,
-    html: renderEmail({
+    ...renderBoth({
       preheader: `${input.authorName} posted an announcement in ${input.orgName}: ${input.title}`,
       heading: title,
       paragraphs: [
@@ -437,7 +514,7 @@ export function cohortInviteEmail(input: {
   hasAccount: boolean;
   /** Set when the invitation is to teach rather than to take part. */
   staffRole?: string | null;
-}): { subject: string; html: string } {
+}): RenderedEmail {
   const cohort = escapeHtml(input.cohortName);
   const inviter = escapeHtml(input.inviterName);
   const group = input.groupName ? escapeHtml(input.groupName) : null;
@@ -451,7 +528,7 @@ export function cohortInviteEmail(input: {
     subject: asStaff
       ? `${input.inviterName} invited you to teach ${input.cohortName} on ThreatLens`
       : `${input.inviterName} invited you to ${input.cohortName} on ThreatLens`,
-    html: renderEmail({
+    ...renderBoth({
       preheader: asStaff
         ? `Join ${input.cohortName} as ${roleLabel}.`
         : `Join ${input.cohortName} and start working investigations.`,

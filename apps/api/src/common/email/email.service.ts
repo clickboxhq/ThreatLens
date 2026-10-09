@@ -5,6 +5,12 @@ export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  /**
+   * The text/plain alternative. Optional only so a caller that genuinely has nothing to say
+   * in text is not forced to invent it — every template supplies one, and an HTML-only
+   * message is a spam signal both Gmail and Outlook weight.
+   */
+  text?: string;
 }
 
 // Resend (https://resend.com), chosen for zero-SMTP-config setup — one API key, no host/port/
@@ -17,7 +23,7 @@ export class EmailService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send({ to, subject, html }: SendEmailInput): Promise<void> {
+  async send({ to, subject, html, text }: SendEmailInput): Promise<void> {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       this.logger.warn(
@@ -40,7 +46,15 @@ export class EmailService {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ from, to, subject, html }),
+        // Omitted rather than sent empty when absent: Resend treats an empty text part as a
+        // real one, which is worse than having none.
+        body: JSON.stringify({
+          from,
+          to,
+          subject,
+          html,
+          ...(text ? { text } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.text();

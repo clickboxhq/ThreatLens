@@ -3,8 +3,12 @@ import {
   welcomeEmail,
   passwordResetEmail,
   organizationInviteEmail,
+  organizationMemberJoinedEmail,
+  organizationAnnouncementEmail,
+  cohortInviteEmail,
   escapeHtml,
 } from './email-templates';
+import type { RenderedEmail } from './email-templates';
 
 const URL = 'https://threatlensapp.com/verify-email/abc123';
 
@@ -145,6 +149,112 @@ describe('email templates', () => {
       expect(passwordResetEmail(URL).subject).toBe(
         'Reset your ThreatLens password',
       );
+    });
+  });
+
+  /**
+   * These went out as HTML only, which is one of the things a spam filter holds against a
+   * sender — registration and password-reset mail was landing in spam — and is also what a
+   * reader whose client or screen reader prefers text is left with.
+   */
+  describe('the text/plain alternative', () => {
+    const every: Array<[string, RenderedEmail, string]> = [
+      ['verification', verificationEmail(URL), URL],
+      ['welcome', welcomeEmail({ displayName: 'Dana', appUrl: URL }), URL],
+      ['password reset', passwordResetEmail(URL), URL],
+      [
+        'organization invite',
+        organizationInviteEmail({
+          orgName: 'ClickBox',
+          inviterName: 'Ada Admin',
+          role: 'student',
+          inviteUrl: URL,
+        }),
+        URL,
+      ],
+      [
+        'member joined',
+        organizationMemberJoinedEmail({
+          adminName: 'Ada Admin',
+          memberName: 'Dana',
+          memberEmail: 'dana@example.com',
+          orgName: 'ClickBox',
+          role: 'student',
+          joinedAt: new Date('2026-10-09T10:00:00Z'),
+          membersUrl: URL,
+        }),
+        URL,
+      ],
+      [
+        'announcement',
+        organizationAnnouncementEmail({
+          recipientName: 'Dana',
+          orgName: 'ClickBox',
+          authorName: 'Ada Admin',
+          title: 'Maintenance window',
+          body: 'We are upgrading on Friday.',
+          announcementsUrl: URL,
+        }),
+        URL,
+      ],
+      [
+        'cohort invite',
+        cohortInviteEmail({
+          cohortName: 'Autumn intake',
+          inviterName: 'Ada Admin',
+          groupName: 'Blue team',
+          joinUrl: URL,
+          hasAccount: false,
+        }),
+        URL,
+      ],
+    ];
+
+    it.each(every)('%s email has one', (_name, email) => {
+      expect(email.text.trim().length).toBeGreaterThan(40);
+    });
+
+    // The whole point of most of these messages. A link that exists only as an href is gone
+    // the moment the markup is.
+    it.each(every)(
+      '%s email carries its link as a bare URL',
+      (_name, email, url) => {
+        expect(email.text).toContain(url);
+      },
+    );
+
+    it.each(every)(
+      '%s email has no markup or entities left in it',
+      (_name, email) => {
+        expect(email.text).not.toMatch(/<[a-z/][^>]*>/i);
+        expect(email.text).not.toMatch(/&(amp|lt|gt|quot|nbsp|#39);/);
+      },
+    );
+
+    it('turns the welcome email list into readable lines, not a run-on', () => {
+      const { text } = welcomeEmail({ displayName: 'Dana', appUrl: URL });
+      // Four getting-started steps, each on its own line rather than concatenated.
+      expect(text).toMatch(/- Choose an investigation\./);
+      expect(text).toMatch(/- Submit your verdict\./);
+      expect(text).toContain('A ClickBox product');
+    });
+
+    it('renders an apostrophe as the character, as the HTML does', () => {
+      // escapeHtml runs on the way into the heading, so the text half has to decode it again
+      // or a reader called O'Brien is greeted as O&#39;Brien.
+      const { text } = welcomeEmail({
+        displayName: "Morgan O'Brien",
+        appUrl: URL,
+      });
+      expect(text).toContain('Morgan');
+      expect(text).not.toContain('&#39;');
+    });
+
+    it('does not repeat the same URL twice over', () => {
+      // html deliberately carries it in both the button and a copyable fallback; text has no
+      // button to mangle, so once is right.
+      const { text } = verificationEmail(URL);
+      expect(text.split(URL).length - 1).toBe(1);
     });
   });
 
