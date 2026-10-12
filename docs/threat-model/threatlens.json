@@ -1,0 +1,2871 @@
+{
+  "version": "2.6.2",
+  "summary": {
+    "title": "ThreatLens",
+    "owner": "ClickBox",
+    "description": "ThreatLens is a hands-on security investigation training platform. Students work realistic incidents against generated telemetry and are graded against a scenario ground truth.\n\nTwo assets drive most of what matters here. The first is the ground truth itself: the required techniques and expected verdict are forty per cent of the mark, so disclosing them does not merely leak data, it invalidates the product. The second is the account data, which belongs to students and is personal rather than financial.\n\nThreats marked Mitigated were found and fixed during development; the detail records what the failure actually was, so the reasoning survives the fix.",
+    "id": 0
+  },
+  "detail": {
+    "contributors": [],
+    "diagrams": [
+      {
+        "id": 0,
+        "title": "ThreatLens — platform data flow",
+        "diagramType": "STRIDE",
+        "placeholder": "New STRIDE diagram description",
+        "thumbnail": "./public/content/images/thumbnail.stride.jpg",
+        "version": "2.6.2",
+        "cells": [
+          {
+            "position": {
+              "x": 20,
+              "y": 60
+            },
+            "size": {
+              "width": 500,
+              "height": 700
+            },
+            "attrs": {
+              "label": {
+                "text": "Untrusted — public internet"
+              }
+            },
+            "visible": true,
+            "shape": "trust-boundary-box",
+            "id": "11111111-0000-4000-8000-000000000001",
+            "zIndex": -1,
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "Untrusted — public internet",
+              "description": "Everything here is under the control of whoever is using it.",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "position": {
+              "x": 600,
+              "y": 40
+            },
+            "size": {
+              "width": 700,
+              "height": 900
+            },
+            "attrs": {
+              "label": {
+                "text": "Railway private network"
+              }
+            },
+            "visible": true,
+            "shape": "trust-boundary-box",
+            "id": "11111111-0000-4000-8000-000000000002",
+            "zIndex": -1,
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "Railway private network",
+              "description": "API, worker, Postgres and Redis. Only the API and web are published.",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "position": {
+              "x": 1360,
+              "y": 380
+            },
+            "size": {
+              "width": 250,
+              "height": 220
+            },
+            "attrs": {
+              "label": {
+                "text": "Third party"
+              }
+            },
+            "visible": true,
+            "shape": "trust-boundary-box",
+            "id": "11111111-0000-4000-8000-000000000003",
+            "zIndex": -1,
+            "data": {
+              "type": "tm.BoundaryBox",
+              "name": "Third party",
+              "description": "Outside our control; data sent here has left the system.",
+              "isTrustBoundary": true,
+              "hasOpenThreats": false
+            }
+          },
+          {
+            "position": {
+              "x": 60,
+              "y": 140
+            },
+            "size": {
+              "width": 120,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Student"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "actor",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000006"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000007"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000008"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000009"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000010",
+            "zIndex": 1,
+            "data": {
+              "name": "Student",
+              "description": "Works investigations and is graded on them. The majority of accounts.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000004",
+                  "title": "Credential stuffing against student accounts",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "Login takes an email and password. Reused credentials from other breaches let an attacker in as a real student, taking their progress, certificates and cohort membership.",
+                  "mitigation": "Argon2id password hashing; per-identifier rate limiting and account lockout on repeated failures; email verification required before scored work counts.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 1,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000005",
+                  "title": "Student denies submitting an investigation",
+                  "status": "Mitigated",
+                  "severity": "Low",
+                  "type": "Repudiation",
+                  "description": "A student disputes a score by claiming they never submitted, or that the platform graded work they did not do.",
+                  "mitigation": "Every scoring and submission action is written to the audit log with actor id, IP and correlation id, and the score row records what was submitted.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 2,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Actor",
+              "providesAuthentication": true
+            }
+          },
+          {
+            "position": {
+              "x": 60,
+              "y": 350
+            },
+            "size": {
+              "width": 120,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Instructor / Org admin"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "actor",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000012"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000013"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000014"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000015"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000016",
+            "zIndex": 1,
+            "data": {
+              "name": "Instructor / Org admin",
+              "description": "Runs cohorts, invites members, reviews and can reopen submissions.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000011",
+                  "title": "Instructor reaches another organisation’s cohort",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "An instructor guesses or is given the id of a cohort, session or gradebook belonging to a different tenant and reads or grades work that is not theirs.",
+                  "mitigation": "Cohort and session access runs through SessionAccessService, which scopes by organisation and cohort membership, and is applied by the WebSocket gateway as well as every REST route.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 3,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Actor",
+              "providesAuthentication": true
+            }
+          },
+          {
+            "position": {
+              "x": 60,
+              "y": 560
+            },
+            "size": {
+              "width": 120,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Platform admin"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "actor",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000019"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000020"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000021"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000022"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000023",
+            "zIndex": 1,
+            "data": {
+              "name": "Platform admin",
+              "description": "Full operator access: users, organisations, settings, audit log, analytics.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000017",
+                  "title": "Takeover of a platform admin account",
+                  "status": "Mitigated",
+                  "severity": "Critical",
+                  "type": "Spoofing",
+                  "description": "A single stolen admin password would expose every tenant’s data and allow silent changes to grading and accounts.",
+                  "mitigation": "TOTP enrolment is mandatory for platform_admin — login returns an enrolment challenge instead of tokens until it is completed, so no admin session can exist without a second factor.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 4,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000018",
+                  "title": "Lower role reaches an admin endpoint",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Elevation of privilege",
+                  "description": "A student or instructor calls an /admin route directly and receives operator-wide data instead of their own scope.",
+                  "mitigation": "AdminController is gated at class level with JwtAuthGuard plus RolesGuard and @Roles(‘platform_admin’); verified against the running service — a student token receives 403.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 5,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Actor",
+              "providesAuthentication": true
+            }
+          },
+          {
+            "position": {
+              "x": 300,
+              "y": 330
+            },
+            "size": {
+              "width": 130,
+              "height": 130
+            },
+            "attrs": {
+              "text": {
+                "text": "Browser app\n(React SPA)"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "process",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000026"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000027"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000028"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000029"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000030",
+            "zIndex": 1,
+            "data": {
+              "name": "Browser app\n(React SPA)",
+              "description": "Holds the access and refresh tokens and calls the API directly.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000024",
+                  "title": "Tokens in localStorage are readable by any injected script",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "The access and refresh tokens are kept in localStorage so they survive a reload. Any successful XSS — a rendered scenario field, an instructor-authored string, a dependency — can read both and impersonate the user from anywhere until the refresh token expires, which is thirty days.",
+                  "mitigation": "Not currently mitigated beyond React’s default escaping. Options: move the refresh token to an HttpOnly, SameSite=Strict cookie so script cannot read it; add a Content-Security-Policy; keep auditing any place scenario or user-authored content reaches dangerouslySetInnerHTML.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 6,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000025",
+                  "title": "Concurrent refresh revokes the user’s own session",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Denial of service",
+                  "description": "The access token lives fifteen minutes and the case workspace opens six queries at once. When it expired each one started its own refresh with the same token; the first rotated it and the rest looked like a replayed token, so the server revoked the whole chain and signed the user out mid-investigation, roughly every fifteen minutes.",
+                  "mitigation": "The client now shares one in-flight refresh between all callers and re-reads the pair from localStorage before using it, so other tabs cannot present a stale copy. Measured: six callers now produce one refresh request.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 7,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Process",
+              "handlesCardPayment": false,
+              "handlesGoodsOrServices": false,
+              "isWebApplication": true,
+              "privilegeLevel": "user"
+            }
+          },
+          {
+            "position": {
+              "x": 650,
+              "y": 120
+            },
+            "size": {
+              "width": 130,
+              "height": 130
+            },
+            "attrs": {
+              "text": {
+                "text": "Web SSR\n(Nitro / Node)"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "process",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000032"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000033"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000034"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000035"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000036",
+            "zIndex": 1,
+            "data": {
+              "name": "Web SSR\n(Nitro / Node)",
+              "description": "Server-renders the app. One long-lived process shared by every visitor.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000031",
+                  "title": "Session leak through module-level token state during SSR",
+                  "status": "Open",
+                  "severity": "Critical",
+                  "type": "Information disclosure",
+                  "description": "The API client keeps the current tokens in module-scope variables. In the browser that is per-tab, but the SSR process is long-lived and shared across every concurrent visitor, so importing those token functions from a server-only path — a route loader, a server function — would place one visitor’s session where every other request can read it.",
+                  "mitigation": "Today this is prevented only by a comment in apps/web/src/lib/api-client.ts and by nothing importing it server-side. Worth enforcing: a lint rule or a server/client module split, so the guarantee does not depend on the next person reading the warning.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 8,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Process",
+              "handlesCardPayment": false,
+              "handlesGoodsOrServices": false,
+              "isWebApplication": true,
+              "privilegeLevel": "anonymous"
+            }
+          },
+          {
+            "position": {
+              "x": 650,
+              "y": 420
+            },
+            "size": {
+              "width": 140,
+              "height": 140
+            },
+            "attrs": {
+              "text": {
+                "text": "API\n(NestJS)"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "process",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000041"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000042"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000043"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000044"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000045",
+            "zIndex": 1,
+            "data": {
+              "name": "API\n(NestJS)",
+              "description": "REST under /api/v1 plus a WebSocket at /ws. All authorisation decisions.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000037",
+                  "title": "Deleted or suspended account keeps working",
+                  "status": "Mitigated",
+                  "severity": "Critical",
+                  "type": "Elevation of privilege",
+                  "description": "Marking a user deleted, suspending them, or suspending their organisation changed a flag that the authentication path did not read. A removed account could still sign in, and a suspended one kept a valid access token for up to fifteen minutes.",
+                  "mitigation": "isAccountActive now checks deletedAt, then user status, then organisation status, on both login and refresh; suspending an organisation revokes its members’ sessions in the same transaction. Proven against production before and after.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 9,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000038",
+                  "title": "Client submits its own score",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Grading decides certificates and leaderboard position. A client that could post its own techniques, evidence counts or verdict result would simply award itself full marks.",
+                  "mitigation": "The client submits only its findings; the score is computed server-side from the session’s own telemetry against the scenario ground truth, hint penalties come from server-side unlock rows, and a session that is no longer active rejects every write path including hint unlocks.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 10,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000039",
+                  "title": "Rate limiter failure takes down authentication",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "The rate limiter runs before the handler on both signup and login and is backed by Redis. On 2026-10-04 the Redis volume was forced read-only, every write was refused, and both signup and login returned 500 for about a day.",
+                  "mitigation": "Advisory counters (rate limits, lockouts) now fail open and log at error level; load-bearing tokens fail closed with a 503 and Retry-After. Readiness performs a real write-read-delete against Redis rather than a PING, and a watcher alerts on the transition.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 11,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000040",
+                  "title": "Admin action cannot be independently proven",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Repudiation",
+                  "description": "Suspensions, deletions, grading overrides and settings changes are recorded by the same service that performs them. An operator with database access could remove or alter the record of what they did.",
+                  "mitigation": "The audit log captures actor, IP and correlation id, but has no integrity protection. If operator actions need to be defensible against an insider, the log needs append-only storage or signed, externally shipped entries.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 12,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Process",
+              "handlesCardPayment": false,
+              "handlesGoodsOrServices": false,
+              "isWebApplication": true,
+              "privilegeLevel": "service"
+            }
+          },
+          {
+            "position": {
+              "x": 650,
+              "y": 720
+            },
+            "size": {
+              "width": 130,
+              "height": 130
+            },
+            "attrs": {
+              "text": {
+                "text": "Worker\n(BullMQ)"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "process",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000048"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000049"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000050"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000051"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000052",
+            "zIndex": 1,
+            "data": {
+              "name": "Worker\n(BullMQ)",
+              "description": "Generates scenario telemetry, runs the alert engine, scores submissions.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000046",
+                  "title": "Queue job injection",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Jobs are taken from Redis and acted on with full database rights. Anything that can write to the queue — a compromised service on the private network, an exposed Redis — can make the worker generate telemetry or rescore a session it was never asked to.",
+                  "mitigation": "Redis is not published and sits on the private network. Jobs are not authenticated or signed; worth deciding whether the queue is trusted by position alone, and whether job payloads should be validated against the session they claim to belong to.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 13,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000047",
+                  "title": "Announcement fan-out is unbatched",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Denial of service",
+                  "description": "An organisation announcement sends to every recipient with a single Promise.all over the whole list. A large cohort produces hundreds of simultaneous provider calls, which will hit the email provider’s rate limit and can get the sending domain throttled.",
+                  "mitigation": "Send in batches with a bounded concurrency, or enqueue one job per recipient so retries and backoff apply per message.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 14,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Process",
+              "handlesCardPayment": false,
+              "handlesGoodsOrServices": false,
+              "isWebApplication": false,
+              "privilegeLevel": "service"
+            }
+          },
+          {
+            "position": {
+              "x": 1060,
+              "y": 160
+            },
+            "size": {
+              "width": 170,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "PostgreSQL"
+              },
+              "topLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              },
+              "bottomLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "store",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000055"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000056"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000057"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000058"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000059",
+            "zIndex": 1,
+            "data": {
+              "name": "PostgreSQL",
+              "description": "Accounts, organisations, cohorts, sessions, telemetry, scores.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000053",
+                  "title": "Application role has more rights than it needs",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "A SQL injection or compromised API process inherits whatever the connection can do. If that role owns the schema, it can also drop or rewrite it.",
+                  "mitigation": "The application connects as the least-privilege socverse_app role; DDL and migrations use a separate owner role via MIGRATE_DATABASE_URL. Queries go through Prisma, and the one raw query in search is parameterised.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 15,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000054",
+                  "title": "Personal data of minors and students at rest",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "Accounts hold names, email addresses, profile photos as data URLs, career details and a full record of each person’s performance. Training platforms are frequently used by students, and the breach impact is personal rather than financial.",
+                  "mitigation": "Storage is encrypted at rest by the provider. Not yet decided: retention for deleted accounts, whether avatarDataUrl should be in the row at all, and what the export/erasure path is if a data subject asks.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 16,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Store",
+              "isALog": false,
+              "isEncrypted": true,
+              "isSigned": false,
+              "storesCredentials": true,
+              "storesInventory": false
+            }
+          },
+          {
+            "position": {
+              "x": 1060,
+              "y": 320
+            },
+            "size": {
+              "width": 170,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Scenario ground truth\n(JSONB)"
+              },
+              "topLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              },
+              "bottomLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "store",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000062"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000063"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000064"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000065"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000066",
+            "zIndex": 1,
+            "data": {
+              "name": "Scenario ground truth\n(JSONB)",
+              "description": "required_techniques, expected verdict, evidence flags, hint text.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000060",
+                  "title": "The answers reach the student",
+                  "status": "Open",
+                  "severity": "Critical",
+                  "type": "Information disclosure",
+                  "description": "groundTruthDefinition holds the required techniques and the expected verdict, which together are forty per cent of the mark, plus the hint text that is supposed to cost score to read. Any endpoint that returns a scenario version whole — the scenario catalogue, the builder, an export, a debug route — hands over the answer key. The repository itself was public until recently, with the same values in the seed.",
+                  "mitigation": "The repository is now private, and the hints endpoint returns text only for unlocked indexes. Still to do: assert in a test that no student-reachable response contains required_techniques, required_verdict or hint text for a locked hint, so a future endpoint cannot quietly reintroduce it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 17,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000061",
+                  "title": "Ground truth edited to change grades",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Tampering",
+                  "description": "Scenario content is authored through the builder. Someone who can write a scenario version can change what counts as correct, and with it every score computed afterwards.",
+                  "mitigation": "Scenario authoring is restricted by role. Scores are not recomputed retroactively, so an edit affects future submissions only. Consider versioning ground truth immutably once a session has been started against it.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 18,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Store",
+              "isALog": false,
+              "isEncrypted": false,
+              "isSigned": false,
+              "storesCredentials": false,
+              "storesInventory": false
+            }
+          },
+          {
+            "position": {
+              "x": 1060,
+              "y": 480
+            },
+            "size": {
+              "width": 170,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Audit log"
+              },
+              "topLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              },
+              "bottomLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "store",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000068"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000069"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000070"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000071"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000072",
+            "zIndex": 1,
+            "data": {
+              "name": "Audit log",
+              "description": "Append-only record of administrative and investigation actions.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000067",
+                  "title": "The log is append-only by convention, not by storage",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "Nothing writes updates or deletes to the audit table, but nothing prevents them either. It is an ordinary table that the application role can modify.",
+                  "mitigation": "Revoke UPDATE and DELETE on audit_logs from the application role, or ship entries to storage the application cannot reach.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 19,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Store",
+              "isALog": true,
+              "isEncrypted": true,
+              "isSigned": false,
+              "storesCredentials": false,
+              "storesInventory": false
+            }
+          },
+          {
+            "position": {
+              "x": 1060,
+              "y": 640
+            },
+            "size": {
+              "width": 170,
+              "height": 60
+            },
+            "attrs": {
+              "text": {
+                "text": "Redis"
+              },
+              "topLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              },
+              "bottomLine": {
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "store",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000075"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000076"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000077"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000078"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000079",
+            "zIndex": 1,
+            "data": {
+              "name": "Redis",
+              "description": "Rate limits, lockouts, verification/reset/MFA tokens, job queue, pub-sub.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000073",
+                  "title": "Password reset token replayed",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "A reset token also clears TOTP, so replaying one is a route past the second factor as well as the password.",
+                  "mitigation": "Tokens are single-use with a short TTL. Email verification tokens move to a used marker rather than being deleted, so a second click can be told the truth — you are verified — instead of looking like forgery; the marker grants nothing.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 20,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000074",
+                  "title": "Authentication tokens held unencrypted",
+                  "status": "Open",
+                  "severity": "High",
+                  "type": "Information disclosure",
+                  "description": "Verification, reset and MFA challenge tokens live in Redis in the clear. Anyone who can read the instance can take over accounts without touching the database.",
+                  "mitigation": "Redis is not published and has no external route. It is not authenticated or TLS-encrypted on the private network; worth enabling requirepass and TLS so a single misconfigured egress is not sufficient.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 21,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Store",
+              "isALog": false,
+              "isEncrypted": false,
+              "isSigned": false,
+              "storesCredentials": true,
+              "storesInventory": false
+            }
+          },
+          {
+            "position": {
+              "x": 1400,
+              "y": 440
+            },
+            "size": {
+              "width": 130,
+              "height": 130
+            },
+            "attrs": {
+              "text": {
+                "text": "Resend\n(email provider)"
+              },
+              "body": {
+                "stroke": "#333333",
+                "strokeWidth": 1.5,
+                "strokeDasharray": null
+              }
+            },
+            "visible": true,
+            "shape": "process",
+            "ports": {
+              "groups": {
+                "top": {
+                  "position": "top",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "right": {
+                  "position": "right",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "bottom": {
+                  "position": "bottom",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                },
+                "left": {
+                  "position": "left",
+                  "attrs": {
+                    "circle": {
+                      "r": 4,
+                      "magnet": true,
+                      "stroke": "#5F95FF",
+                      "strokeWidth": 1,
+                      "fill": "#fff",
+                      "style": {
+                        "visibility": "hidden"
+                      }
+                    }
+                  }
+                }
+              },
+              "items": [
+                {
+                  "group": "top",
+                  "id": "11111111-0000-4000-8000-000000000082"
+                },
+                {
+                  "group": "right",
+                  "id": "11111111-0000-4000-8000-000000000083"
+                },
+                {
+                  "group": "bottom",
+                  "id": "11111111-0000-4000-8000-000000000084"
+                },
+                {
+                  "group": "left",
+                  "id": "11111111-0000-4000-8000-000000000085"
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000086",
+            "zIndex": 1,
+            "data": {
+              "name": "Resend\n(email provider)",
+              "description": "Delivers verification, reset, invitation and announcement email.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": true,
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000080",
+                  "title": "Phishing sent as threatlensapp.com",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "Password reset and verification mail trains people to click links from this domain. An unauthenticated domain lets anyone send convincing mail as ThreatLens.",
+                  "mitigation": "SPF on the root and the sending subdomain, DKIM signing on the root, and DMARC with relaxed alignment so both can pass independently. Currently p=none while the newly cut domain builds reputation — return it to p=quarantine once reports show consistent delivery.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 22,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000081",
+                  "title": "Account email addresses held by a third party",
+                  "status": "Open",
+                  "severity": "Medium",
+                  "type": "Information disclosure",
+                  "description": "Every address, display name and invitation lands in the provider’s logs and is retained under their policy, not ours.",
+                  "mitigation": "Unavoidable with a hosted sender; the decision is which data goes into message bodies. Keep personal detail out of subjects and preheaders, which are retained and previewed most widely.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 23,
+                  "score": ""
+                }
+              ],
+              "type": "tm.Process",
+              "handlesCardPayment": false,
+              "handlesGoodsOrServices": false,
+              "isWebApplication": false,
+              "privilegeLevel": "third-party"
+            }
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Uses",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Uses",
+              "description": "Browser session.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000087",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000010",
+              "port": "11111111-0000-4000-8000-000000000007"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000030",
+              "port": "11111111-0000-4000-8000-000000000029"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Uses",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Uses",
+              "description": "Browser session.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000088",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000016",
+              "port": "11111111-0000-4000-8000-000000000013"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000030",
+              "port": "11111111-0000-4000-8000-000000000029"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Uses",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Uses",
+              "description": "Browser session.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000089",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000023",
+              "port": "11111111-0000-4000-8000-000000000020"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000030",
+              "port": "11111111-0000-4000-8000-000000000029"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Page load",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Page load",
+              "description": "Server-rendered HTML and assets.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000090",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000030",
+              "port": "11111111-0000-4000-8000-000000000026"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000036",
+              "port": "11111111-0000-4000-8000-000000000035"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "REST + WebSocket\n(bearer token)",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "REST + WebSocket\n(bearer token)",
+              "description": "All application traffic, including /ws for live investigation events.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": true,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS / WSS",
+              "threats": [
+                {
+                  "id": "11111111-0000-4000-8000-000000000091",
+                  "title": "WebSocket token leaking through the URL",
+                  "status": "Mitigated",
+                  "severity": "High",
+                  "type": "Spoofing",
+                  "description": "Authenticating a socket with ?token= puts a live credential into proxy logs, server access logs and browser history, where it long outlives the request.",
+                  "mitigation": "The socket connects with a session id only and authenticates on a first message frame; the connection is then authorised with the same SessionAccessService check the REST routes use.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 24,
+                  "score": ""
+                },
+                {
+                  "id": "11111111-0000-4000-8000-000000000092",
+                  "title": "Cross-origin request from a hostile page",
+                  "status": "Mitigated",
+                  "severity": "Medium",
+                  "type": "Tampering",
+                  "description": "A page the user is tricked into visiting issues requests against the API using the session it finds.",
+                  "mitigation": "CORS is restricted to the configured WEB_ORIGIN, and the API takes bearer tokens rather than cookies, so a cross-site request carries no ambient credential.",
+                  "modelType": "STRIDE",
+                  "new": false,
+                  "number": 25,
+                  "score": ""
+                }
+              ]
+            },
+            "id": "11111111-0000-4000-8000-000000000093",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000030",
+              "port": "11111111-0000-4000-8000-000000000027"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000044"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Server-side fetch",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Server-side fetch",
+              "description": "Rendering data for the first paint.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000094",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000036",
+              "port": "11111111-0000-4000-8000-000000000033"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000041"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Prisma",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Prisma",
+              "description": "Application queries as the least-privilege role.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": true,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 5432",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000095",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000042"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000059",
+              "port": "11111111-0000-4000-8000-000000000058"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Reads answers",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Reads answers",
+              "description": "Scoring and hint unlocking read the ground truth.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 5432",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000096",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000042"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000066",
+              "port": "11111111-0000-4000-8000-000000000065"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Writes",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Writes",
+              "description": "Administrative and investigation events.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 5432",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000097",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000042"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000072",
+              "port": "11111111-0000-4000-8000-000000000071"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Tokens, limits,\nqueue",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Tokens, limits,\nqueue",
+              "description": "Auth tokens, rate limits, job enqueue, pub-sub.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": true,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 6379",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000098",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000043"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000079",
+              "port": "11111111-0000-4000-8000-000000000078"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {
+                  "name": "block"
+                },
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Jobs",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Jobs",
+              "description": "Telemetry generation, alert correlation, scoring.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": true,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 6379",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000099",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000079",
+              "port": "11111111-0000-4000-8000-000000000077"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000052",
+              "port": "11111111-0000-4000-8000-000000000049"
+            },
+            "vertices": []
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Writes telemetry\nand scores",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Writes telemetry\nand scores",
+              "description": "Generated events and the computed score.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": false,
+              "protocol": "TCP 5432",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000100",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000052",
+              "port": "11111111-0000-4000-8000-000000000049"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000059",
+              "port": "11111111-0000-4000-8000-000000000057"
+            },
+            "vertices": [
+              {
+                "x": 960,
+                "y": 820
+              }
+            ]
+          },
+          {
+            "shape": "flow",
+            "attrs": {
+              "line": {
+                "stroke": "#333333",
+                "targetMarker": {
+                  "name": "block"
+                },
+                "sourceMarker": {},
+                "strokeDasharray": null
+              }
+            },
+            "width": 200,
+            "height": 100,
+            "zIndex": 10,
+            "labels": [
+              {
+                "markup": [
+                  {
+                    "tagName": "ellipse",
+                    "selector": "labelBody"
+                  },
+                  {
+                    "tagName": "text",
+                    "selector": "labelText"
+                  }
+                ],
+                "attrs": {
+                  "labelText": {
+                    "text": "Send email",
+                    "textAnchor": "middle",
+                    "textVerticalAnchor": "middle"
+                  },
+                  "labelBody": {
+                    "ref": "labelText",
+                    "refRx": "50%",
+                    "refRy": "60%",
+                    "fill": "#fff",
+                    "strokeWidth": 0
+                  }
+                },
+                "position": {
+                  "distance": 0.5,
+                  "args": {
+                    "keepGradient": true,
+                    "ensureLegibility": true
+                  }
+                }
+              }
+            ],
+            "connector": "smooth",
+            "data": {
+              "type": "tm.Flow",
+              "name": "Send email",
+              "description": "Verification, reset, invitations, announcements.",
+              "outOfScope": false,
+              "reasonOutOfScope": "",
+              "hasOpenThreats": false,
+              "isBidirectional": false,
+              "isEncrypted": true,
+              "isPublicNetwork": true,
+              "protocol": "HTTPS",
+              "threats": []
+            },
+            "id": "11111111-0000-4000-8000-000000000101",
+            "source": {
+              "cell": "11111111-0000-4000-8000-000000000045",
+              "port": "11111111-0000-4000-8000-000000000043"
+            },
+            "target": {
+              "cell": "11111111-0000-4000-8000-000000000086",
+              "port": "11111111-0000-4000-8000-000000000084"
+            },
+            "vertices": [
+              {
+                "x": 1300,
+                "y": 880
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "diagramTop": 1,
+    "reviewer": "",
+    "threatTop": 25
+  }
+}
