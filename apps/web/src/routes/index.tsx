@@ -657,6 +657,7 @@ function PricingCard({
   name,
   price,
   unit,
+  wasPrice,
   note,
   savings,
   body,
@@ -669,6 +670,7 @@ function PricingCard({
   name: string;
   price: string;
   unit: string;
+  wasPrice?: string;
   note?: string;
   savings?: string;
   body: string;
@@ -701,6 +703,11 @@ function PricingCard({
             {price}
           </span>
           {unit && <span className="text-[13px] text-white/45">{unit}</span>}
+          {wasPrice && (
+            <span className="text-[13px] text-white/35 line-through" aria-label={`was ${wasPrice}`}>
+              {wasPrice}
+            </span>
+          )}
         </div>
         {note && (
           <div className="mt-1 text-[12px] text-white/45" style={monoFont}>
@@ -798,6 +805,7 @@ function Pricing() {
                 name={plan.name}
                 price={d.headline}
                 unit={d.unit}
+                wasPrice={d.wasPrice}
                 note={d.note}
                 savings={d.savings}
                 body={plan.positioning}

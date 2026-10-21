@@ -119,13 +119,19 @@ export function formatNgn(amountNgn: number): string {
 }
 
 interface PriceDisplay {
-  /** Headline, e.g. "₦10,000" or "Custom". */
+  /** Headline, e.g. "₦10,000" or "Custom". On annual this is the discounted price. */
   headline: string;
   /** Unit after the headline, e.g. "/month" or "/user/month". Empty for custom. */
   unit: string;
+  /**
+   * What the same year costs at the monthly rate, struck through beside the headline — so
+   * "discounted" is something the reader can see rather than a claim they have to take on
+   * trust. Only set when there is a real saving.
+   */
+  wasPrice?: string;
   /** Supporting line 1, e.g. "₦8,333/month, billed annually". */
   note?: string;
-  /** Supporting line 2, e.g. "Save ₦20,000 annually". */
+  /** Supporting line 2, e.g. "17% off — save ₦20,000". */
   savings?: string;
 }
 
@@ -151,16 +157,21 @@ export function priceDisplay(plan: Plan, period: BillingPeriod): PriceDisplay {
 
   const annual = plan.prices.annual.amountNgn;
   const monthly = plan.prices.monthly.amountNgn;
+  // The honest baseline for a discount is what the same year costs paying monthly, not a
+  // list price nobody is charged.
+  const yearAtMonthlyRate = monthly * 12;
+  const savingsPerYear = yearAtMonthlyRate - annual;
+  const discountPercent = Math.round((savingsPerYear / yearAtMonthlyRate) * 100);
   const monthlyEquivalent = Math.round(annual / 12);
-  const savingsPerYear = monthly * 12 - annual;
+  const discounted = savingsPerYear > 0;
 
   return {
     headline: formatNgn(annual),
     unit: `${unitSuffix}/year`,
+    wasPrice: discounted ? formatNgn(yearAtMonthlyRate) : undefined,
     note: `${formatNgn(monthlyEquivalent)}${unitSuffix}/month, billed annually`,
-    savings:
-      savingsPerYear > 0
-        ? `Save ${formatNgn(savingsPerYear)}${perUser ? " per user" : ""} annually`
-        : undefined,
+    savings: discounted
+      ? `${discountPercent}% off — save ${formatNgn(savingsPerYear)}${perUser ? " per user" : ""}`
+      : undefined,
   };
 }
