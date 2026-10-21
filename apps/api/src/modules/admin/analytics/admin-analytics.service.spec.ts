@@ -1,5 +1,10 @@
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { BillingService } from '../../billing/billing.service';
+
+// These tests assert the no-provider behaviour, so the billing seam is built without a
+// Paystack key. Prisma is never reached on that path.
+const unconfiguredBilling = () =>
+  new BillingService({} as never, { isConfigured: () => false } as never);
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { CustomerAnalyticsQueryDto } from '../dto/customer-analytics-query.dto';
 
@@ -39,7 +44,7 @@ describe('AdminAnalyticsService.getOverview', () => {
   // depends on the fixture while the filter is what was missing.
   it('excludes deleted organizations from the platform totals', async () => {
     const prisma = overviewPrisma({ orgCount: 3 });
-    const service = new AdminAnalyticsService(prisma, new BillingService());
+    const service = new AdminAnalyticsService(prisma, unconfiguredBilling());
 
     await service.getOverview();
 
@@ -59,7 +64,7 @@ describe('AdminAnalyticsService.getOverview', () => {
       ],
     });
 
-    const service = new AdminAnalyticsService(prisma, new BillingService());
+    const service = new AdminAnalyticsService(prisma, unconfiguredBilling());
     const overview = await service.getOverview();
 
     expect(overview.users.byRole).toEqual({
@@ -74,7 +79,7 @@ describe('AdminAnalyticsService.getOverview', () => {
   it('reports revenue and subscriptions as unavailable while there is no payment provider', async () => {
     const service = new AdminAnalyticsService(
       overviewPrisma({}),
-      new BillingService(),
+      unconfiguredBilling(),
     );
     const overview = await service.getOverview();
 
@@ -149,7 +154,7 @@ describe('AdminAnalyticsService.getCustomers', () => {
       },
     } as unknown as PrismaService;
 
-    return new AdminAnalyticsService(prisma, new BillingService());
+    return new AdminAnalyticsService(prisma, unconfiguredBilling());
   }
 
   it('returns organizations before individuals on the first page', async () => {

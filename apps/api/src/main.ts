@@ -13,6 +13,11 @@ async function bootstrap() {
   // fact) specifically so nothing logged during startup bypasses it.
   const app = await NestFactory.create(AppModule, {
     logger: new ScrubbingLogger(),
+    // Keeps the unparsed body on the request, which the Paystack webhook needs. Paystack
+    // signs the exact bytes it sent, so a payload parsed here and re-serialised there
+    // differs by key order or whitespace and never matches — and it fails looking precisely
+    // like a wrong secret key, which is an afternoon nobody gets back.
+    rawBody: true,
   });
 
   app.setGlobalPrefix('api/v1', {

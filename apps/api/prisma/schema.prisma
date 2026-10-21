@@ -72,6 +72,7 @@ model Organization {
   cohorts               Cohort[]
   announcements         Announcement[]
   organizationScenarios OrganizationScenario[]
+  subscription          Subscription?
 
   @@map("organizations")
 }
@@ -139,36 +140,36 @@ model OrganizationInvite {
 }
 
 model User {
-  id                   String              @id @default(uuid()) @db.Uuid
-  orgId                String?             @map("org_id") @db.Uuid
+  id                       String              @id @default(uuid()) @db.Uuid
+  orgId                    String?             @map("org_id") @db.Uuid
   // Standing within `orgId` — see OrgMembershipStatus. Meaningless while orgId is null.
-  orgMembershipStatus  OrgMembershipStatus @default(active) @map("org_membership_status")
+  orgMembershipStatus      OrgMembershipStatus @default(active) @map("org_membership_status")
   // When the *current* orgId membership began — distinct from `createdAt`, which is the
   // ThreatLens account's own age and predates joining any particular org. Set alongside
   // orgId (org creation, invite acceptance) and cleared alongside it (removeMember), so it
   // never survives into an unrelated later membership.
-  orgJoinedAt          DateTime?           @map("org_joined_at")
-  email                String              @unique @db.Citext
-  passwordHash         String?             @map("password_hash")
-  role                 UserRole            @default(student)
-  displayName          String              @map("display_name")
-  status               UserStatus          @default(active)
-  emailVerifiedAt      DateTime?           @map("email_verified_at")
-  sessionVersion       Int                 @default(1) @map("session_version")
-  lastLoginAt          DateTime?           @map("last_login_at")
+  orgJoinedAt              DateTime?           @map("org_joined_at")
+  email                    String              @unique @db.Citext
+  passwordHash             String?             @map("password_hash")
+  role                     UserRole            @default(student)
+  displayName              String              @map("display_name")
+  status                   UserStatus          @default(active)
+  emailVerifiedAt          DateTime?           @map("email_verified_at")
+  sessionVersion           Int                 @default(1) @map("session_version")
+  lastLoginAt              DateTime?           @map("last_login_at")
   // Distinct from lastLoginAt: only touched by genuine investigation/learning work (see
   // ActivityTrackingService), never by login/polling/token-refresh/notifications. This is the
   // source of truth for both the "Active" presence indicator and inactivity-reminder emails —
   // login alone does not count as meaningful activity for either.
-  lastMeaningfulActivityAt DateTime?        @map("last_meaningful_activity_at")
+  lastMeaningfulActivityAt DateTime?           @map("last_meaningful_activity_at")
   // §15.1: TOTP-based MFA. mfaSecret is written at /auth/mfa/setup (pending) and only takes
   // effect once mfaEnabled flips true at /auth/mfa/enable. Recovery codes are stored hashed
   // (sha256) and consumed one-time, same spirit as the recovery-code pattern used elsewhere
   // (§15.3 scopes app-layer field encryption to sso_config/payment tokens, not this table,
   // so mfaSecret relies on disk-level encryption like the rest of the schema).
-  mfaEnabled           Boolean             @default(false) @map("mfa_enabled")
-  mfaSecret            String?             @map("mfa_secret")
-  mfaRecoveryCodesHash String[]            @default([]) @map("mfa_recovery_codes_hash")
+  mfaEnabled               Boolean             @default(false) @map("mfa_enabled")
+  mfaSecret                String?             @map("mfa_secret")
+  mfaRecoveryCodesHash     String[]            @default([]) @map("mfa_recovery_codes_hash")
 
   // Profile — all optional/additive, collected post-signup (see /welcome).
   // displayName above remains the name shown everywhere already built
@@ -230,6 +231,7 @@ model User {
   orgScenarioAssignments OrganizationScenarioAssignment[] @relation("OrgScenarioAssignmentUser")
   streakActivity         StreakActivity[]
   streak                 UserStreak?
+  subscription           Subscription?
 
   @@map("users")
 }
@@ -1634,4 +1636,122 @@ model UserStreak {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_streaks")
+}
+
+// ---------- Billing (Paystack) ----------
+
+enum BillingInterval {
+  monthly
+  annual
+}
+
+/// Mirrors what the application needs to decide access, not Paystack's own vocabulary — a
+/// provider swap should not require a migration here.
+enum SubscriptionStatus {
+  trialing
+  active
+  /// A renewal failed. Access continues until currentPeriodEnd, then lapses on its own.
+  past_due
+  /// Cancelled but paid up; access runs to the end of the period already bought.
+  cancelled
+  expired
+}
+
+enum PaymentStatus {
+  success
+  failed
+  refunded
+}
+
+/// One per billing customer — a user paying for themselves, or an organisation paying for
+/// seats. Exactly one of userId / orgId is set, enforced by a check constraint added in the
+/// migration, because Prisma cannot express "exactly one of these".
+///
+/// `currentPeriodEnd` is the only thing that grants access. Status is for display and for
+/// deciding whether to chase a renewal; a past_due subscription keeps working until the
+/// period that was actually paid for runs out, which is both fairer and simpler than
+/// revoking on the first failed charge.
+model Subscription {
+  id       String             @id @default(uuid()) @db.Uuid
+  userId   String?            @unique @map("user_id") @db.Uuid
+  orgId    String?            @unique @map("org_id") @db.Uuid
+  planId   String             @map("plan_id")
+  interval BillingInterval
+  status   SubscriptionStatus @default(active)
+  /// Seats bought, for an organisation. Always 1 for an individual.
+  seats    Int                @default(1)
+
+  /// Paystack's identifiers. The subscription code is null for an annual plan, which is a
+  /// one-off charge rather than a Paystack subscription — storing a card for twelve months
+  /// to charge it once invites a stale-card failure on the single renewal that matters most.
+  paystackCustomerCode     String? @map("paystack_customer_code")
+  paystackSubscriptionCode String? @unique @map("paystack_subscription_code")
+  paystackPlanCode         String? @map("paystack_plan_code")
+
+  /// Access is granted while now() < currentPeriodEnd. Extended by a successful charge.
+  currentPeriodEnd DateTime  @map("current_period_end")
+  cancelledAt      DateTime? @map("cancelled_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  payments     Payment[]
+
+  @@index([status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+/// The money ledger. Written only by the webhook handler, never by a request from a browser
+/// claiming a payment succeeded — the client is told the outcome by Paystack's redirect, but
+/// only a signed webhook is allowed to move this table.
+///
+/// `reference` is Paystack's transaction reference and is unique, so a redelivered webhook
+/// cannot double-count revenue even if the dedupe table were lost.
+model Payment {
+  id             String  @id @default(uuid()) @db.Uuid
+  subscriptionId String? @map("subscription_id") @db.Uuid
+  /// Denormalised so revenue survives a subscription row being removed.
+  userId         String? @map("user_id") @db.Uuid
+  orgId          String? @map("org_id") @db.Uuid
+
+  reference  String        @unique
+  amountKobo Int           @map("amount_kobo")
+  currency   String        @default("NGN")
+  status     PaymentStatus
+  paidAt     DateTime?     @map("paid_at")
+  /// What the provider actually sent, kept for reconciliation and disputes.
+  raw        Json?
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([status, paidAt])
+  @@map("payments")
+}
+
+/// Every webhook delivery, recorded before it is acted on.
+///
+/// Paystack retries a delivery it did not get a prompt 200 for, so the same event arrives
+/// more than once as a matter of course. `dedupeKey` is a digest of the exact raw body, which
+/// makes a retry a no-op without needing the provider to supply a stable event id.
+///
+/// Rows are kept after processing rather than deleted: when a figure is disputed, the
+/// question is always "what did they actually send us, and when", and that answer has to
+/// survive the code that interpreted it.
+model WebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  provider    String    @default("paystack")
+  dedupeKey   String    @unique @map("dedupe_key")
+  eventType   String    @map("event_type")
+  payload     Json
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+  /// Set when handling threw. The row stays so a failed event can be found and replayed.
+  error       String?
+
+  @@index([provider, eventType, receivedAt])
+  @@map("webhook_events")
 }

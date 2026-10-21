@@ -163,7 +163,7 @@ export class AdminAnalyticsService {
         submissions,
         averageScorePercent: toNumber(scoreAgg._avg.overallPercent),
       },
-      revenue: this.billing.getPlatformRevenueSummary(),
+      revenue: await this.billing.getPlatformRevenueSummary(),
       generatedAt: now.toISOString(),
     };
   }
@@ -370,7 +370,8 @@ export class AdminAnalyticsService {
       ...orgs.map((o) => o.id),
       ...individuals.map((u) => u.id),
     ];
-    const revenueByCustomer = this.billing.getRevenueByCustomer(customerIds);
+    const revenueByCustomer =
+      await this.billing.getRevenueByCustomer(customerIds);
 
     const rowFor = (
       id: string,

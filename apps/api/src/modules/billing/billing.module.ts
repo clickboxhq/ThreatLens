@@ -1,10 +1,25 @@
 import { Module } from '@nestjs/common';
 import { BillingService } from './billing.service';
+import { BillingWebhookService } from './billing-webhook.service';
+import { CheckoutService } from './checkout.service';
+import { PaystackClient } from './paystack.client';
+import { SubscriptionService } from './subscription.service';
+import {
+  BillingController,
+  PaystackWebhookController,
+} from './billing.controller';
 
-// Exported (not @Global) — only the platform-admin analytics surface consumes it today. A
-// future real billing page / webhook controller would be added here.
+// SubscriptionService is exported so feature gating elsewhere can ask one question — does
+// this account have paid access — without every module learning what a subscription is.
 @Module({
-  providers: [BillingService],
-  exports: [BillingService],
+  controllers: [BillingController, PaystackWebhookController],
+  providers: [
+    BillingService,
+    BillingWebhookService,
+    CheckoutService,
+    PaystackClient,
+    SubscriptionService,
+  ],
+  exports: [BillingService, SubscriptionService],
 })
 export class BillingModule {}
