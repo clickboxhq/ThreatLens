@@ -26,6 +26,7 @@
     "prisma:seed": "prisma db seed",
     "admin:grant": "ts-node prisma/grant-admin.ts",
     "admin:reset-mfa": "ts-node prisma/reset-mfa.ts",
+    "admin:audit-sweep": "ts-node prisma/audit-sweep.ts",
     "docs:sync": "ts-node prisma/sync-docs.ts",
     "test:e2e:local": "node scripts/e2e-local.mjs"
   },
