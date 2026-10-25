@@ -27,6 +27,7 @@
     "admin:grant": "ts-node prisma/grant-admin.ts",
     "admin:reset-mfa": "ts-node prisma/reset-mfa.ts",
     "admin:audit-sweep": "ts-node prisma/audit-sweep.ts",
+    "billing:check": "ts-node prisma/billing-check.ts",
     "docs:sync": "ts-node prisma/sync-docs.ts",
     "test:e2e:local": "node scripts/e2e-local.mjs"
   },
