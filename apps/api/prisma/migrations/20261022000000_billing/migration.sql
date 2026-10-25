@@ -21,6 +21,7 @@ CREATE TABLE "subscriptions" (
     "paystack_authorization_code" TEXT,
     "paystack_email_token" TEXT,
     "trial_ends_at" TIMESTAMP(3),
+    "trial_reminder_sent_at" TIMESTAMP(3),
     "current_period_end" TIMESTAMP(3) NOT NULL,
     "cancelled_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

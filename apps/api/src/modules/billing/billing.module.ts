@@ -5,6 +5,8 @@ import { CheckoutService } from './checkout.service';
 import { CancellationService } from './cancellation.service';
 import { PaystackClient } from './paystack.client';
 import { SubscriptionService } from './subscription.service';
+import { TrialReminderService } from './trial-reminder.service';
+import { EmailService } from '../../common/email/email.service';
 import {
   BillingController,
   PaystackWebhookController,
@@ -21,6 +23,11 @@ import {
     CancellationService,
     PaystackClient,
     SubscriptionService,
+    TrialReminderService,
+    // Provided here, not inherited: EmailService is per-module in this codebase, and a
+    // module that injects it without providing it compiles, passes its unit tests, and
+    // then fails at boot. app.module.spec is what catches that.
+    EmailService,
   ],
   exports: [BillingService, SubscriptionService],
 })

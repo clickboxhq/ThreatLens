@@ -567,3 +567,43 @@ export function cohortInviteEmail(input: {
     }),
   };
 }
+
+/**
+ * Sent before a free trial converts to a charge.
+ *
+ * The one email in this file whose job is to make cancelling easy. A card-upfront trial that
+ * charges without warning is the shape of thing people dispute with their bank rather than
+ * with you, and a chargeback costs the fee, the revenue and the sending reputation. Saying
+ * the amount and the date plainly, with the way out one click away, costs a fraction of one
+ * dispute.
+ */
+export function trialEndingEmail(input: {
+  displayName: string;
+  amount: string;
+  chargeDate: string;
+  manageUrl: string;
+}): RenderedEmail {
+  const name = input.displayName.trim().split(/\s+/)[0] || 'there';
+
+  return {
+    subject: `Your ThreatLens trial ends ${input.chargeDate}`,
+    ...renderBoth({
+      preheader: `${input.amount} on ${input.chargeDate}. Cancel any time before then.`,
+      heading: `Your trial ends ${input.chargeDate}`,
+      paragraphs: [
+        `Hi ${escapeHtml(name)}, your free trial of ThreatLens ends on ${escapeHtml(
+          input.chargeDate,
+        )}.`,
+        `<strong>On that day we will charge ${escapeHtml(
+          input.amount,
+        )} to the card you used to start the trial</strong>, and monthly from then on.`,
+        'If ThreatLens is working for you, there is nothing to do — your investigations, scores and progress carry on uninterrupted.',
+        'If it is not, cancel before that date and you will not be charged. You keep access for the rest of the trial either way.',
+      ],
+      cta: { label: 'Manage or cancel', url: input.manageUrl },
+      fallbackUrl: input.manageUrl,
+      footnote:
+        'Cancelling takes one click and you do not need to contact anybody to do it.',
+    }),
+  };
+}

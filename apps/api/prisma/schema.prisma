@@ -1704,12 +1704,15 @@ model Subscription {
 
   /// When a free trial converts to a paid charge. Set only while status is trialing, and
   /// kept afterwards so support can answer "when was I first billed".
-  trialEndsAt      DateTime? @map("trial_ends_at")
+  trialEndsAt         DateTime? @map("trial_ends_at")
+  /// Claimed before the reminder is sent, not after, so two API replicas cannot both
+  /// email the same person about the same charge.
+  trialReminderSentAt DateTime? @map("trial_reminder_sent_at")
   /// Access is granted while now() < currentPeriodEnd. Extended by a successful charge.
-  currentPeriodEnd DateTime  @map("current_period_end")
-  cancelledAt      DateTime? @map("cancelled_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  currentPeriodEnd    DateTime  @map("current_period_end")
+  cancelledAt         DateTime? @map("cancelled_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
