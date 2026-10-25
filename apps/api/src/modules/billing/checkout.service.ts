@@ -127,7 +127,10 @@ export class CheckoutService {
       // it is refunded as soon as the authorisation comes back.
       amountKobo: trial ? CARD_VERIFICATION_KOBO : price.amountKobo,
       reference,
-      callbackUrl: `${webOrigin}/app/billing/return?reference=${reference}`,
+      // Back to the billing page itself rather than a dedicated return route: the page
+      // already knows how to describe every subscription state, and the reference only tells
+      // it to wait for the webhook rather than to trust the redirect.
+      callbackUrl: `${webOrigin}/app/billing?reference=${reference}`,
       // On a trial the subscription is created afterwards with a start date, so no plan goes
       // on this transaction. Monthly recurs through a Paystack plan; annual is a one-off
       // charge — see the Subscription model for why annual is not a stored-card plan.
