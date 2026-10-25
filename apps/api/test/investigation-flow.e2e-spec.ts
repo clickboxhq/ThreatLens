@@ -8,6 +8,7 @@ import {
   pollUntil,
 } from './helpers/e2e-app';
 import { EmailVerificationTokenStore } from '../src/modules/auth/email-verification-token.store';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 // The full walking-skeleton flow (§2.1–§2.12) driven entirely over HTTP against a real
 // Postgres + Redis + BullMQ — signup through a scored session — the one path unit tests
@@ -30,6 +31,7 @@ describe('Investigation flow (e2e)', () => {
   const password = 'e2e test password 12345';
 
   let accessToken: string;
+  let userId: string;
   let sessionId: string;
   let incidentId: string;
 
@@ -69,6 +71,35 @@ describe('Investigation flow (e2e)', () => {
     expect(login.body.accessToken).toBeTruthy();
     expect(login.body.user.emailVerified).toBe(true);
     accessToken = login.body.accessToken;
+    userId = signup.body.userId;
+  });
+
+  // ThreatLens has no free tier, so a fresh account reaches none of the product below until
+  // it is on a trial or paying. That is the paywall working, and this flow is about the
+  // investigation rather than about billing — so assert the gate is real, then put the
+  // account on a trial the way a real signup would.
+  it('is refused the product until it is on a trial, then granted it', async () => {
+    await http
+      .get('/api/v1/scenarios')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(402);
+
+    const prisma = app.get(PrismaService);
+    await prisma.subscription.create({
+      data: {
+        userId,
+        planId: 'individual',
+        interval: 'monthly',
+        status: 'trialing',
+        trialEndsAt: new Date(Date.now() + 7 * 86400000),
+        currentPeriodEnd: new Date(Date.now() + 7 * 86400000),
+      },
+    });
+
+    await http
+      .get('/api/v1/scenarios')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
   });
 
   it('creates a session and waits for the real Telemetry Generator + Alert Engine job chain to finish', async () => {
