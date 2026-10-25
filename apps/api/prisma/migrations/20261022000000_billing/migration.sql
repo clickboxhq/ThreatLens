@@ -3,6 +3,9 @@
 CREATE TYPE "BillingInterval" AS ENUM ('monthly', 'annual');
 CREATE TYPE "SubscriptionStatus" AS ENUM ('trialing', 'active', 'past_due', 'cancelled', 'expired');
 CREATE TYPE "PaymentStatus" AS ENUM ('success', 'failed', 'refunded');
+-- A card-verification charge is money that moved but is not revenue; it is refunded as soon
+-- as the authorisation it exists to create comes back.
+CREATE TYPE "PaymentKind" AS ENUM ('subscription', 'card_verification');
 
 CREATE TABLE "subscriptions" (
     "id" UUID NOT NULL,
@@ -15,6 +18,9 @@ CREATE TABLE "subscriptions" (
     "paystack_customer_code" TEXT,
     "paystack_subscription_code" TEXT,
     "paystack_plan_code" TEXT,
+    "paystack_authorization_code" TEXT,
+    "paystack_email_token" TEXT,
+    "trial_ends_at" TIMESTAMP(3),
     "current_period_end" TIMESTAMP(3) NOT NULL,
     "cancelled_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -43,6 +49,7 @@ CREATE TABLE "payments" (
     "user_id" UUID,
     "org_id" UUID,
     "reference" TEXT NOT NULL,
+    "kind" "PaymentKind" NOT NULL DEFAULT 'subscription',
     "amount_kobo" INTEGER NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'NGN',
     "status" "PaymentStatus" NOT NULL,

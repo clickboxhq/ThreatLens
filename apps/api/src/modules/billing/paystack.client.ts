@@ -136,6 +136,55 @@ export class PaystackClient {
     };
   }
 
+  /**
+   * Schedules the subscription that ends a free trial.
+   *
+   * `startDate` is when Paystack first debits the card, so a date seven days out is what
+   * makes the trial free: the card is captured now, charged then, and recurs from there.
+   * Paystack will only accept this once the customer has a reusable authorisation, which is
+   * why a verification charge has to come first — there is no zero-amount card save.
+   */
+  async createSubscription(input: {
+    customerCode: string;
+    planCode: string;
+    authorizationCode: string;
+    startDate: Date;
+  }): Promise<{ subscriptionCode: string | null; emailToken: string | null }> {
+    const json = await this.post<{
+      data?: { subscription_code?: string; email_token?: string };
+    }>('/subscription', {
+      customer: input.customerCode,
+      plan: input.planCode,
+      authorization: input.authorizationCode,
+      start_date: input.startDate.toISOString(),
+    });
+    return {
+      subscriptionCode: json.data?.subscription_code ?? null,
+      // Paystack requires this alongside the code to cancel, so it is stored now rather
+      // than re-fetched later when someone is waiting on a cancel button.
+      emailToken: json.data?.email_token ?? null,
+    };
+  }
+
+  /**
+   * Stops a subscription renewing. Paystack needs the email token alongside the code; it
+   * comes back on the subscription record and is stored when the subscription is created.
+   */
+  async disableSubscription(input: {
+    subscriptionCode: string;
+    emailToken: string;
+  }): Promise<void> {
+    await this.post('/subscription/disable', {
+      code: input.subscriptionCode,
+      token: input.emailToken,
+    });
+  }
+
+  /** Returns the card-verification charge. Called as soon as the authorisation exists. */
+  async refund(reference: string): Promise<void> {
+    await this.post('/refund', { transaction: reference });
+  }
+
   private async post<T>(
     path: string,
     body?: Record<string, unknown>,

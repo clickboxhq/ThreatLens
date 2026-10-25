@@ -7,6 +7,16 @@ import { AppException } from '../../common/exceptions/app-exception';
 import { PLAN_PRICES, type PlanId, type BillingInterval } from './plan-prices';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
+export const TRIAL_DAYS = 7;
+/**
+ * The token amount charged to capture a card for a trial, in kobo.
+ *
+ * Paystack issues a reusable authorisation only off a real transaction, so this is the
+ * smallest honest way to put a card on file. It is refunded the moment the authorisation
+ * comes back.
+ */
+export const CARD_VERIFICATION_KOBO = 5_000;
+
 @Injectable()
 export class CheckoutService {
   constructor(
@@ -27,10 +37,17 @@ export class CheckoutService {
     planId: PlanId,
     interval: BillingInterval,
     orgId: string | null,
+    trial = false,
   ): Promise<{
     authorizationUrl: string;
     reference: string;
     testMode: boolean;
+    trial: {
+      days: number;
+      verificationKobo: number;
+      firstChargeKobo: number;
+      firstChargeAt: string;
+    } | null;
   }> {
     if (!this.paystack.isConfigured()) {
       throw new AppException(
@@ -68,23 +85,60 @@ export class CheckoutService {
       seatsFor = orgId;
     }
 
+    // A trial is only honest if the charge at the end of it is actually scheduled. Without a
+    // plan code there is nothing to schedule, so refuse rather than hand out a free period
+    // that silently never converts.
+    if (trial) {
+      if (interval !== 'monthly') {
+        throw new AppException(
+          400,
+          'TRIAL_NOT_AVAILABLE',
+          'The free trial applies to the monthly plan.',
+        );
+      }
+      if (!price.paystackPlanCode) {
+        throw new AppException(
+          503,
+          'PAYMENTS_UNAVAILABLE',
+          'Trials are not available yet.',
+        );
+      }
+      const already = await this.prisma.subscription.findFirst({
+        where: seatsFor ? { orgId: seatsFor } : { userId: user.id },
+        select: { id: true },
+      });
+      if (already) {
+        throw new AppException(
+          409,
+          'TRIAL_ALREADY_USED',
+          'This account has already started a subscription.',
+        );
+      }
+    }
+
     const reference = `tl_${randomUUID().replace(/-/g, '')}`;
     const webOrigin =
       this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:8080';
 
     const initialized = await this.paystack.initializeTransaction({
       email: account.email,
-      amountKobo: price.amountKobo,
+      // A trial charges a token amount to capture the card. Paystack issues a reusable
+      // authorisation only off a real transaction — there is no zero-amount card save — and
+      // it is refunded as soon as the authorisation comes back.
+      amountKobo: trial ? CARD_VERIFICATION_KOBO : price.amountKobo,
       reference,
       callbackUrl: `${webOrigin}/app/billing/return?reference=${reference}`,
-      // Monthly recurs through a Paystack plan; annual is a one-off charge, so it carries no
-      // plan code. See the Subscription model for why annual is not a stored-card plan.
-      planCode: interval === 'monthly' ? price.paystackPlanCode : null,
+      // On a trial the subscription is created afterwards with a start date, so no plan goes
+      // on this transaction. Monthly recurs through a Paystack plan; annual is a one-off
+      // charge — see the Subscription model for why annual is not a stored-card plan.
+      planCode:
+        !trial && interval === 'monthly' ? price.paystackPlanCode : null,
       metadata: {
         userId: seatsFor ? null : user.id,
         orgId: seatsFor,
         planId,
         interval,
+        ...(trial ? { kind: 'card_verification', trialDays: TRIAL_DAYS } : {}),
       },
     });
 
@@ -92,6 +146,17 @@ export class CheckoutService {
       authorizationUrl: initialized.authorizationUrl,
       reference: initialized.reference,
       testMode: this.paystack.isTestMode(),
+      // What the page must tell them before they enter a card.
+      trial: trial
+        ? {
+            days: TRIAL_DAYS,
+            verificationKobo: CARD_VERIFICATION_KOBO,
+            firstChargeKobo: price.amountKobo,
+            firstChargeAt: new Date(
+              Date.now() + TRIAL_DAYS * 86400000,
+            ).toISOString(),
+          }
+        : null,
     };
   }
 }

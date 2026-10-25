@@ -151,7 +151,12 @@ export function priceDisplay(plan: Plan, period: BillingPeriod): PriceDisplay {
     return {
       headline: formatNgn(plan.prices.monthly.amountNgn),
       unit: `${unitSuffix}/month`,
-      note: plan.trialDays ? `${plan.trialDays}-day free trial` : undefined,
+      // The trial takes a card and charges when it ends, so the card says so. A trial that
+      // quietly collects a card is what people file chargebacks over, and the disclosure
+      // costs nothing that the surprise would not cost more.
+      note: plan.trialDays
+        ? `${plan.trialDays} days free, then ${formatNgn(plan.prices.monthly.amountNgn)}${unitSuffix}/month`
+        : undefined,
     };
   }
 

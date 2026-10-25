@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { BillingWebhookService } from './billing-webhook.service';
 import { CheckoutService } from './checkout.service';
+import { CancellationService } from './cancellation.service';
 import { PaystackClient } from './paystack.client';
 import { SubscriptionService } from './subscription.service';
 import {
@@ -17,6 +18,7 @@ import {
     BillingService,
     BillingWebhookService,
     CheckoutService,
+    CancellationService,
     PaystackClient,
     SubscriptionService,
   ],

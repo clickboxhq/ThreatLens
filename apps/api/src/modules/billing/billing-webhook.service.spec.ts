@@ -38,6 +38,19 @@ function build(seed: Partial<Stores> = {}) {
 
   const tx = {
     payment: {
+      update: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { reference: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = s.payments.find((x) => x.reference === where.reference);
+          if (row) Object.assign(row, data);
+          return row;
+        },
+      ),
       findUnique: jest.fn(
         async ({ where }: { where: { reference: string } }) =>
           s.payments.find((p) => p.reference === where.reference) ?? null,
@@ -78,6 +91,21 @@ function build(seed: Partial<Stores> = {}) {
   };
 
   const prisma = {
+    payment: {
+      update: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { reference: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = s.payments.find((x) => x.reference === where.reference);
+          if (row) Object.assign(row, data);
+          return row;
+        },
+      ),
+    },
     webhookEvent: {
       findUnique: jest.fn(
         async ({ where }: { where: { dedupeKey: string } }) =>
@@ -103,6 +131,19 @@ function build(seed: Partial<Stores> = {}) {
       ),
     },
     subscription: {
+      update: jest.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = s.subscriptions.find((x) => x.id === where.id)!;
+          Object.assign(row, data);
+          return row;
+        },
+      ),
       updateMany: jest.fn(
         async ({
           where,
@@ -130,7 +171,28 @@ function build(seed: Partial<Stores> = {}) {
     ),
   } as unknown as PrismaService;
 
-  return { service: new BillingWebhookService(prisma), stores: s, tx };
+  const paystack = {
+    createSubscription: jest.fn<
+      Promise<{ subscriptionCode: string; emailToken: string }>,
+      [
+        {
+          customerCode: string;
+          planCode: string;
+          authorizationCode: string;
+          startDate: Date;
+        },
+      ]
+    >(async () => ({ subscriptionCode: 'SUB_NEW', emailToken: 'TOK' })),
+    refund: jest.fn<Promise<void>, [string]>(async () => undefined),
+    disableSubscription: jest.fn(async () => undefined),
+  };
+
+  return {
+    service: new BillingWebhookService(prisma, paystack as never),
+    stores: s,
+    tx,
+    paystack,
+  };
 }
 
 const chargeBody = (
@@ -307,5 +369,170 @@ describe('BillingWebhookService', () => {
 
     expect(result).toBe('processed');
     expect(stores.events[0].error).toBeNull();
+  });
+});
+
+const verificationBody = (reference: string, userId = 'user-1') => {
+  const payload = {
+    event: 'charge.success',
+    data: {
+      reference,
+      amount: 5000,
+      currency: 'NGN',
+      paid_at: '2026-10-25T10:00:00.000Z',
+      customer: { customer_code: 'CUS_1', email: 'a@example.com' },
+      authorization: { authorization_code: 'AUTH_1', reusable: true },
+      metadata: {
+        userId,
+        planId: 'individual',
+        interval: 'monthly',
+        kind: 'card_verification',
+        trialDays: 7,
+      },
+    },
+  };
+  return { raw: Buffer.from(JSON.stringify(payload)), payload };
+};
+
+/**
+ * The card-upfront trial. Everything here is about the gap between capturing a card and
+ * charging it a week later — the window in which a mistake is either a free ride forever or
+ * a charge somebody did not agree to.
+ */
+describe('BillingWebhookService — card-upfront trial', () => {
+  beforeAll(() => {
+    process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY = 'PLN_test';
+  });
+
+  it('starts a trial and schedules the first real charge for the day it ends', async () => {
+    const { service, stores, paystack } = build();
+    const { raw, payload } = verificationBody('tl_v1');
+
+    await service.receive(raw, payload);
+
+    const sub = stores.subscriptions[0];
+    expect(sub.status).toBe('trialing');
+    expect(paystack.createSubscription).toHaveBeenCalledTimes(1);
+
+    const scheduled = paystack.createSubscription.mock.calls[0][0] as {
+      startDate: Date;
+      planCode: string;
+      authorizationCode: string;
+    };
+    expect(scheduled.planCode).toBe('PLN_test');
+    expect(scheduled.authorizationCode).toBe('AUTH_1');
+    // Charged when the free week ends, not before.
+    const days = (scheduled.startDate.getTime() - Date.now()) / 86400000;
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThan(7.1);
+  });
+
+  it('gives access for the trial week', async () => {
+    const { service, stores } = build();
+    const { raw, payload } = verificationBody('tl_v2');
+
+    await service.receive(raw, payload);
+
+    const sub = stores.subscriptions[0];
+    expect(sub.currentPeriodEnd.getTime()).toBeGreaterThan(Date.now());
+    const days = (sub.currentPeriodEnd.getTime() - Date.now()) / 86400000;
+    expect(days).toBeLessThan(7.1);
+  });
+
+  it('refunds the card-verification charge and does not count it as revenue', async () => {
+    const { service, stores, paystack } = build();
+    const { raw, payload } = verificationBody('tl_v3');
+
+    await service.receive(raw, payload);
+
+    expect(paystack.refund).toHaveBeenCalledWith('tl_v3');
+    const payment = stores.payments[0] as unknown as Record<string, unknown>;
+    expect(payment.kind).toBe('card_verification');
+    expect(payment.status).toBe('refunded');
+  });
+
+  it('refuses a capture that produced no reusable card', async () => {
+    // Without an authorisation there is nothing to charge later, so starting the free week
+    // would be giving the product away with no way to convert.
+    const { service, stores, paystack } = build();
+    const payload = {
+      event: 'charge.success',
+      data: {
+        reference: 'tl_v4',
+        amount: 5000,
+        customer: { customer_code: 'CUS_1' },
+        metadata: { userId: 'user-1', kind: 'card_verification' },
+      },
+    };
+
+    await service.receive(Buffer.from(JSON.stringify(payload)), payload);
+
+    expect(stores.subscriptions).toHaveLength(0);
+    expect(paystack.createSubscription).not.toHaveBeenCalled();
+    expect(stores.events[0].error).toContain('reusable authorisation');
+  });
+
+  it('resumes scheduling on redelivery when the provider call failed', async () => {
+    // The database writes commit before the call to Paystack. A failure in between would
+    // otherwise leave someone on a trial that never converts — free forever, silently.
+    const { service, stores, paystack } = build();
+    paystack.createSubscription.mockRejectedValueOnce(
+      new Error('provider down'),
+    );
+
+    const { raw, payload } = verificationBody('tl_v5');
+    await service.receive(raw, payload);
+
+    expect(stores.subscriptions[0].paystackSubscriptionCode).toBeUndefined();
+    expect(stores.events[0].processedAt).toBeNull();
+
+    await service.receive(raw, payload);
+
+    expect(paystack.createSubscription).toHaveBeenCalledTimes(2);
+    expect(stores.subscriptions[0].paystackSubscriptionCode).toBe('SUB_NEW');
+    expect(stores.payments).toHaveLength(1);
+  });
+
+  it('still completes the trial when the refund fails', async () => {
+    // Fifty naira unreturned must not fail the delivery and re-run the scheduling above.
+    const { service, stores, paystack } = build();
+    paystack.refund.mockRejectedValueOnce(new Error('refund refused'));
+
+    const { raw, payload } = verificationBody('tl_v6');
+    await service.receive(raw, payload);
+
+    expect(stores.subscriptions[0].status).toBe('trialing');
+    expect(stores.events[0].processedAt).not.toBeNull();
+  });
+
+  it('converts the trial to a paid month when the scheduled charge lands', async () => {
+    const { service, stores } = build();
+    const first = verificationBody('tl_v7');
+    await service.receive(first.raw, first.payload);
+    expect(stores.subscriptions[0].status).toBe('trialing');
+
+    // Seven days later Paystack charges the real amount — an ordinary charge, no kind.
+    const charge = {
+      event: 'charge.success',
+      data: {
+        reference: 'tl_real',
+        amount: 1_000_000,
+        currency: 'NGN',
+        paid_at: '2026-11-01T10:00:00.000Z',
+        customer: { customer_code: 'CUS_1' },
+        metadata: {
+          userId: 'user-1',
+          planId: 'individual',
+          interval: 'monthly',
+        },
+      },
+    };
+    await service.receive(Buffer.from(JSON.stringify(charge)), charge);
+
+    expect(stores.subscriptions[0].status).toBe('active');
+    const days =
+      (stores.subscriptions[0].currentPeriodEnd.getTime() - Date.now()) /
+      86400000;
+    expect(days).toBeGreaterThan(30);
   });
 });

@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaystackClient } from './paystack.client';
 import { BillingWebhookService } from './billing-webhook.service';
 import { CheckoutService } from './checkout.service';
+import { CancellationService } from './cancellation.service';
 import { SubscriptionService } from './subscription.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -30,6 +31,11 @@ export class StartCheckoutDto {
   @IsOptional()
   @IsString()
   orgId?: string;
+
+  /** Start the free trial: capture a card now, first real charge when it ends. */
+  @IsOptional()
+  @IsBoolean()
+  trial?: boolean;
 }
 
 /**
@@ -82,6 +88,7 @@ export class PaystackWebhookController {
 export class BillingController {
   constructor(
     private readonly checkout: CheckoutService,
+    private readonly cancellation: CancellationService,
     private readonly subscriptions: SubscriptionService,
   ) {}
 
@@ -101,6 +108,17 @@ export class BillingController {
       dto.planId,
       dto.interval,
       dto.orgId ?? null,
+      dto.trial ?? false,
     );
+  }
+
+  /**
+   * Stops the next charge. Access continues to the end of the period already paid for — or,
+   * on a trial, to the end of the free week.
+   */
+  @Post('cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancel(@CurrentUser() user: AuthenticatedUser) {
+    return this.cancellation.cancel(user);
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PaystackClient } from './paystack.client';
 
 /** The shape we rely on. Paystack sends a great deal more; none of it is trusted. */
 interface PaystackEvent {
@@ -15,24 +16,32 @@ interface PaystackEvent {
     paidAt?: string;
     subscription_code?: string;
     plan?: { plan_code?: string };
+    authorization?: { authorization_code?: string; reusable?: boolean };
     customer?: { customer_code?: string; email?: string };
     metadata?: {
       userId?: string;
       orgId?: string;
       planId?: string;
       interval?: string;
+      /** Set on the small charge that exists only to capture a card for a trial. */
+      kind?: string;
+      trialDays?: number | string;
     };
   };
 }
 
 const MONTH_DAYS = 30;
 const YEAR_DAYS = 365;
+const CARD_VERIFICATION = 'card_verification';
 
 @Injectable()
 export class BillingWebhookService {
   private readonly logger = new Logger(BillingWebhookService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paystack: PaystackClient,
+  ) {}
 
   /**
    * Records the delivery, then acts on it at most once.
@@ -126,6 +135,10 @@ export class BillingWebhookService {
       );
     }
 
+    if (meta.kind === CARD_VERIFICATION) {
+      return this.onCardCaptured(event, reference, userId, orgId);
+    }
+
     const interval = meta.interval === 'annual' ? 'annual' : 'monthly';
     const days = interval === 'annual' ? YEAR_DAYS : MONTH_DAYS;
     const paidAt = d.paid_at ?? d.paidAt ?? null;
@@ -183,6 +196,130 @@ export class BillingWebhookService {
         },
       });
     });
+  }
+
+  /**
+   * The card-upfront trial: a small charge captured a card, so start the free period and
+   * schedule the real charge for the day it ends.
+   *
+   * Deliberately resumable rather than merely idempotent. The database writes commit before
+   * the two calls back out to Paystack, so a failure in between would otherwise leave
+   * somebody on a trial that never converts — free forever, silently. On a redelivery this
+   * picks up from whichever step has not happened yet instead of returning early because the
+   * payment row already exists.
+   */
+  private async onCardCaptured(
+    event: PaystackEvent,
+    reference: string,
+    userId: string | null,
+    orgId: string | null,
+  ): Promise<void> {
+    const d = event.data ?? {};
+    const meta = d.metadata ?? {};
+    const authorizationCode = d.authorization?.authorization_code ?? null;
+    const customerCode = d.customer?.customer_code ?? null;
+    const trialDays = Number(meta.trialDays ?? 7) || 7;
+    const planId = meta.planId ?? (orgId ? 'organization' : 'individual');
+
+    if (!authorizationCode || !customerCode) {
+      throw new Error(
+        `card verification ${reference} returned no reusable authorisation`,
+      );
+    }
+
+    const where = userId ? { userId } : { orgId: orgId as string };
+
+    const subscription = await this.prisma.$transaction(async (tx) => {
+      const existingPayment = await tx.payment.findUnique({
+        where: { reference },
+      });
+      if (!existingPayment) {
+        await tx.payment.create({
+          data: {
+            userId,
+            orgId,
+            reference,
+            kind: 'card_verification',
+            amountKobo: d.amount ?? 0,
+            currency: d.currency ?? 'NGN',
+            status: 'success',
+            paidAt: new Date(d.paid_at ?? d.paidAt ?? Date.now()),
+            raw: (event as unknown as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+          },
+        });
+      }
+
+      const current = await tx.subscription.findFirst({ where });
+      const trialEndsAt = new Date(Date.now() + trialDays * 86400000);
+
+      if (current) {
+        return tx.subscription.update({
+          where: { id: current.id },
+          data: {
+            paystackAuthorizationCode: authorizationCode,
+            paystackCustomerCode: customerCode,
+          },
+        });
+      }
+      return tx.subscription.create({
+        data: {
+          userId,
+          orgId,
+          planId,
+          interval: 'monthly',
+          status: 'trialing',
+          trialEndsAt,
+          // Access during the trial is the same mechanism as access when paid: a period
+          // end in the future. Nothing downstream needs to know a trial is special.
+          currentPeriodEnd: trialEndsAt,
+          paystackAuthorizationCode: authorizationCode,
+          paystackCustomerCode: customerCode,
+        },
+      });
+    });
+
+    if (!subscription.paystackSubscriptionCode) {
+      const planCode = this.planCodeFor(planId);
+      if (!planCode) {
+        throw new Error(
+          `no Paystack plan code for ${planId}; trial would never convert`,
+        );
+      }
+      const created = await this.paystack.createSubscription({
+        customerCode,
+        planCode,
+        authorizationCode,
+        startDate: subscription.trialEndsAt ?? subscription.currentPeriodEnd,
+      });
+      await this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          paystackSubscriptionCode: created.subscriptionCode,
+          paystackEmailToken: created.emailToken,
+          paystackPlanCode: planCode,
+        },
+      });
+    }
+
+    // Best effort, and last. The card is captured and the charge is scheduled; failing the
+    // whole delivery over an unreturned fifty naira would risk re-running everything above.
+    try {
+      await this.paystack.refund(reference);
+      await this.prisma.payment.update({
+        where: { reference },
+        data: { status: 'refunded' },
+      });
+    } catch (err) {
+      this.logger.error(
+        `Card-verification refund for ${reference} failed, refund it by hand: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private planCodeFor(planId: string): string | null {
+    return planId === 'organization'
+      ? (process.env.PAYSTACK_PLAN_ORGANIZATION_MONTHLY ?? null)
+      : (process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY ?? null);
   }
 
   /** Links Paystack's subscription code so a later cancellation can be matched to a row. */

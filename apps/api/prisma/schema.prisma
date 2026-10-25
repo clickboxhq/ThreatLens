@@ -1657,6 +1657,14 @@ enum SubscriptionStatus {
   expired
 }
 
+/// A card-verification charge is money that moved but is not revenue — it is refunded as
+/// soon as the card authorisation it exists to create comes back. Keeping it a separate kind
+/// is what stops it being counted as a sale.
+enum PaymentKind {
+  subscription
+  card_verification
+}
+
 enum PaymentStatus {
   success
   failed
@@ -1684,10 +1692,19 @@ model Subscription {
   /// Paystack's identifiers. The subscription code is null for an annual plan, which is a
   /// one-off charge rather than a Paystack subscription — storing a card for twelve months
   /// to charge it once invites a stale-card failure on the single renewal that matters most.
-  paystackCustomerCode     String? @map("paystack_customer_code")
-  paystackSubscriptionCode String? @unique @map("paystack_subscription_code")
-  paystackPlanCode         String? @map("paystack_plan_code")
+  paystackCustomerCode      String? @map("paystack_customer_code")
+  paystackSubscriptionCode  String? @unique @map("paystack_subscription_code")
+  paystackPlanCode          String? @map("paystack_plan_code")
+  /// The reusable card token. Paystack will only issue one after a real transaction, which
+  /// is why a card-upfront trial has to start with a small charge rather than a zero-amount
+  /// card save.
+  paystackAuthorizationCode String? @map("paystack_authorization_code")
+  /// Required by Paystack alongside the subscription code to cancel it.
+  paystackEmailToken        String? @map("paystack_email_token")
 
+  /// When a free trial converts to a paid charge. Set only while status is trialing, and
+  /// kept afterwards so support can answer "when was I first billed".
+  trialEndsAt      DateTime? @map("trial_ends_at")
   /// Access is granted while now() < currentPeriodEnd. Extended by a successful charge.
   currentPeriodEnd DateTime  @map("current_period_end")
   cancelledAt      DateTime? @map("cancelled_at")
@@ -1716,6 +1733,7 @@ model Payment {
   orgId          String? @map("org_id") @db.Uuid
 
   reference  String        @unique
+  kind       PaymentKind   @default(subscription)
   amountKobo Int           @map("amount_kobo")
   currency   String        @default("NGN")
   status     PaymentStatus
