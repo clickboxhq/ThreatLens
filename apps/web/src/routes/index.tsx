@@ -1,6 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { PLANS, priceDisplay, type BillingPeriod } from "@/lib/pricing";
+import { useBillingActions, useEntitlement } from "@/hooks/use-billing";
+import { ApiError } from "@/lib/api-client";
+import { toast } from "sonner";
 import { seo, organizationJsonLd, webApplicationJsonLd } from "@/lib/seo";
 import {
   Award,
@@ -664,6 +667,8 @@ function PricingCard({
   features,
   cta,
   ctaHref,
+  onCta,
+  ctaBusy,
   featured,
   delay,
 }: {
@@ -677,6 +682,9 @@ function PricingCard({
   features: string[];
   cta: string;
   ctaHref: string;
+  /** When set, the CTA is a button that does this instead of a link. */
+  onCta?: () => void;
+  ctaBusy?: boolean;
   featured?: boolean;
   delay: number;
 }) {
@@ -735,7 +743,20 @@ function PricingCard({
           ))}
         </ul>
         <div className="flex-1" />
-        {ctaHref.startsWith("/") ? (
+        {onCta ? (
+          <button
+            type="button"
+            onClick={onCta}
+            disabled={ctaBusy}
+            className={
+              featured
+                ? "btn-primary mt-8 w-full justify-center disabled:opacity-60"
+                : "btn-ghost mt-8 w-full justify-center disabled:opacity-60"
+            }
+          >
+            {ctaBusy ? "Starting…" : cta} <ArrowRight className="size-3.5" />
+          </button>
+        ) : ctaHref.startsWith("/") ? (
           <Link
             to={ctaHref}
             className={
@@ -765,6 +786,45 @@ function PricingCard({
 
 function Pricing() {
   const [billing, setBilling] = useState<BillingPeriod>("monthly");
+  const user = useAuthUser();
+  const navigate = useNavigate();
+  const { entitlement } = useEntitlement();
+  const { startCheckout, isStartingCheckout } = useBillingActions();
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+
+  /**
+   * Where the Individual CTA goes depends on who is clicking.
+   *
+   * A signed-out visitor still goes to signup — they cannot be charged before they have an
+   * account. A signed-in visitor goes straight to Paystack, because sending somebody who is
+   * already logged in to a signup form is the bug this replaces. Somebody who already has
+   * access goes to their billing page rather than being sold what they have.
+   */
+  async function individualCta() {
+    if (!user) {
+      void navigate({ to: "/signup" });
+      return;
+    }
+    if (entitlement?.active) {
+      void navigate({ to: "/app/billing" });
+      return;
+    }
+    setPendingPlan("individual");
+    try {
+      const session = await startCheckout({
+        planId: "individual",
+        interval: billing === "annual" ? "annual" : "monthly",
+        // The trial converts to a monthly subscription, so it is monthly-only.
+        trial: billing === "monthly",
+      });
+      window.location.href = session.authorizationUrl;
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Could not start checkout. Nothing was charged.",
+      );
+      setPendingPlan(null);
+    }
+  }
 
   return (
     <section id="pricing" style={{ background: "#000000", color: "#EDEDED" }}>
@@ -811,8 +871,14 @@ function Pricing() {
                 body={plan.positioning}
                 features={plan.features}
                 featured={plan.id === "organization"}
-                cta={plan.cta[billing]}
+                cta={
+                  plan.id === "individual" && entitlement?.active
+                    ? "Manage your plan"
+                    : plan.cta[billing]
+                }
                 ctaHref={plan.ctaHref}
+                onCta={plan.id === "individual" ? () => void individualCta() : undefined}
+                ctaBusy={isStartingCheckout && pendingPlan === plan.id}
                 delay={i * 80}
               />
             );

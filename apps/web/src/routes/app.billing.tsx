@@ -13,7 +13,9 @@ import type { EntitlementDto } from "@/types/billing";
 export const Route = createFileRoute("/app/billing")({
   // Paystack sends people back here with ?reference=. It is a hint to wait, not proof of
   // payment — only the signed webhook grants access.
-  validateSearch: (search: Record<string, unknown>) => ({
+  // Return type annotated so the key is optional: without it every navigate() to this
+  // route would have to pass reference explicitly.
+  validateSearch: (search: Record<string, unknown>): { reference?: string } => ({
     reference: typeof search.reference === "string" ? search.reference : undefined,
   }),
   component: Billing,

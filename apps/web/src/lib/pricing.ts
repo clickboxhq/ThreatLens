@@ -57,7 +57,10 @@ export const PLANS: Plan[] = [
       "Learning paths & certificates",
     ],
     trialDays: 7,
-    cta: { monthly: "Start 7-Day Trial", annual: "Start 7-Day Trial" },
+    // The trial converts to a monthly subscription, so it is offered on monthly only.
+    // Promising a 7-day trial on the annual card would mean a ₦100,000 charge a week later,
+    // and the API refuses it — the button would simply fail.
+    cta: { monthly: "Start 7-Day Trial", annual: "Subscribe Annually" },
     ctaHref: "/signup",
     prices: {
       monthly: ngn(10_000, "monthly", false),
