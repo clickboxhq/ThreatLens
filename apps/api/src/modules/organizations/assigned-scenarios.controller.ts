@@ -1,6 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { OrganizationScenariosService } from './organization-scenarios.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
@@ -11,7 +12,7 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
  * individual account or a removed/suspended member gets a 403, never a silently empty list.
  */
 @Controller('assigned-scenarios')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class AssignedScenariosController {
   constructor(
     private readonly organizationScenariosService: OrganizationScenariosService,

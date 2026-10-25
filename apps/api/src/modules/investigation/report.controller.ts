@@ -7,12 +7,13 @@ import {
 } from '@nestjs/common';
 import { ReportService } from './report.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // §2.14/§2.19
 @Controller('sessions/:sessionId/incidents/:incidentId/report')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ReportController {
   constructor(private readonly service: ReportService) {}
 
@@ -29,7 +30,7 @@ export class ReportController {
 // §2.14's Reports list — every closed incident the Student has ever produced a final report
 // for, across every session.
 @Controller('reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ReportsListController {
   constructor(private readonly service: ReportService) {}
 

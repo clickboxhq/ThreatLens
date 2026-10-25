@@ -1,6 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
@@ -12,7 +13,7 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
  * because that prefix reads as org_admin-only everywhere else.
  */
 @Controller('announcements')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class AnnouncementsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 

@@ -11,6 +11,7 @@ import { SessionsService } from './sessions.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { SubmitSessionDto } from './dto/submit-session.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import { RateLimiterService } from '../../common/rate-limiter/rate-limiter.service';
@@ -29,7 +30,7 @@ const SESSION_SUBMIT_RATE_LIMIT_WINDOW_SECONDS = 600;
 
 // §16.4
 @Controller('sessions')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,

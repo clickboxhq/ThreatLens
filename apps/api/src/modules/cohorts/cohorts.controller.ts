@@ -2,11 +2,12 @@ import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { CohortsService } from './cohorts.service';
 import { JoinCohortDto } from './dto/join-cohort.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 @Controller('cohorts')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class CohortsController {
   constructor(private readonly cohortsService: CohortsService) {}
 

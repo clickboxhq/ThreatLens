@@ -14,11 +14,12 @@ import {
   UpdateOrganizationScenarioDueDateDto,
 } from './dto/organization-scenarios.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 @Controller('organizations/mine/scenarios')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class OrganizationScenariosController {
   constructor(
     private readonly organizationScenariosService: OrganizationScenariosService,

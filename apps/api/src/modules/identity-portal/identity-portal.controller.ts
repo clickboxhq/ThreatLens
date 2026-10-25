@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { IdentityPortalService } from './identity-portal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
@@ -18,7 +19,7 @@ import type {
 
 // §16.9
 @Controller('sessions/:sessionId/identities')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class IdentityPortalController {
   constructor(private readonly service: IdentityPortalService) {}
 

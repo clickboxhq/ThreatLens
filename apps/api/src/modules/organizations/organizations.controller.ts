@@ -20,6 +20,8 @@ import {
 } from './dto/organizations.dto';
 import { AppException } from '../../common/exceptions/app-exception';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { NoSubscriptionRequired } from '../../common/decorators/no-subscription-required.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
@@ -32,10 +34,13 @@ const LOGO_ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 // role gating would work too, but org_admin already exists as a real, distinct role (see
 // schema.prisma's UserRole), so no new guard decorator is needed here.
 @Controller('organizations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
+  // Creating an organisation is how an account becomes one that can buy seats, so it
+  // cannot itself require a subscription.
+  @NoSubscriptionRequired()
   @Post()
   async create(
     @CurrentUser() user: AuthenticatedUser,
@@ -153,6 +158,9 @@ export class OrganizationsController {
     return { revoked: true };
   }
 
+  // An invited member has no subscription of their own — the organisation's covers them
+  // once they are in. Gating this would make that impossible to reach.
+  @NoSubscriptionRequired()
   @Post('invites/:token/accept')
   async acceptInvite(
     @CurrentUser() user: AuthenticatedUser,

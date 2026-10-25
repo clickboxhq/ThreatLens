@@ -9,12 +9,13 @@ import {
 } from '@nestjs/common';
 import { HintsService } from './hints.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 // §12.5
 @Controller('sessions/:sessionId/hints')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class HintsController {
   constructor(private readonly hintsService: HintsService) {}
 

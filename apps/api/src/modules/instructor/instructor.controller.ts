@@ -27,6 +27,7 @@ import {
   CreateCohortInviteDto,
 } from './dto/instructor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -40,7 +41,7 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 // CohortAccessService refuses them every write, so the guard staying permissive here does not
 // widen what they can actually do.
 @Controller('instructor')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 // Coarse gate only. org_admin and platform_admin are admitted here so they can reach a
 // cohort at all; CohortAccessService decides what each may actually do with it — an
 // org_admin reads their organisation's cohorts, a platform_admin reads any cohort and may

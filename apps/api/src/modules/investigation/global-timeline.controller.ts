@@ -1,6 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { TimelineService } from './timeline.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
@@ -8,7 +9,7 @@ import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 // they've ever worked, not just one. Separate from TimelineController's per-incident routes
 // since this is a cross-session aggregate, not a sub-resource of one incident.
 @Controller('timeline')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class GlobalTimelineController {
   constructor(private readonly timelineService: TimelineService) {}
 

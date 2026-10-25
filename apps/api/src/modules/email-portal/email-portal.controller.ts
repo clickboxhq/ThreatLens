@@ -8,13 +8,14 @@ import {
 } from '@nestjs/common';
 import { EmailPortalService } from './email-portal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { EmailDirection, SpfResult } from '@prisma/client';
 
 // §16.11
 @Controller('sessions/:sessionId/emails')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class EmailPortalController {
   constructor(private readonly service: EmailPortalService) {}
 

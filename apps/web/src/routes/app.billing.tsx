@@ -86,6 +86,9 @@ function Billing() {
   }
 
   const e = entitlement;
+  // A lapsed account still has a subscription row, so a status with no access means the
+  // trial has already been used. Offering it again would hand them a 409 from the API.
+  const trialUsed = Boolean(e?.status) && !e?.active;
   const status = e ? statusLabel(e) : null;
   const renews = e?.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
 
@@ -117,7 +120,9 @@ function Billing() {
       {!e?.active && !e?.viaOrganization && !reference && (
         <Panel>
           <div className="px-5 py-6">
-            <h2 className="text-[15px] font-medium text-foreground">Start your 7-day free trial</h2>
+            <h2 className="text-[15px] font-medium text-foreground">
+              {trialUsed ? "Your trial has ended" : "Start your 7-day free trial"}
+            </h2>
             <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
               Full access to every scenario, scored investigations, and certificates.
             </p>
@@ -125,35 +130,59 @@ function Billing() {
             {/* Said plainly and before the card, not in small print after it. */}
             <div className="mt-4 rounded-md border border-border bg-background/50 p-3.5 text-[12.5px] leading-relaxed text-secondary">
               <div className="font-medium text-foreground">What happens</div>
-              <ul className="mt-1.5 space-y-1">
-                <li>
-                  We charge a refundable ₦50 now to confirm your card — it comes straight back.
-                </li>
-                <li>
-                  Seven days free. After that,{" "}
-                  <span className="font-medium text-foreground">
-                    {formatNgn(monthlyNgn)} per month
-                  </span>
-                  , charged automatically.
-                </li>
-                <li>
-                  We'll email you two days before the first charge. Cancel any time before then and
-                  you pay nothing.
-                </li>
-              </ul>
+              {trialUsed ? (
+                // The free week is gone, so promising it here would be a lie above a button
+                // that charges immediately.
+                <ul className="mt-1.5 space-y-1">
+                  <li>
+                    You'll be charged{" "}
+                    <span className="font-medium text-foreground">
+                      {formatNgn(monthlyNgn)} per month
+                    </span>
+                    , starting today.
+                  </li>
+                  <li>Your scenarios, scores and progress are exactly where you left them.</li>
+                  <li>Cancel any time — you keep access to the end of the month you paid for.</li>
+                </ul>
+              ) : (
+                <ul className="mt-1.5 space-y-1">
+                  <li>
+                    We charge a refundable ₦50 now to confirm your card — it comes straight back.
+                  </li>
+                  <li>
+                    Seven days free. After that,{" "}
+                    <span className="font-medium text-foreground">
+                      {formatNgn(monthlyNgn)} per month
+                    </span>
+                    , charged automatically.
+                  </li>
+                  <li>
+                    We'll email you two days before the first charge. Cancel any time before then
+                    and you pay nothing.
+                  </li>
+                </ul>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2.5">
-              <Button onClick={() => void begin(true)} disabled={isStartingCheckout}>
-                {isStartingCheckout ? "Starting…" : "Start free trial"}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => void begin(false)}
-                disabled={isStartingCheckout}
-              >
-                Skip the trial and subscribe
-              </Button>
+              {trialUsed ? (
+                <Button onClick={() => void begin(false)} disabled={isStartingCheckout}>
+                  {isStartingCheckout ? "Starting…" : "Subscribe"}
+                </Button>
+              ) : (
+                <>
+                  <Button onClick={() => void begin(true)} disabled={isStartingCheckout}>
+                    {isStartingCheckout ? "Starting…" : "Start free trial"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => void begin(false)}
+                    disabled={isStartingCheckout}
+                  >
+                    Skip the trial and subscribe
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </Panel>

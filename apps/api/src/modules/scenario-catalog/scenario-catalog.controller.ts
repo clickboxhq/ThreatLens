@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AppException } from '../../common/exceptions/app-exception';
 import { computeSkillRadar } from '../sessions/skill-radar';
@@ -20,7 +21,7 @@ import type { ScenarioCategory, ScenarioDifficulty } from '@prisma/client';
 // which does the matching server-side and returns a scenario plus the tactic being worked on —
 // never the technique list that would give the answer away.
 @Controller('scenarios')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ScenarioCatalogController {
   constructor(private readonly prisma: PrismaService) {}
 

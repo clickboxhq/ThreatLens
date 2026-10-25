@@ -9,13 +9,14 @@ import {
 } from '@nestjs/common';
 import { DevicePortalService } from './device-portal.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { DeviceRiskLevel } from '@prisma/client';
 
 // §10, §16.10
 @Controller('sessions/:sessionId/devices')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class DevicePortalController {
   constructor(private readonly service: DevicePortalService) {}
 

@@ -8,13 +8,14 @@ import {
 } from '@nestjs/common';
 import { ThreatIntelService } from './threat-intel.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { IndicatorType } from '@prisma/client';
 
 // §16.12 / §2.7 — scenario-scoped threat intel lookup, never a live external call (§1.6).
 @Controller('sessions/:sessionId/threat-intel')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ThreatIntelController {
   constructor(private readonly threatIntelService: ThreatIntelService) {}
 
@@ -32,7 +33,7 @@ export class ThreatIntelController {
 // A Student's own cross-session threat-intel lookup history — see ThreatIntelService.listMine
 // for why this can never become a way to browse a scenario's full indicator set.
 @Controller('threat-intel')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ThreatIntelHistoryController {
   constructor(private readonly threatIntelService: ThreatIntelService) {}
 

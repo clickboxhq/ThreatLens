@@ -11,6 +11,7 @@ import {
 import { AlertsService } from './alerts.service';
 import { UpdateAlertStatusDto } from './dto/dismiss-alert.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TracksActivity } from '../../common/decorators/tracks-activity.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
@@ -18,7 +19,7 @@ import type { AlertSeverity, AlertStatus } from '@prisma/client';
 
 // §16.5
 @Controller('sessions/:sessionId/alerts')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
 

@@ -9,11 +9,12 @@ import {
 import { SearchService } from './search.service';
 import { SearchDto } from './dto/search.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 @Controller('sessions/:sessionId/search')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
@@ -35,7 +36,7 @@ export class SearchController {
 // §2.8's "Global Search" — the same field=value/freetext query as SearchController, across
 // every session the Student has ever run instead of just the one it's nested under.
 @Controller('search')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class GlobalSearchController {
   constructor(private readonly searchService: SearchService) {}
 
