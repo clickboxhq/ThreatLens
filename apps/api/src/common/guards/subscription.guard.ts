@@ -51,12 +51,18 @@ export class SubscriptionGuard implements CanActivate {
 
     if (user.role === 'platform_admin') return true;
 
-    if (await this.subscriptions.hasActiveAccess(user)) return true;
+    const entitlement = await this.subscriptions.describeFor(user);
+    if (entitlement.active) return true;
 
+    // A `status` of null means this account has never had a subscription of any kind, so it
+    // has no trial to have ended. Telling a brand-new account that its trial is over is both
+    // wrong and discouraging at exactly the moment it is being asked to pay.
     throw new AppException(
       402,
       'SUBSCRIPTION_REQUIRED',
-      'Your trial has ended. Start a subscription to continue.',
+      entitlement.status === null
+        ? 'ThreatLens needs an active subscription. Start your free trial to continue.'
+        : 'Your subscription has ended. Renew it to continue.',
     );
   }
 }
