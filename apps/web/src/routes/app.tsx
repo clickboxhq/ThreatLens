@@ -1,8 +1,10 @@
-import { createFileRoute, Navigate, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppShell } from "@/components/soc/app-shell";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useIsAuthenticated, useAuthUser } from "@/lib/auth-store";
 import { useEntitlement } from "@/hooks/use-billing";
+import { onSubscriptionRequired } from "@/lib/api-client";
 import { Skeleton } from "@/components/soc/ui/skeleton";
 
 export const Route = createFileRoute("/app")({
@@ -39,7 +41,22 @@ function ProtectedAppShell() {
   const isAuthenticated = useIsAuthenticated();
   const user = useAuthUser();
   const location = useLocation();
+  const navigate = useNavigate();
   const { entitlement } = useEntitlement();
+
+  // The redirect below needs GET /billing/me to have answered. This does not: any refusal
+  // from any endpoint is the server stating the same thing, so a lapsed account reaches the
+  // billing page even on the loads where the entitlement lookup itself was what failed.
+  // Without it that account sits on a console whose every panel fails, with nothing saying
+  // why and nothing offering the page that fixes it.
+  useEffect(
+    () =>
+      onSubscriptionRequired(() => {
+        if (OPEN_WITHOUT_SUBSCRIPTION.some((p) => window.location.pathname.startsWith(p))) return;
+        void navigate({ to: "/app/billing", replace: true });
+      }),
+    [navigate],
+  );
 
   if (!hydrated) {
     return (

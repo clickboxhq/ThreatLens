@@ -82,6 +82,26 @@ if (isBrowser) {
   });
 }
 
+/**
+ * Fires when the server refuses a request for want of a subscription.
+ *
+ * The console decides where to send a lapsed account by asking GET /billing/me. When that
+ * particular request is the one that fails — an expired access token, a blip, a cold API —
+ * the answer never arrives, nothing redirects, and the account is left sitting on a console
+ * where every panel quietly 402s. The page looks broken rather than unpaid, and the one page
+ * that would fix it is the page nobody was sent to.
+ *
+ * A 402 is not a guess, though: it is the server stating the entitlement outright, on a
+ * request it has already decided. Treating it as the authority means the redirect no longer
+ * depends on a separate probe having succeeded.
+ */
+const paywallListeners = new Set<() => void>();
+
+export function onSubscriptionRequired(listener: () => void): () => void {
+  paywallListeners.add(listener);
+  return () => paywallListeners.delete(listener);
+}
+
 export class ApiError extends Error {
   status: number;
   code: string;
@@ -121,6 +141,9 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const err = body?.error ?? { code: "UNKNOWN", message: "Request failed." };
+    if (response.status === 402 && err.code === "SUBSCRIPTION_REQUIRED") {
+      paywallListeners.forEach((listener) => listener());
+    }
     throw new ApiError(response.status, err.code, err.message, err.correlationId);
   }
   return body as T;
