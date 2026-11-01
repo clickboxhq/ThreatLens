@@ -31,6 +31,22 @@ export const Route = createFileRoute("/app")({
  */
 const OPEN_WITHOUT_SUBSCRIPTION = ["/app/billing", "/app/settings", "/app/profile"];
 
+/**
+ * Hoisted so each redirect is one element with one props object, for the whole app's life.
+ *
+ * TanStack's <Navigate> decides whether to fire by comparing its props to the previous ones
+ * **by reference**, and JSX builds a fresh props object on every render. A component that
+ * unmounts as soon as it redirects never notices. One that stays mounted — this route, whose
+ * condition is still true on the next render — calls navigate() again, and each call restarts
+ * the pending navigation, which keeps the component mounted, which renders again. The tab
+ * locks up on a loop that never settles, which is what signing out used to do.
+ *
+ * A constant element keeps the same props object across renders, so the reference check
+ * short-circuits and the navigation is issued exactly once per mount.
+ */
+const REDIRECT_TO_LOGIN = <Navigate to="/login" replace />;
+const REDIRECT_TO_BILLING = <Navigate to="/app/billing" replace />;
+
 // Auth state only exists client-side (see lib/auth-store.ts's own comment on why a
 // server-shared singleton can never safely hold it), so this can't be a beforeLoad/loader
 // redirect — it's a client-side check-and-redirect, same shape as the pre-merge app's
@@ -66,7 +82,7 @@ function ProtectedAppShell() {
       </div>
     );
   }
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return REDIRECT_TO_LOGIN;
 
   // Staff run the platform rather than subscribe to it.
   const isStaff = user?.role === "platform_admin";
@@ -81,7 +97,7 @@ function ProtectedAppShell() {
   // refuses the data regardless, so this redirect decides where somebody is sent, not what
   // they can reach, and it does not need to be the first thing that happens.
   if (!isStaff && !onOpenPage && entitlement && !entitlement.active) {
-    return <Navigate to="/app/billing" replace />;
+    return REDIRECT_TO_BILLING;
   }
 
   return <AppShell />;

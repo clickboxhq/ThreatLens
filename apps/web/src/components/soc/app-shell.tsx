@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
   ShieldAlert,
@@ -506,7 +506,6 @@ function Topbar({
   const { unreadCount } = useNotifications();
   const user = useAuthUser();
   const logout = useAuthStore((s) => s.logout);
-  const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md md:px-6">
       <button
@@ -573,8 +572,11 @@ function Topbar({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
+                // No navigate() here. This component is inside the tree the route guard is
+                // about to redirect away from, and two navigations racing to the same place
+                // is what made signing out hang. logout() clears the session; the guard in
+                // routes/app.tsx sees it and sends the browser to /login, once.
                 logout();
-                navigate({ to: "/login" });
               }}
             >
               <LogOut className="size-4" /> Log out
