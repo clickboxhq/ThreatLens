@@ -34,25 +34,33 @@ const NONE: Entitlement = {
 export class SubscriptionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * One query, not three.
+   *
+   * SubscriptionGuard calls this on nearly every request now that there is no free tier, so
+   * its cost is paid on every page a customer loads. The obvious shape — look up your own
+   * subscription, then your organisation, then its subscription — is three round trips for
+   * anyone whose personal subscription is absent, which is every member of a paying
+   * organisation. Prisma can fetch all of it in one.
+   */
   async describeFor(user: AuthenticatedUser): Promise<Entitlement> {
-    const own = await this.prisma.subscription.findFirst({
-      where: { userId: user.id },
+    const row = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        subscription: true,
+        organization: { select: { subscription: true } },
+      },
     });
-    const mine = this.toEntitlement(own, false);
+
+    const mine = this.toEntitlement(row?.subscription ?? null, false);
     if (mine.active) return mine;
 
     // An organisation's subscription covers its members, so a personal one that has lapsed
     // does not mean no access.
-    const row = await this.prisma.user.findUnique({
-      where: { id: user.id },
-      select: { orgId: true },
-    });
-    if (!row?.orgId) return mine;
-
-    const org = await this.prisma.subscription.findFirst({
-      where: { orgId: row.orgId },
-    });
-    const viaOrg = this.toEntitlement(org, true);
+    const viaOrg = this.toEntitlement(
+      row?.organization?.subscription ?? null,
+      true,
+    );
     return viaOrg.active ? viaOrg : mine;
   }
 

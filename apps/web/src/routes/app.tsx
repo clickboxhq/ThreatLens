@@ -39,7 +39,7 @@ function ProtectedAppShell() {
   const isAuthenticated = useIsAuthenticated();
   const user = useAuthUser();
   const location = useLocation();
-  const { entitlement, isPending } = useEntitlement();
+  const { entitlement } = useEntitlement();
 
   if (!hydrated) {
     return (
@@ -55,17 +55,14 @@ function ProtectedAppShell() {
   const isStaff = user?.role === "platform_admin";
   const onOpenPage = OPEN_WITHOUT_SUBSCRIPTION.some((p) => location.pathname.startsWith(p));
 
-  // Wait for the answer rather than guessing. Redirecting on a pending query would bounce
-  // every paying customer through the billing page on each cold load.
-  if (!isStaff && !onOpenPage && isPending) {
-    return (
-      <div className="flex flex-col gap-3 px-4 py-6 md:px-8 md:py-8">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40" />
-      </div>
-    );
-  }
-
+  // Render immediately and redirect only once the answer says to, rather than holding the
+  // console behind a billing request.
+  //
+  // Blocking on it made every page of the console wait for an extra round trip before
+  // anything appeared, which is felt on every load by every paying customer — to spare a
+  // lapsed one a brief glimpse of a console that cannot load any data anyway. The server
+  // refuses the data regardless, so this redirect decides where somebody is sent, not what
+  // they can reach, and it does not need to be the first thing that happens.
   if (!isStaff && !onOpenPage && entitlement && !entitlement.active) {
     return <Navigate to="/app/billing" replace />;
   }
