@@ -52,6 +52,10 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+export function getRefreshToken(): string | null {
+  return refreshToken;
+}
+
 /**
  * Re-reads the pair another tab may have rotated out from under this one.
  *

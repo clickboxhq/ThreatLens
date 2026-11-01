@@ -1,7 +1,14 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { apiClient, getAccessToken, onTokensChanged, setTokens, tryRefresh } from "./api-client";
+import {
+  apiClient,
+  getAccessToken,
+  getRefreshToken,
+  onTokensChanged,
+  setTokens,
+  tryRefresh,
+} from "./api-client";
 
 export type AuthRole = "student" | "instructor" | "org_admin" | "platform_admin";
 export type ExperienceLevel =
@@ -172,9 +179,24 @@ export const useAuthStore = create<AuthState>()(() => ({
   },
 
   logout() {
+    // Captured before the local state goes, because that is what the server needs to revoke.
+    const token = getRefreshToken();
+
+    // Locally first, and synchronously. Signing out has to be instant on screen: waiting on
+    // the network would leave somebody staring at their own account after they asked to
+    // leave it, which on a shared machine is the moment that matters most.
     setTokens(null);
     persistUser(null);
     useAuthStore.setState({ user: null });
+
+    // Then tell the server, which until now was never told at all: the refresh token stayed
+    // valid for its full thirty days after signing out, so anyone holding it — on a shared
+    // or stolen machine — could mint fresh sessions from an account its owner believed they
+    // had left. Best-effort by design; the local session is already gone either way, and a
+    // failed revoke must not put the UI back.
+    if (token) {
+      void apiClient.post("/auth/logout", { refreshToken: token }).catch(() => {});
+    }
   },
 
   // Called after a same-tab email verification confirm so the "please verify" gate disappears
