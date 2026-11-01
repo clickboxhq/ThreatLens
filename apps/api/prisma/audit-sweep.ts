@@ -45,6 +45,8 @@ async function main() {
   const rows = await prisma.auditLog.findMany({
     where: { action: { in: WATCHED }, occurredAt: { gte: since } },
     include: { actor: { select: { email: true } } },
+    // targetId is who it was done TO. On a lockout the actor is the system and the target is
+    // the account somebody was trying to break into, which is the part worth reading.
     orderBy: { occurredAt: 'desc' },
   });
 
@@ -56,8 +58,11 @@ async function main() {
     console.log(`${rows.length} event(s):\n`);
     for (const r of rows) {
       const who = r.actor?.email ?? (r.actorUserId ? r.actorUserId : 'system');
+      const target = r.targetId
+        ? ` -> ${r.targetType ?? 'target'} ${r.targetId.slice(0, 8)}`
+        : '';
       console.log(
-        `  ${r.occurredAt.toISOString()}  ${r.action.padEnd(26)} ${who.padEnd(32)} ${r.actorIp ?? '-'}`,
+        `  ${r.occurredAt.toISOString()}  ${r.action.padEnd(26)} ${who.padEnd(32)} ${(r.actorIp ?? '-').padEnd(16)}${target}`,
       );
     }
     console.log();
