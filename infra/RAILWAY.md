@@ -104,6 +104,7 @@ REDIS_URL=${{Redis.REDIS_URL}}
 JWT_ACCESS_SECRET=<openssl rand -base64 48>
 JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_DAYS=30
+JWT_REFRESH_TTL_DAYS_PRIVILEGED=7
 TRUST_PROXY_HOPS=1
 APP_DB_PASSWORD=<pick a strong value, distinct from Postgres's own password>
 RESEND_API_KEY=<your Resend API key, from resend.com/api-keys>
