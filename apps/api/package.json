@@ -97,7 +97,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(?:@scure|@noble|@otplib|otplib)/)"
+      "/node_modules/(?!(?:@scure|@noble|@otplib|otplib|htmlparser2|entities|domhandler|domutils|domelementtype|dom-serializer)/)"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
