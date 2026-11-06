@@ -6,7 +6,7 @@
 # not for what actually ships to production.
 
 # ---- build: compiles dist/ and generates the Prisma client with full devDependencies ----
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 RUN apk add --no-cache openssl
 COPY package*.json ./
@@ -26,7 +26,7 @@ RUN npm run build --workspace=apps/api
 # infra/docker-compose.prod.yml doesn't rely on (migrations run via the separate `build`-stage
 # `migrate` service there) but infra/RAILWAY.md does, running migrations directly against this
 # image via `railway run` since Railway has no equivalent to a one-off compose service.
-FROM node:22-alpine AS production
+FROM node:26-alpine AS production
 RUN apk add --no-cache openssl
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
