@@ -97,6 +97,41 @@ async function main() {
     console.log(`  ${s.status.padEnd(12)} ${s._count}`);
   }
 
+  // What was actually captured when someone "put their card in". A trial converts by
+  // charging a stored authorisation seven days later, with nobody watching, so the only
+  // moment to find out the card is unusable is now — and the only way to know a card was
+  // taken at all is to look at the one Paystack sent back.
+  const captures = await prisma.payment.findMany({
+    where: { kind: 'card_verification' },
+    orderBy: { paidAt: 'desc' },
+    take: 5,
+    select: { reference: true, status: true, paidAt: true, raw: true },
+  });
+
+  console.log('\nCards captured for trials (5 most recent)');
+  if (captures.length === 0) console.log('  none');
+  for (const c of captures) {
+    const auth = (
+      (c.raw as Record<string, unknown> | null)?.data as
+        Record<string, unknown> | undefined
+    )?.authorization as Record<string, unknown> | undefined;
+    if (!auth) {
+      console.log(`  ${c.reference}  no authorisation recorded`);
+      continue;
+    }
+    const card = `${auth.brand ?? auth.card_type ?? '?'} ****${auth.last4 ?? '????'}`;
+    const expiry = `${auth.exp_month ?? '??'}/${auth.exp_year ?? '????'}`;
+    // Paystack returns reusable: false for channels that cannot be charged again. The
+    // trial would then run its week and quietly fail to convert.
+    const reuse =
+      auth.reusable === false
+        ? 'NOT REUSABLE — trial will not convert'
+        : 'reusable';
+    console.log(
+      `  ${c.paidAt?.toISOString() ?? '(unpaid)'}  ${card}  exp ${expiry}  ${String(auth.channel ?? '?')}  ${reuse}  refund: ${c.status}`,
+    );
+  }
+
   // Card-verification charges are excluded: they are refunded and are not revenue.
   const naira = (payments._sum.amountKobo ?? 0) / 100;
   console.log(

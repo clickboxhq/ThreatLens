@@ -252,7 +252,25 @@ export class BillingWebhookService {
 
     if (!authorizationCode || !customerCode) {
       throw new Error(
-        `card verification ${reference} returned no reusable authorisation`,
+        `card verification ${reference} returned no authorisation`,
+      );
+    }
+
+    // Paystack marks an authorisation it cannot charge again — some channels never issue a
+    // reusable one. Letting that through would start a seven-day trial whose conversion
+    // charge fails in a week, with nobody watching, which is the product given away. Give
+    // the fifty naira back now and refuse, while there is still someone at the screen to
+    // try another card.
+    if (d.authorization?.reusable === false) {
+      try {
+        await this.paystack.refund(reference);
+      } catch (err) {
+        this.logger.error(
+          `Could not refund unusable card verification ${reference}: ${(err as Error).message}`,
+        );
+      }
+      throw new Error(
+        `card verification ${reference} returned a non-reusable authorisation; no trial started`,
       );
     }
 

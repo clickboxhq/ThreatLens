@@ -477,7 +477,26 @@ describe('BillingWebhookService — card-upfront trial', () => {
 
     expect(stores.subscriptions).toHaveLength(0);
     expect(paystack.createSubscription).not.toHaveBeenCalled();
-    expect(stores.events[0].error).toContain('reusable authorisation');
+    expect(stores.events[0].error).toContain('no authorisation');
+  });
+
+  it('refuses a card Paystack says it cannot charge again, and gives the money back', async () => {
+    // A non-reusable authorisation converts into nothing in a week's time, with nobody
+    // watching. Refuse while the person is still at the screen, and do not keep the fifty
+    // naira for a trial they did not get.
+    const { service, stores, paystack } = build();
+    const { payload } = verificationBody('tl_v5');
+    payload.data.authorization = {
+      authorization_code: 'AUTH_1',
+      reusable: false,
+    };
+
+    await service.receive(Buffer.from(JSON.stringify(payload)), payload);
+
+    expect(stores.subscriptions).toHaveLength(0);
+    expect(paystack.createSubscription).not.toHaveBeenCalled();
+    expect(paystack.refund).toHaveBeenCalledWith('tl_v5');
+    expect(stores.events[0].error).toContain('non-reusable authorisation');
   });
 
   it('resumes scheduling on redelivery when the provider call failed', async () => {
