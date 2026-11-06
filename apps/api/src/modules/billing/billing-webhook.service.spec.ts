@@ -131,6 +131,14 @@ function build(seed: Partial<Stores> = {}) {
       ),
     },
     subscription: {
+      findFirst: jest.fn(
+        async ({ where }: { where: Record<string, string> }) =>
+          s.subscriptions.find((x) =>
+            Object.entries(where).every(
+              ([k, v]) => (x as unknown as Record<string, unknown>)[k] === v,
+            ),
+          ) ?? null,
+      ),
       update: jest.fn(
         async ({
           where,
@@ -301,7 +309,7 @@ describe('BillingWebhookService', () => {
 
     expect(result).toBe('processed');
     expect(stores.payments).toHaveLength(0);
-    expect(stores.events[0].error).toContain('no customer');
+    expect(stores.events[0].error).toContain('no known customer');
     expect(stores.events[0].processedAt).toBeNull();
   });
 
@@ -534,5 +542,149 @@ describe('BillingWebhookService — card-upfront trial', () => {
       (stores.subscriptions[0].currentPeriodEnd.getTime() - Date.now()) /
       86400000;
     expect(days).toBeGreaterThan(30);
+  });
+});
+
+/**
+ * Renewals, which is every charge after the first one.
+ *
+ * Paystack raises these itself and does not replay the metadata set when the subscription
+ * was bought, so anything that reads the customer or the interval out of metadata works
+ * exactly once and then fails for the rest of the subscription's life — while Paystack goes
+ * on taking the money.
+ */
+const renewalBody = (
+  reference: string,
+  opts: {
+    subscriptionCode?: string;
+    customerCode?: string;
+    amountKobo?: number;
+  } = {},
+) => {
+  const payload = {
+    event: 'charge.success',
+    data: {
+      reference,
+      amount: opts.amountKobo ?? 1_000_000,
+      currency: 'NGN',
+      paid_at: '2026-11-22T10:00:00.000Z',
+      customer: { customer_code: opts.customerCode ?? 'CUS_1' },
+      ...(opts.subscriptionCode
+        ? { subscription_code: opts.subscriptionCode }
+        : {}),
+      // No metadata at all. This is the whole point.
+    },
+  };
+  return { raw: Buffer.from(JSON.stringify(payload)), payload };
+};
+
+const existingSubscription = (over: Record<string, unknown> = {}) => ({
+  id: 'sub-1',
+  userId: 'user-1',
+  orgId: null,
+  planId: 'individual',
+  interval: 'monthly',
+  status: 'active',
+  currentPeriodEnd: new Date('2026-11-20T00:00:00.000Z'),
+  paystackCustomerCode: 'CUS_1',
+  paystackSubscriptionCode: 'SUB_1',
+  cancelledAt: null,
+  ...over,
+});
+
+describe('BillingWebhookService — renewals', () => {
+  it('credits a renewal that carries no metadata, matched on subscription code', async () => {
+    const { service, stores } = build({
+      subscriptions: [existingSubscription()],
+    });
+    const { raw, payload } = renewalBody('tl_renew', {
+      subscriptionCode: 'SUB_1',
+    });
+
+    await service.receive(raw, payload);
+
+    expect(stores.payments).toHaveLength(1);
+    expect(stores.subscriptions).toHaveLength(1);
+    expect(stores.subscriptions[0].currentPeriodEnd.getTime()).toBeGreaterThan(
+      new Date('2026-11-20T00:00:00.000Z').getTime(),
+    );
+  });
+
+  it('falls back to the customer when the event names no subscription', async () => {
+    const { service, stores } = build({
+      subscriptions: [existingSubscription({ paystackSubscriptionCode: null })],
+    });
+    const { raw, payload } = renewalBody('tl_renew', { customerCode: 'CUS_1' });
+
+    await service.receive(raw, payload);
+
+    expect(stores.payments).toHaveLength(1);
+    expect(stores.subscriptions).toHaveLength(1);
+  });
+
+  // Thirty days for a year's money is the expensive version of this bug.
+  it('extends an annual subscription by a year, not a month', async () => {
+    const start = new Date('2026-11-20T00:00:00.000Z');
+    const { service, stores } = build({
+      subscriptions: [
+        existingSubscription({ interval: 'annual', currentPeriodEnd: start }),
+      ],
+    });
+    const { raw, payload } = renewalBody('tl_renew_annual', {
+      subscriptionCode: 'SUB_1',
+      amountKobo: 10_000_000,
+    });
+
+    await service.receive(raw, payload);
+
+    const grantedDays =
+      (stores.subscriptions[0].currentPeriodEnd.getTime() - start.getTime()) /
+      86_400_000;
+    expect(Math.round(grantedDays)).toBe(365);
+  });
+
+  it('does not invent a subscription for a charge it cannot place', async () => {
+    const { service, stores } = build();
+    const { raw, payload } = renewalBody('tl_orphan', {
+      subscriptionCode: 'SUB_UNKNOWN',
+      customerCode: 'CUS_UNKNOWN',
+    });
+
+    const result = await service.receive(raw, payload);
+
+    expect(result).toBe('processed');
+    expect(stores.events[0].error).toContain(
+      'matches no known customer or subscription',
+    );
+    expect(stores.payments).toHaveLength(0);
+    expect(stores.subscriptions).toHaveLength(0);
+  });
+
+  // Metadata is still the better source when it is there: the first charge of an annual
+  // subscription has no stored row to read an interval from yet.
+  it('still prefers metadata on a first charge', async () => {
+    const { service, stores } = build();
+    const payload = {
+      event: 'charge.success',
+      data: {
+        reference: 'tl_first_annual',
+        amount: 10_000_000,
+        currency: 'NGN',
+        paid_at: '2026-11-22T10:00:00.000Z',
+        customer: { customer_code: 'CUS_9' },
+        metadata: {
+          userId: 'user-9',
+          planId: 'individual',
+          interval: 'annual',
+        },
+      },
+    };
+
+    await service.receive(Buffer.from(JSON.stringify(payload)), payload);
+
+    const granted =
+      (stores.subscriptions[0].currentPeriodEnd.getTime() - Date.now()) /
+      86_400_000;
+    expect(Math.round(granted)).toBe(365);
   });
 });

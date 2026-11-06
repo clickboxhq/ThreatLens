@@ -127,19 +127,48 @@ export class BillingWebhookService {
     if (!reference) throw new Error('charge.success with no reference');
 
     const meta = d.metadata ?? {};
-    const userId = meta.userId ?? null;
-    const orgId = meta.orgId ?? null;
-    if (!userId && !orgId) {
-      throw new Error(
-        `charge.success ${reference} carries no customer in metadata`,
+
+    if (meta.kind === CARD_VERIFICATION) {
+      // The card-capture charge is one we started ourselves, so its metadata is always
+      // there; without it there is no way to know whose card this is.
+      if (!meta.userId && !meta.orgId) {
+        throw new Error(
+          `charge.success ${reference} carries no customer in metadata`,
+        );
+      }
+      return this.onCardCaptured(
+        event,
+        reference,
+        meta.userId ?? null,
+        meta.orgId ?? null,
       );
     }
 
-    if (meta.kind === CARD_VERIFICATION) {
-      return this.onCardCaptured(event, reference, userId, orgId);
+    // A renewal is not our transaction. Paystack raises it on its own schedule and does not
+    // replay the metadata we set when the subscription was first bought, so reading the
+    // customer out of metadata works for the first charge and fails for every one after it.
+    // That failure is expensive and silent in the worst direction: Paystack goes on taking
+    // the money while this throws, the period is never extended, and the customer loses
+    // access to something they are still paying for.
+    //
+    // Paystack does identify the subscription on a renewal — by subscription code, and
+    // failing that by customer — and we stored both when it was created. Those are the
+    // durable link; metadata is only a convenience on the first charge.
+    const linked =
+      meta.userId || meta.orgId ? null : await this.subscriptionFromEvent(d);
+    const userId = meta.userId ?? linked?.userId ?? null;
+    const orgId = meta.orgId ?? linked?.orgId ?? null;
+    if (!userId && !orgId) {
+      throw new Error(
+        `charge.success ${reference} matches no known customer or subscription`,
+      );
     }
 
-    const interval = meta.interval === 'annual' ? 'annual' : 'monthly';
+    // Same reasoning for the interval: metadata has it on the first charge, and on a renewal
+    // the subscription we already stored is the authority. Defaulting a renewal to monthly
+    // would hand an annual subscriber thirty days for a year's money.
+    const interval =
+      (meta.interval ?? linked?.interval) === 'annual' ? 'annual' : 'monthly';
     const days = interval === 'annual' ? YEAR_DAYS : MONTH_DAYS;
     const paidAt = d.paid_at ?? d.paidAt ?? null;
 
@@ -279,7 +308,8 @@ export class BillingWebhookService {
     });
 
     if (!subscription.paystackSubscriptionCode) {
-      const planCode = this.planCodeFor(planId);
+      // Trials convert to the monthly plan; checkout refuses a trial on any other interval.
+      const planCode = this.planCodeFor(planId, 'monthly');
       if (!planCode) {
         throw new Error(
           `no Paystack plan code for ${planId}; trial would never convert`,
@@ -316,10 +346,46 @@ export class BillingWebhookService {
     }
   }
 
-  private planCodeFor(planId: string): string | null {
-    return planId === 'organization'
-      ? (process.env.PAYSTACK_PLAN_ORGANIZATION_MONTHLY ?? null)
-      : (process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY ?? null);
+  private planCodeFor(planId: string, interval: string): string | null {
+    const plan = planId === 'organization' ? 'ORGANIZATION' : 'INDIVIDUAL';
+    const period = interval === 'annual' ? 'ANNUAL' : 'MONTHLY';
+    return process.env[`PAYSTACK_PLAN_${plan}_${period}`] ?? null;
+  }
+
+  /**
+   * Finds the subscription a renewal belongs to, using what Paystack sends unprompted.
+   *
+   * The subscription code is the exact link and is tried first. The customer code is the
+   * fallback for an event that omits it — looser, since one customer could in principle
+   * hold more than one subscription, so it takes the most recent.
+   */
+  private async subscriptionFromEvent(
+    d: NonNullable<PaystackEvent['data']>,
+  ): Promise<{
+    userId: string | null;
+    orgId: string | null;
+    interval: string;
+  } | null> {
+    const select = { userId: true, orgId: true, interval: true } as const;
+
+    if (d.subscription_code) {
+      const bySubscription = await this.prisma.subscription.findFirst({
+        where: { paystackSubscriptionCode: d.subscription_code },
+        select,
+      });
+      if (bySubscription) return bySubscription;
+    }
+
+    const customerCode = d.customer?.customer_code;
+    if (customerCode) {
+      return this.prisma.subscription.findFirst({
+        where: { paystackCustomerCode: customerCode },
+        orderBy: { createdAt: 'desc' },
+        select,
+      });
+    }
+
+    return null;
   }
 
   /** Links Paystack's subscription code so a later cancellation can be matched to a row. */
