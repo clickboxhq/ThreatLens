@@ -17,9 +17,9 @@ export type BillingInterval = 'monthly' | 'annual';
 export interface PlanPrice {
   amountKobo: number;
   /**
-   * Filled per environment once the plan exists in the Paystack dashboard. Null keeps the
-   * monthly plan from recurring — the charge still works, it simply will not renew — so an
-   * unfinished setup degrades to a one-off rather than silently charging the wrong thing.
+   * Filled per environment once the plan exists in the Paystack dashboard. Null means
+   * checkout refuses this plan outright: selling a subscription that quietly never renews
+   * is worse than not selling it, because nobody finds out until the revenue stops.
    */
   paystackPlanCode: string | null;
 }
@@ -34,7 +34,7 @@ export const PLAN_PRICES: Record<PlanId, Record<BillingInterval, PlanPrice>> = {
     },
     annual: {
       amountKobo: 100_000 * 100,
-      paystackPlanCode: null,
+      paystackPlanCode: code('PAYSTACK_PLAN_INDIVIDUAL_ANNUAL'),
     },
   },
   organization: {
@@ -44,7 +44,7 @@ export const PLAN_PRICES: Record<PlanId, Record<BillingInterval, PlanPrice>> = {
     },
     annual: {
       amountKobo: 150_000 * 100,
-      paystackPlanCode: null,
+      paystackPlanCode: code('PAYSTACK_PLAN_ORGANIZATION_ANNUAL'),
     },
   },
 };

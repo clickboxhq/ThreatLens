@@ -22,19 +22,29 @@ async function main() {
   const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
   const individual = process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY ?? '';
   const organization = process.env.PAYSTACK_PLAN_ORGANIZATION_MONTHLY ?? '';
+  const individualAnnual = process.env.PAYSTACK_PLAN_INDIVIDUAL_ANNUAL ?? '';
+  const organizationAnnual =
+    process.env.PAYSTACK_PLAN_ORGANIZATION_ANNUAL ?? '';
 
   console.log('Configuration');
   console.log(`  Secret key set:        ${yesNo(Boolean(secret))}`);
   console.log(
     `  Mode:                  ${secret.startsWith('sk_live_') ? 'LIVE — real money' : secret.startsWith('sk_test_') ? 'test' : 'unset'}`,
   );
-  // A trial with no plan code behind it would start free and never convert, so checkout
-  // refuses it rather than giving the product away silently.
+  // Checkout refuses any plan with no code behind it. A trial would otherwise start free
+  // and never convert, and a paid plan would charge once and never renew — both give the
+  // product away, just on different timescales.
   console.log(
-    `  Individual plan code:  ${individual || 'MISSING — monthly trials will be refused'}`,
+    `  Individual monthly:    ${individual || 'MISSING — monthly checkout and trials refused'}`,
   );
   console.log(
-    `  Organisation plan:     ${organization || 'MISSING — organisation trials will be refused'}`,
+    `  Individual annual:     ${individualAnnual || 'MISSING — annual checkout refused'}`,
+  );
+  console.log(
+    `  Organisation monthly:  ${organization || 'MISSING — monthly checkout and trials refused'}`,
+  );
+  console.log(
+    `  Organisation annual:   ${organizationAnnual || 'MISSING — annual checkout refused'}`,
   );
 
   const deliveries = await prisma.webhookEvent.findMany({

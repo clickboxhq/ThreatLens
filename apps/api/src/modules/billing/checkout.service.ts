@@ -62,6 +62,19 @@ export class CheckoutService {
       throw new AppException(400, 'UNKNOWN_PLAN', 'No such plan and interval.');
     }
 
+    // Every purchase needs a Paystack plan behind it, because every purchase is meant to
+    // renew. Without one the charge would still succeed and then quietly never recur — a
+    // subscription that lapses in a year with nobody watching. Refusing is the kinder
+    // failure: it is visible immediately, and it is visible to us rather than to a customer
+    // twelve months from now.
+    if (!price.paystackPlanCode) {
+      throw new AppException(
+        503,
+        'PAYMENTS_UNAVAILABLE',
+        'This plan is not available yet.',
+      );
+    }
+
     const account = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { email: true, orgId: true },
@@ -96,13 +109,6 @@ export class CheckoutService {
           'The free trial applies to the monthly plan.',
         );
       }
-      if (!price.paystackPlanCode) {
-        throw new AppException(
-          503,
-          'PAYMENTS_UNAVAILABLE',
-          'Trials are not available yet.',
-        );
-      }
       const already = await this.prisma.subscription.findFirst({
         where: seatsFor ? { orgId: seatsFor } : { userId: user.id },
         select: { id: true },
@@ -132,10 +138,9 @@ export class CheckoutService {
       // it to wait for the webhook rather than to trust the redirect.
       callbackUrl: `${webOrigin}/app/billing?reference=${reference}`,
       // On a trial the subscription is created afterwards with a start date, so no plan goes
-      // on this transaction. Monthly recurs through a Paystack plan; annual is a one-off
-      // charge — see the Subscription model for why annual is not a stored-card plan.
-      planCode:
-        !trial && interval === 'monthly' ? price.paystackPlanCode : null,
+      // on this transaction. Every other purchase carries its plan, which is what makes
+      // Paystack charge it again when the period is up — annual included.
+      planCode: trial ? null : price.paystackPlanCode,
       metadata: {
         userId: seatsFor ? null : user.id,
         orgId: seatsFor,
