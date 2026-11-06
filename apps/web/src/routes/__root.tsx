@@ -6,8 +6,9 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -38,12 +39,25 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+/**
+ * Typed with the router's own props rather than a hand-written `{ error: Error }`: a throw
+ * is not obliged to throw an Error, and the router passes through whatever it caught, so
+ * what arrives here is only as narrow as the version of the router says it is. Taking the
+ * library's type keeps this compiling across versions that disagree about it, and the
+ * narrowing below is what makes the value safe to treat as an Error either way.
+ */
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
+  // Keyed on the original so a non-Error throw does not produce a fresh wrapper every
+  // render and re-fire the report.
+  const thrown = useMemo(
+    () => (error instanceof Error ? error : new Error(String(error))),
+    [error],
+  );
+  console.error(thrown);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    reportLovableError(thrown, { boundary: "tanstack_root_error_component" });
+  }, [thrown]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

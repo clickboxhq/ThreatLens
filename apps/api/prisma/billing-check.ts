@@ -22,19 +22,29 @@ async function main() {
   const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
   const individual = process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY ?? '';
   const organization = process.env.PAYSTACK_PLAN_ORGANIZATION_MONTHLY ?? '';
+  const individualAnnual = process.env.PAYSTACK_PLAN_INDIVIDUAL_ANNUAL ?? '';
+  const organizationAnnual =
+    process.env.PAYSTACK_PLAN_ORGANIZATION_ANNUAL ?? '';
 
   console.log('Configuration');
   console.log(`  Secret key set:        ${yesNo(Boolean(secret))}`);
   console.log(
     `  Mode:                  ${secret.startsWith('sk_live_') ? 'LIVE — real money' : secret.startsWith('sk_test_') ? 'test' : 'unset'}`,
   );
-  // A trial with no plan code behind it would start free and never convert, so checkout
-  // refuses it rather than giving the product away silently.
+  // Checkout refuses any plan with no code behind it. A trial would otherwise start free
+  // and never convert, and a paid plan would charge once and never renew — both give the
+  // product away, just on different timescales.
   console.log(
-    `  Individual plan code:  ${individual || 'MISSING — monthly trials will be refused'}`,
+    `  Individual monthly:    ${individual || 'MISSING — monthly checkout and trials refused'}`,
   );
   console.log(
-    `  Organisation plan:     ${organization || 'MISSING — organisation trials will be refused'}`,
+    `  Individual annual:     ${individualAnnual || 'MISSING — annual checkout refused'}`,
+  );
+  console.log(
+    `  Organisation monthly:  ${organization || 'MISSING — monthly checkout and trials refused'}`,
+  );
+  console.log(
+    `  Organisation annual:   ${organizationAnnual || 'MISSING — annual checkout refused'}`,
   );
 
   const deliveries = await prisma.webhookEvent.findMany({
@@ -85,6 +95,41 @@ async function main() {
   if (subscriptions.length === 0) console.log('  none');
   for (const s of subscriptions) {
     console.log(`  ${s.status.padEnd(12)} ${s._count}`);
+  }
+
+  // What was actually captured when someone "put their card in". A trial converts by
+  // charging a stored authorisation seven days later, with nobody watching, so the only
+  // moment to find out the card is unusable is now — and the only way to know a card was
+  // taken at all is to look at the one Paystack sent back.
+  const captures = await prisma.payment.findMany({
+    where: { kind: 'card_verification' },
+    orderBy: { paidAt: 'desc' },
+    take: 5,
+    select: { reference: true, status: true, paidAt: true, raw: true },
+  });
+
+  console.log('\nCards captured for trials (5 most recent)');
+  if (captures.length === 0) console.log('  none');
+  for (const c of captures) {
+    const auth = (
+      (c.raw as Record<string, unknown> | null)?.data as
+        Record<string, unknown> | undefined
+    )?.authorization as Record<string, unknown> | undefined;
+    if (!auth) {
+      console.log(`  ${c.reference}  no authorisation recorded`);
+      continue;
+    }
+    const card = `${auth.brand ?? auth.card_type ?? '?'} ****${auth.last4 ?? '????'}`;
+    const expiry = `${auth.exp_month ?? '??'}/${auth.exp_year ?? '????'}`;
+    // Paystack returns reusable: false for channels that cannot be charged again. The
+    // trial would then run its week and quietly fail to convert.
+    const reuse =
+      auth.reusable === false
+        ? 'NOT REUSABLE — trial will not convert'
+        : 'reusable';
+    console.log(
+      `  ${c.paidAt?.toISOString() ?? '(unpaid)'}  ${card}  exp ${expiry}  ${String(auth.channel ?? '?')}  ${reuse}  refund: ${c.status}`,
+    );
   }
 
   // Card-verification charges are excluded: they are refunded and are not revenue.

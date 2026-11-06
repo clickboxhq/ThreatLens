@@ -26,6 +26,23 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import type { User } from '@prisma/client';
 
+/**
+ * Roles whose sessions are kept short.
+ *
+ * A stolen refresh token is good until it expires, so the expiry is the length of the
+ * breach. For a student that is their own progress. For these two it is other people's —
+ * an org_admin manages their organisation's members and billing, a platform_admin manages
+ * everyone's — which is worth more friction.
+ *
+ * `instructor` is deliberately not here. The blast radius is real (scenario ground truth,
+ * their cohorts' learner data) but it is scoped to cohorts they already teach, and they are
+ * the heaviest daily users of the product. Move it in if that trade stops looking right.
+ */
+const PRIVILEGED_ROLES: ReadonlySet<string> = new Set([
+  'org_admin',
+  'platform_admin',
+]);
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
@@ -979,6 +996,22 @@ export class AuthService {
     });
   }
 
+  /**
+   * How long a refresh token for this role stays good. Applied on every issue, and a
+   * refresh issues a new one — so an admin already carrying a thirty-day token is down to
+   * seven within one access-token lifetime of using the product, without logging anyone out.
+   */
+  private refreshTtlDaysFor(role: string): number {
+    const standard = Number(this.config.get('JWT_REFRESH_TTL_DAYS') ?? 30);
+    if (!PRIVILEGED_ROLES.has(role)) return standard;
+    const privileged = Number(
+      this.config.get('JWT_REFRESH_TTL_DAYS_PRIVILEGED') ?? 7,
+    );
+    // Whatever the two are set to, the privileged window is never the longer one. A
+    // configuration mistake should not quietly hand admins the most durable sessions.
+    return Math.min(privileged, standard);
+  }
+
   private async issueTokenPair(
     user: User,
     replacesTokenId?: string,
@@ -986,9 +1019,7 @@ export class AuthService {
     const accessTtlSeconds = Number(
       this.config.get('JWT_ACCESS_TTL_SECONDS') ?? 900,
     );
-    const refreshTtlDays = Number(
-      this.config.get('JWT_REFRESH_TTL_DAYS') ?? 30,
-    );
+    const refreshTtlDays = this.refreshTtlDaysFor(user.role);
 
     const accessToken = this.jwt.sign(
       {

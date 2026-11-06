@@ -1613,6 +1613,63 @@ describe('AuthService session lifecycle — refresh/logout (server-side TTL enfo
     expect(newRow.expiresAt.getTime()).toBeLessThan(expectedExpiry + 5000);
   });
 
+  /**
+   * A refresh token is valid until it expires, so its lifetime is how long a stolen one
+   * keeps working. Admin sessions are held to a shorter one than everyone else's.
+   */
+  describe('privileged session lifetime', () => {
+    async function ttlDaysFor(
+      role: User['role'],
+      overrides: Record<string, unknown> = {},
+    ): Promise<number> {
+      const target = user({ role });
+      const users = new Map([[target.id, target]]);
+      const refreshTokens = new Map<string, FakeRefreshToken>();
+      seedRefreshToken(refreshTokens, target.id);
+      const { service, config } = buildService(users, refreshTokens);
+      config.get = jest.fn((key: string) => overrides[key]);
+
+      const before = Date.now();
+      const result = await service.refresh(RAW_TOKEN);
+      const row = [...refreshTokens.values()].find(
+        (t) => t.tokenHash === tokenHash(result.refreshToken),
+      )!;
+      return (row.expiresAt.getTime() - before) / (24 * 60 * 60 * 1000);
+    }
+
+    it.each(['org_admin', 'platform_admin'] as const)(
+      'gives a %s seven days, not thirty',
+      async (role) => {
+        expect(await ttlDaysFor(role)).toBeCloseTo(7, 1);
+      },
+    );
+
+    it.each(['student', 'instructor'] as const)(
+      'leaves a %s on the standard thirty days',
+      async (role) => {
+        expect(await ttlDaysFor(role)).toBeCloseTo(30, 1);
+      },
+    );
+
+    it('honours JWT_REFRESH_TTL_DAYS_PRIVILEGED', async () => {
+      expect(
+        await ttlDaysFor('platform_admin', {
+          JWT_REFRESH_TTL_DAYS_PRIVILEGED: 2,
+        }),
+      ).toBeCloseTo(2, 1);
+    });
+
+    it('never lets an admin session outlast a standard one, however the two are configured', async () => {
+      // Misconfiguration should not quietly hand admins the most durable sessions of all.
+      expect(
+        await ttlDaysFor('platform_admin', {
+          JWT_REFRESH_TTL_DAYS: 3,
+          JWT_REFRESH_TTL_DAYS_PRIVILEGED: 90,
+        }),
+      ).toBeCloseTo(3, 1);
+    });
+  });
+
   it('logout() revokes the refresh token so it can no longer be used, but does not error for an unknown token', async () => {
     const target = user();
     const users = new Map([[target.id, target]]);

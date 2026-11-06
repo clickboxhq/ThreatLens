@@ -54,7 +54,7 @@ function statusLabel(e: EntitlementDto): { text: string; tone: string } {
 
 function Billing() {
   const { reference } = Route.useSearch();
-  const { entitlement, isPending } = useEntitlement(Boolean(reference));
+  const { entitlement, isPending, confirmationTimedOut } = useEntitlement(Boolean(reference));
   const { startCheckout, isStartingCheckout, cancel, isCancelling } = useBillingActions();
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -89,6 +89,9 @@ function Billing() {
   // A lapsed account still has a subscription row, so a status with no access means the
   // trial has already been used. Offering it again would hand them a 409 from the API.
   const trialUsed = Boolean(e?.status) && !e?.active;
+  // Still genuinely waiting on the webhook — as opposed to back from Paystack with nothing
+  // to show for it, which is a different thing to say and a different thing to offer.
+  const confirming = Boolean(reference) && !e?.active && !confirmationTimedOut;
   const status = e ? statusLabel(e) : null;
   const renews = e?.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
 
@@ -96,12 +99,29 @@ function Billing() {
     <div className="px-4 py-6 md:px-8 md:py-8">
       <SectionHeader title="Billing" description="Your plan and payment settings." />
 
-      {reference && !e?.active && (
+      {confirming && (
         <Panel className="mb-4">
           <div className="flex items-center gap-2.5 px-5 py-4 text-[13px] text-secondary">
             <Loader2 className="size-4 animate-spin" />
             Confirming your payment with Paystack. This usually takes a few seconds — you can leave
             this page, nothing will be lost.
+          </div>
+        </Panel>
+      )}
+
+      {/* The wait ran out. Say so plainly and give the plan panel back, rather than
+          spinning at somebody whose card was declined until they give up. */}
+      {reference && !e?.active && confirmationTimedOut && (
+        <Panel className="mb-4">
+          <div className="px-5 py-4 text-[13px]">
+            <p className="font-medium text-foreground">
+              We haven't had a confirmation from Paystack.
+            </p>
+            <p className="mt-1.5 text-secondary">
+              If your card was declined, nothing was charged and you can try again below. If you did
+              complete the payment, it can take a few minutes to reach us — reload this page and it
+              will appear. Nothing is lost either way.
+            </p>
           </div>
         </Panel>
       )}
@@ -116,8 +136,9 @@ function Billing() {
       )}
 
       {/* Not while the confirming banner is up: offering the trial to somebody who has
-          just paid for it reads as though the payment failed. */}
-      {!e?.active && !e?.viaOrganization && !reference && (
+          just paid for it reads as though the payment failed. Once the wait has run out,
+          though, it is the way back — so this follows `confirming`, not `reference`. */}
+      {!e?.active && !e?.viaOrganization && !confirming && (
         <Panel>
           <div className="px-5 py-6">
             <h2 className="text-[15px] font-medium text-foreground">

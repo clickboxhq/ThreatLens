@@ -6,6 +6,8 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "transformIgnorePatterns": ["/node_modules/(?!(?:@scure|@noble|@otplib|otplib)/)"],
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(?:@scure|@noble|@otplib|otplib|htmlparser2|entities|domhandler|domutils|domelementtype|dom-serializer)/)"
+  ],
   "testTimeout": 120000
 }
