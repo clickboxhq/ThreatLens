@@ -50,6 +50,8 @@ import { ActivityModule } from './common/activity/activity.module';
 })
 export class WorkerModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    // See the note in app.module.ts: Express 5 needs a named wildcard, and the braces keep
+    // the root path covered.
+    consumer.apply(CorrelationIdMiddleware).forRoutes('{*splat}');
   }
 }

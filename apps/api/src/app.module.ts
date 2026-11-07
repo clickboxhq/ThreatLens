@@ -98,8 +98,15 @@ import { MaintenanceMiddleware } from './common/middleware/maintenance.middlewar
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // `'{*splat}'`, not `'*'`: Express 5's path-to-regexp requires a *named* wildcard, so a
+    // bare `'*'` throws at startup. The braces make the segment optional, which is what
+    // keeps `/` covered alongside everything under it — the form the migration guide warns
+    // about is the slash-prefixed `'/*splat'`, which matches `/deep/path` but not `/`.
+    // Both middlewares here are load-bearing on every request — correlation IDs for log
+    // tracing, and the maintenance gate — so a pattern that silently skipped a path would
+    // be the kind of gap nobody notices until it matters.
     consumer
       .apply(CorrelationIdMiddleware, MaintenanceMiddleware)
-      .forRoutes('*');
+      .forRoutes('{*splat}');
   }
 }
