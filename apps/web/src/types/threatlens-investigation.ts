@@ -99,7 +99,10 @@ export interface MitreTechniqueDto {
   id: string;
   techniqueId: string;
   name: string;
+  /** Raw ATT&CK tactic ID, e.g. "TA0006". */
   tactic: string;
+  /** Human-readable tactic, e.g. "Credential Access" — resolved server-side. */
+  tacticName: string;
 }
 
 // The 6 options ThreatLens's "Response actions" panel offers — see

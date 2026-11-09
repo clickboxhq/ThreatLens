@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Panel } from "@/components/soc/primitives";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { ApiError } from "@/lib/api-client";
@@ -59,6 +59,22 @@ export function StageSubmit({
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Grouped under their tactic, because picking the right technique out of a flat wall of
+  // thirty-odd IDs is a memory test, not an analysis one — and the tactic is the thing an
+  // analyst has usually already decided by this point ("this was credential access"), so it
+  // is the cheapest way to narrow the list. A Map preserves insertion order and the API
+  // sends the catalogue in kill-chain order, so the panel reads the way an attack unfolds
+  // rather than alphabetically.
+  const techniquesByTactic = useMemo(() => {
+    const groups = new Map<string, MitreTechniqueDto[]>();
+    for (const t of mitreTechniques) {
+      const existing = groups.get(t.tacticName);
+      if (existing) existing.push(t);
+      else groups.set(t.tacticName, [t]);
+    }
+    return [...groups];
+  }, [mitreTechniques]);
+
   function validate(): string | null {
     if (!verdict) return "Select a verdict before submitting.";
     if (summary.trim().length < 20) return "The written summary must be at least 20 characters.";
@@ -87,29 +103,54 @@ export function StageSubmit({
         </div>
       </Panel>
 
-      <Panel title="MITRE ATT&CK techniques" className="mt-4">
-        <div className="flex flex-wrap gap-1.5">
-          {mitreTechniques.map((t) => {
-            const on = selectedTechniqueIds.includes(t.id);
-            return (
-              <button
-                key={t.id}
-                onClick={() =>
-                  setSelectedTechniqueIds((prev) =>
-                    on ? prev.filter((id) => id !== t.id) : [...prev, t.id],
-                  )
-                }
-                title={`${t.name} · ${t.tactic}`}
-                className={`rounded border px-1.5 py-0.5 font-mono text-[11px] ${
-                  on
-                    ? "border-[color:var(--info)]/60 bg-[color:var(--info)]/10 text-[color:var(--info)]"
-                    : "border-border bg-background text-secondary"
-                }`}
-              >
-                {t.techniqueId}
-              </button>
-            );
-          })}
+      <Panel
+        title="MITRE ATT&CK techniques"
+        className="mt-4"
+        actions={
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {selectedTechniqueIds.length} selected
+          </span>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {techniquesByTactic.map(([tacticName, techniques]) => (
+            <div key={tacticName}>
+              <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
+                {tacticName}
+              </div>
+              <div className="flex flex-col gap-1">
+                {techniques.map((t) => {
+                  const on = selectedTechniqueIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setSelectedTechniqueIds((prev) =>
+                          on ? prev.filter((id) => id !== t.id) : [...prev, t.id],
+                        )
+                      }
+                      className={`flex items-baseline gap-2 rounded-md border px-2.5 py-1.5 text-left transition-colors ${
+                        on
+                          ? "border-[color:var(--info)]/60 bg-[color:var(--info)]/10"
+                          : "border-border bg-background hover:border-border/80"
+                      }`}
+                    >
+                      <span
+                        className={`shrink-0 font-mono text-[11px] ${
+                          on ? "text-[color:var(--info)]" : "text-muted-foreground"
+                        }`}
+                      >
+                        {t.techniqueId}
+                      </span>
+                      <span className="text-[12.5px] leading-snug">{t.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </Panel>
 
