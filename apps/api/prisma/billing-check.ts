@@ -20,6 +20,10 @@ const yesNo = (ok: boolean) => (ok ? 'yes' : 'NO');
 
 async function main() {
   const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
+  const webhookSecrets = (process.env.PAYSTACK_WEBHOOK_SECRET ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const individual = process.env.PAYSTACK_PLAN_INDIVIDUAL_MONTHLY ?? '';
   const organization = process.env.PAYSTACK_PLAN_ORGANIZATION_MONTHLY ?? '';
   const individualAnnual = process.env.PAYSTACK_PLAN_INDIVIDUAL_ANNUAL ?? '';
@@ -30,6 +34,17 @@ async function main() {
   console.log(`  Secret key set:        ${yesNo(Boolean(secret))}`);
   console.log(
     `  Mode:                  ${secret.startsWith('sk_live_') ? 'LIVE — real money' : secret.startsWith('sk_test_') ? 'test' : 'unset'}`,
+  );
+  // Paystack runs two webhook signing schemes and picks per mode, so this says which one we
+  // can actually verify. Both are accepted; the risk is holding neither credential that the
+  // arriving scheme needs, and that failure is invisible — the endpoint answers 200 either
+  // way, so Paystack marks each rejected delivery as accepted and never retries it.
+  console.log(
+    `  Webhook signing secret: ${
+      webhookSecrets.length === 0
+        ? 'not set — only legacy x-paystack-signature can be verified'
+        : `${webhookSecrets.length} set${webhookSecrets.every((s) => s.startsWith('whsec_')) ? '' : ' — WARNING: one does not start with whsec_'}`
+    }`,
   );
   // Checkout refuses any plan with no code behind it. A trial would otherwise start free
   // and never convert, and a paid plan would charge once and never renew — both give the

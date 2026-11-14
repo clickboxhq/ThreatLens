@@ -59,12 +59,8 @@ export class PaystackWebhookController {
     @Req() req: RawBodyRequest<Request>,
   ): Promise<{ received: boolean }> {
     const raw = req.rawBody;
-    const signature = req.headers['x-paystack-signature'];
 
-    if (
-      !raw ||
-      !this.paystack.verifySignature(raw, signature as string | undefined)
-    ) {
+    if (!raw || !this.paystack.verifyWebhook(raw, req.headers)) {
       // 200 on purpose. A 4xx tells an attacker probing the endpoint that their forgery was
       // detected and invites them to keep tuning; it also makes Paystack retry a delivery we
       // will never accept. Nothing is recorded and nothing is processed.
