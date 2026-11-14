@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { EmailService } from '../../../common/email/email.service';
+import { mfaRemovedEmail } from '../../../common/email/email-templates';
 import { AppException } from '../../../common/exceptions/app-exception';
 import { AuditLogService } from '../../../common/audit-log/audit-log.service';
 import { presenceStatus } from '../../../common/activity/presence';
@@ -34,9 +37,13 @@ export interface AdminUserRow {
 
 @Injectable()
 export class AdminUsersService {
+  private readonly logger = new Logger(AdminUsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly emailService: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   async list(query: ListUsersQuery): Promise<Page<AdminUserRow>> {
@@ -321,7 +328,7 @@ export class AdminUsersService {
   async resetMfa(admin: AuthenticatedUser, userId: string, actorIp?: string) {
     const target = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
-      select: { id: true, mfaEnabled: true },
+      select: { id: true, mfaEnabled: true, email: true },
     });
     if (!target) throw new AppException(404, 'NOT_FOUND', 'User not found.');
 
@@ -349,6 +356,31 @@ export class AdminUsersService {
       targetId: userId,
       metadata: { wasEnabled: target.mfaEnabled },
     });
+
+    // Only worth saying if there was actually a factor to remove, and only after the reset
+    // has committed — the account holder is told their protection is gone, which must never
+    // be claimed about a reset that did not happen.
+    //
+    // A failed send does not fail the reset: the admin did this to get someone back into
+    // their account, and refusing that because the mail provider is down would help nobody.
+    // It is logged instead, because an unsent one of these is a notification somebody should
+    // have received.
+    if (target.mfaEnabled) {
+      const origin =
+        this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173';
+      try {
+        await this.emailService.send({
+          to: target.email,
+          ...mfaRemovedEmail(`${origin}/app/settings`),
+        });
+      } catch (err) {
+        this.logger.error(
+          `Could not tell ${userId} that their MFA was removed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
 
     return { id: userId, mfaEnabled: false };
   }

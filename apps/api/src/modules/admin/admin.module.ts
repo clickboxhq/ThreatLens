@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EmailService } from '../../common/email/email.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminAnalyticsService } from './analytics/admin-analytics.service';
@@ -28,6 +29,10 @@ import { BillingModule } from '../billing/billing.module';
     AdminSettingsController,
   ],
   providers: [
+    // Provided here rather than inherited: EmailService is per-module in this codebase
+    // (see the note in billing.module.ts). AdminUsersService needs it to tell someone their
+    // two-factor authentication has been removed.
+    EmailService,
     AdminService,
     AdminAnalyticsService,
     AdminUsersService,

@@ -222,6 +222,17 @@ function LoginPage() {
                     </p>
                   )}
 
+                  {/* Resetting the password no longer removes two-factor, so somebody who has
+                      lost both their app and their codes would otherwise try it, still land
+                      here, and have nothing left to try. Name the real way out. */}
+                  <p className="text-[12.5px] leading-relaxed text-black/45">
+                    Lost your authenticator and your recovery codes?{" "}
+                    <Link to="/contact" className="text-black/70 underline underline-offset-2">
+                      Contact us
+                    </Link>{" "}
+                    — resetting your password will not remove two-factor authentication.
+                  </p>
+
                   <button
                     type="submit"
                     disabled={verifyingMfa || !mfaCode.trim()}

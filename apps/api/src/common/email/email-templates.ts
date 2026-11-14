@@ -354,16 +354,43 @@ export function passwordResetEmail(resetUrl: string): RenderedEmail {
       heading: 'Reset your password',
       paragraphs: [
         'We received a request to reset the password on your ThreatLens account. Choose a new one here:',
-        // Named explicitly because this reset is also the recovery path for a lost
-        // authenticator (see confirmPasswordReset) — someone locked out of 2FA needs to know
-        // this link is what clears it, not just that it changes their password.
-        'If two-factor authentication is switched on for your account, completing this reset also turns it off, so you can sign in again if you have lost your authenticator app.',
+        // Stated so nobody reads a surviving 2FA prompt as the reset having failed, and so
+        // the real recovery route is named rather than discovered. confirmPasswordReset
+        // deliberately leaves MFA alone — a mailbox alone must not be enough to strip it.
+        'Two-factor authentication stays switched on. If you have lost your authenticator app, sign in with one of your recovery codes, or contact us and we will help you back in.',
       ],
       cta: { label: 'Reset my password', url: resetUrl },
       meta: 'This link can only be used once, and expires in 1 hour.',
       fallbackUrl: resetUrl,
       footnote:
         'If you did not request this, you can safely ignore this email — nothing changes unless you open the link and set a new password.',
+    }),
+  };
+}
+
+/**
+ * Sent when an administrator removes two-factor authentication from an account.
+ *
+ * Since confirmPasswordReset no longer clears MFA, this is the only way a second factor
+ * comes off an account someone else can trigger — which means a human acted on it, and the
+ * owner should hear about it whether or not they asked. Removing a factor silently is how a
+ * victim finds out too late.
+ */
+export function mfaRemovedEmail(settingsUrl: string): RenderedEmail {
+  return {
+    subject:
+      'Two-factor authentication was removed from your ThreatLens account',
+    ...renderBoth({
+      preheader: 'If you did not ask for this, act now.',
+      heading: 'Two-factor authentication was removed',
+      paragraphs: [
+        'An administrator has turned off two-factor authentication on your ThreatLens account. You have been signed out everywhere, and your password alone now gets you in.',
+        'Set it up again as soon as you can — it is the main thing standing between your account and someone who has your password.',
+      ],
+      cta: { label: 'Turn two-factor back on', url: settingsUrl },
+      fallbackUrl: settingsUrl,
+      footnote:
+        'If you did not request this, contact us straight away — it may mean someone else has reached your account.',
     }),
   };
 }
