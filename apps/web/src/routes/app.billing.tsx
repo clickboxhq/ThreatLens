@@ -6,9 +6,9 @@ import { Panel, SectionHeader } from "@/components/soc/primitives";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/soc/ui/confirm-dialog";
 import { useBillingActions, useEntitlement } from "@/hooks/use-billing";
-import { formatNgn, PLANS } from "@/lib/pricing";
+import { formatNgn, PLANS, priceDisplay } from "@/lib/pricing";
 import { ApiError } from "@/lib/api-client";
-import type { EntitlementDto } from "@/types/billing";
+import type { BillingIntervalId, EntitlementDto } from "@/types/billing";
 
 export const Route = createFileRoute("/app/billing")({
   // Paystack sends people back here with ?reference=. It is a hint to wait, not proof of
@@ -44,6 +44,11 @@ const DATE = new Intl.DateTimeFormat("en-NG", {
 const individual = PLANS.find((p) => p.id === "individual")!;
 const monthlyNgn = individual.prices!.monthly.amountNgn;
 
+const PERIODS: { id: BillingIntervalId; label: string }[] = [
+  { id: "monthly", label: "Monthly" },
+  { id: "annual", label: "Annual" },
+];
+
 function statusLabel(e: EntitlementDto): { text: string; tone: string } {
   if (e.status === "trialing") return { text: "Free trial", tone: "var(--info)" };
   if (e.status === "past_due") return { text: "Payment failed", tone: "var(--warning)" };
@@ -57,12 +62,15 @@ function Billing() {
   const { entitlement, isPending, confirmationTimedOut } = useEntitlement(Boolean(reference));
   const { startCheckout, isStartingCheckout, cancel, isCancelling } = useBillingActions();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [period, setPeriod] = useState<BillingIntervalId>("monthly");
 
   async function begin(trial: boolean) {
     try {
       const session = await startCheckout({
         planId: "individual",
-        interval: "monthly",
+        // The trial is monthly-only on the API side, so `trial` is never true here while
+        // `period` is annual — the annual branch below offers no trial button at all.
+        interval: period,
         trial,
       });
       // Paystack hosts the card form; we never see card details.
@@ -94,6 +102,10 @@ function Billing() {
   const confirming = Boolean(reference) && !e?.active && !confirmationTimedOut;
   const status = e ? statusLabel(e) : null;
   const renews = e?.currentPeriodEnd ? new Date(e.currentPeriodEnd) : null;
+  // Reused from the marketing page rather than recomputed here: the annual note and saving
+  // are derived from the same two prices, so the billing page cannot quote a discount the
+  // pricing page disagrees with.
+  const display = priceDisplay(individual, period);
 
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
@@ -142,11 +154,61 @@ function Billing() {
         <Panel>
           <div className="px-5 py-6">
             <h2 className="text-[15px] font-medium text-foreground">
-              {trialUsed ? "Your trial has ended" : "Start your 7-day free trial"}
+              {trialUsed
+                ? "Your trial has ended"
+                : period === "annual"
+                  ? "Subscribe annually"
+                  : "Start your 7-day free trial"}
             </h2>
             <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
               Full access to every scenario, scored investigations, and certificates.
             </p>
+
+            {/* A period toggle rather than two plan cards: monthly and annual are the same
+                product at two prices, so there is nothing to compare except the bill. */}
+            <div
+              className="mt-4 inline-flex rounded-md border border-border p-0.5"
+              role="group"
+              aria-label="Billing period"
+            >
+              {PERIODS.map((p) => {
+                const on = period === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPeriod(p.id)}
+                    aria-pressed={on}
+                    className={`rounded px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
+                      on
+                        ? "bg-[color:var(--info)]/10 text-[color:var(--info)]"
+                        : "text-secondary hover:text-foreground"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="text-[22px] font-semibold tracking-tight text-foreground">
+                {display.headline}
+              </span>
+              <span className="text-[13px] text-muted-foreground">{display.unit}</span>
+              {/* What the same year costs paying monthly. Struck through so the discount is
+                  something you can see rather than a claim you have to take on trust. */}
+              {display.wasPrice && (
+                <span className="text-[13px] text-muted-foreground line-through">
+                  {display.wasPrice}
+                </span>
+              )}
+            </div>
+            {display.savings && (
+              <div className="mt-0.5 text-[12.5px] font-medium text-[color:var(--success)]">
+                {display.savings}
+              </div>
+            )}
 
             {/* Said plainly and before the card, not in small print after it. */}
             <div className="mt-4 rounded-md border border-border bg-background/50 p-3.5 text-[12.5px] leading-relaxed text-secondary">
@@ -158,12 +220,31 @@ function Billing() {
                   <li>
                     You'll be charged{" "}
                     <span className="font-medium text-foreground">
-                      {formatNgn(monthlyNgn)} per month
+                      {display.headline}
+                      {display.unit}
                     </span>
                     , starting today.
                   </li>
                   <li>Your scenarios, scores and progress are exactly where you left them.</li>
-                  <li>Cancel any time — you keep access to the end of the month you paid for.</li>
+                  <li>
+                    Cancel any time — you keep access to the end of the{" "}
+                    {period === "annual" ? "year" : "month"} you paid for.
+                  </li>
+                </ul>
+              ) : period === "annual" ? (
+                <ul className="mt-1.5 space-y-1">
+                  <li>
+                    We charge{" "}
+                    <span className="font-medium text-foreground">{display.headline}</span> today,
+                    for a full year. No ₦50 card check — that is part of starting a trial.
+                  </li>
+                  {display.note && <li>{display.note}.</li>}
+                  <li>Cancel any time — you keep access to the end of the year you paid for.</li>
+                  {/* The trial button is simply absent on annual, so say why rather than
+                      leave somebody hunting for the offer they saw a moment ago. */}
+                  <li className="text-muted-foreground">
+                    The free trial runs on the monthly plan. Switch to Monthly above to take it.
+                  </li>
                 </ul>
               ) : (
                 <ul className="mt-1.5 space-y-1">
@@ -186,9 +267,13 @@ function Billing() {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2.5">
-              {trialUsed ? (
+              {trialUsed || period === "annual" ? (
                 <Button onClick={() => void begin(false)} disabled={isStartingCheckout}>
-                  {isStartingCheckout ? "Starting…" : "Subscribe"}
+                  {isStartingCheckout
+                    ? "Starting…"
+                    : period === "annual"
+                      ? "Subscribe annually"
+                      : "Subscribe"}
                 </Button>
               ) : (
                 <>
