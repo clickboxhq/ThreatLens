@@ -852,31 +852,23 @@ export class AuthService {
       type: argon2.argon2id,
     });
 
-    // A password reset is only reachable by clicking a real, single-use, time-limited link
-    // sent to the account's registered email — the same trust level this codebase already
-    // relies on to prove account ownership elsewhere. For a role where MFA is optional, that's
-    // strong enough to also serve as "I lost my authenticator and have no recovery codes"
-    // recovery: without clearing it here, a Student/Instructor who resets their password would
-    // still be stuck at the login MFA prompt with no way to satisfy it, i.e. still fully locked
-    // out. For org_admin/platform_admin, MFA is mandatory (§15.2) specifically so it can't be
-    // casually removed — mirroring mfaDisable()'s own rule, a password reset does not clear it
-    // for those roles, so an attacker who compromises only the mailbox still can't strip 2FA
-    // off a privileged account this way.
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-    });
-    const clearsMfa = user.mfaEnabled && !MFA_MANDATORY_ROLES.has(user.role);
-
+    // A password reset does not clear MFA, for any role.
+    //
+    // It used to, for roles where MFA is optional, reasoning that a reset link proves control
+    // of the mailbox and could therefore double as lost-authenticator recovery. That gives
+    // away the whole point of a second factor: anyone who took over the mailbox could reset
+    // the password and strip 2FA in the same step, so MFA protected the account against
+    // everything except the attack it mainly exists to stop.
+    //
+    // The lockout that was meant to avoid is already covered, by paths that need a human
+    // rather than just an inbox — an admin can clear MFA (admin-users.service.ts resetMfa),
+    // and there is a break-glass CLI (`npm run admin:reset-mfa`) for when the admin UI itself
+    // is unreachable. Someone who has lost both their authenticator and their recovery codes
+    // raises a support request; they are not locked out permanently.
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data: {
-          passwordHash,
-          sessionVersion: { increment: 1 },
-          ...(clearsMfa
-            ? { mfaEnabled: false, mfaSecret: null, mfaRecoveryCodesHash: [] }
-            : {}),
-        },
+        data: { passwordHash, sessionVersion: { increment: 1 } },
       }),
       this.prisma.refreshToken.updateMany({
         where: { userId, revokedAt: null },
@@ -890,7 +882,6 @@ export class AuthService {
       action: 'password_reset',
       targetType: 'user',
       targetId: userId,
-      metadata: clearsMfa ? { mfaCleared: true } : undefined,
       correlationId,
     });
   }

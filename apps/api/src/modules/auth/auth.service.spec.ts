@@ -757,12 +757,13 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
     });
   });
 
-  // A lost-authenticator-with-no-recovery-codes lockout has no other self-service path — the
-  // login MFA prompt requires a code, and mfaDisable() itself requires an authenticated session
-  // (i.e. already being past that same prompt). Clicking a real, emailed, single-use reset link
-  // is the one out-of-band proof of ownership this codebase already trusts elsewhere, so it
-  // doubles as MFA recovery for roles where MFA is optional.
-  it('confirmPasswordReset() clears MFA for a student/instructor account that has it enabled', async () => {
+  // The regression this guards: a reset link proves control of the mailbox and nothing more.
+  // Letting it strip a second factor means MFA stops protecting the account against mailbox
+  // takeover, which is the attack it mainly exists to stop — an attacker with the inbox could
+  // reset the password and remove 2FA in one move. A genuinely lost authenticator is recovered
+  // through an admin (admin-users.service.ts resetMfa) or the break-glass CLI, both of which
+  // need a human rather than just an inbox.
+  it('confirmPasswordReset() leaves MFA switched on for a student account', async () => {
     const target = user({
       role: 'student',
       mfaEnabled: true,
@@ -770,24 +771,21 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
       mfaRecoveryCodesHash: ['hash1', 'hash2'],
     });
     const users = new Map([[target.id, target]]);
-    const { service, passwordResetTokens, auditLog } = buildService(users);
+    const { service, passwordResetTokens } = buildService(users);
 
     const token = await passwordResetTokens.create(target.id);
     await service.confirmPasswordReset(token, 'brand new password 456');
 
     const updated = users.get(target.id)!;
-    expect(updated.mfaEnabled).toBe(false);
-    expect(updated.mfaSecret).toBeNull();
-    expect(updated.mfaRecoveryCodesHash).toEqual([]);
-    expect(auditLog.record).toHaveBeenCalledWith(
-      expect.objectContaining({ metadata: { mfaCleared: true } }),
-    );
+    expect(updated.mfaEnabled).toBe(true);
+    expect(updated.mfaSecret).toBe('some-secret');
+    expect(updated.mfaRecoveryCodesHash).toEqual(['hash1', 'hash2']);
   });
 
   // §15.2: MFA is mandatory for these two roles specifically so it can't be casually removed —
   // mfaDisable() already enforces this, and password reset must not become a back door around
-  // it (an attacker who only compromises the mailbox still can't strip 2FA off a privileged
-  // account this way).
+  // it. The rule is now the same for every role, but this stays as its own case because a
+  // privileged account is where a regression would cost the most.
   it('confirmPasswordReset() does NOT clear MFA for an org_admin/platform_admin account', async () => {
     for (const role of ['org_admin', 'platform_admin'] as const) {
       const target = user({
@@ -797,7 +795,7 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
         mfaRecoveryCodesHash: ['hash1'],
       });
       const users = new Map([[target.id, target]]);
-      const { service, passwordResetTokens, auditLog } = buildService(users);
+      const { service, passwordResetTokens } = buildService(users);
 
       const token = await passwordResetTokens.create(target.id);
       await service.confirmPasswordReset(token, 'brand new password 456');
@@ -805,9 +803,7 @@ describe('AuthService password reset (§15.1, §16.2)', () => {
       const updated = users.get(target.id)!;
       expect(updated.mfaEnabled).toBe(true);
       expect(updated.mfaSecret).toBe('some-secret');
-      expect(auditLog.record).toHaveBeenCalledWith(
-        expect.objectContaining({ metadata: undefined }),
-      );
+      expect(updated.mfaRecoveryCodesHash).toEqual(['hash1']);
     }
   });
 

@@ -2,6 +2,7 @@ import {
   verificationEmail,
   welcomeEmail,
   passwordResetEmail,
+  mfaRemovedEmail,
   organizationInviteEmail,
   organizationMemberJoinedEmail,
   organizationAnnouncementEmail,
@@ -107,11 +108,35 @@ describe('email templates', () => {
     });
   });
 
+  // These two carry the security story between them: the reset mail must not promise to
+  // remove a second factor it no longer removes, and the removal mail exists so that losing
+  // one is never silent.
+  describe('what the two-factor emails tell people', () => {
+    it('the reset email says two-factor survives, and names the way back in', () => {
+      const text = passwordResetEmail(URL).text.toLowerCase();
+      expect(text).toContain('stays switched on');
+      expect(text).toContain('recovery code');
+      // The old copy promised the opposite. If this ever reappears, the mail is telling
+      // people to use a password reset as MFA recovery, which no longer works.
+      expect(text).not.toContain('turns it off');
+    });
+
+    it('the removal email says what was lost and what to do about it', () => {
+      const mail = mfaRemovedEmail(URL);
+      expect(mail.subject.toLowerCase()).toContain('removed');
+      const text = mail.text.toLowerCase();
+      expect(text).toContain('turned off two-factor authentication');
+      expect(text).toContain('contact us');
+      expect(mail.html).toContain(URL);
+    });
+  });
+
   describe('structure every client depends on', () => {
     it.each([
       ['verification', verificationEmail(URL).html],
       ['welcome', welcomeEmail({ displayName: 'Dana', appUrl: URL }).html],
       ['password reset', passwordResetEmail(URL).html],
+      ['mfa removed', mfaRemovedEmail(URL).html],
       [
         'organization invite',
         organizationInviteEmail({
@@ -162,6 +187,7 @@ describe('email templates', () => {
       ['verification', verificationEmail(URL), URL],
       ['welcome', welcomeEmail({ displayName: 'Dana', appUrl: URL }), URL],
       ['password reset', passwordResetEmail(URL), URL],
+      ['mfa removed', mfaRemovedEmail(URL), URL],
       [
         'organization invite',
         organizationInviteEmail({
