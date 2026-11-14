@@ -1,9 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
+import type { IncomingHttpHeaders } from 'http';
 import { AppException } from '../../common/exceptions/app-exception';
 
 const PAYSTACK_API = 'https://api.paystack.co';
+
+/**
+ * How far an event's own timestamp may be from ours before we refuse it, per Paystack's
+ * published tolerance. This is what stops someone replaying a delivery they captured
+ * earlier, so it depends on this server's clock actually being right.
+ */
+const SIGNATURE_TOLERANCE_SECONDS = 300;
+
+/** Express gives a repeated header as an array; a signature header must be a single value. */
+function headerValue(
+  headers: IncomingHttpHeaders,
+  name: string,
+): string | undefined {
+  const value = headers[name];
+  return typeof value === 'string' ? value : undefined;
+}
 
 export interface InitializeTransactionInput {
   email: string;
@@ -40,6 +57,21 @@ export class PaystackClient {
     return this.config.get<string>('PAYSTACK_SECRET_KEY');
   }
 
+  /**
+   * The `whsec_` secrets that sign webhooks under Paystack's current scheme.
+   *
+   * A comma-separated list rather than one value, because rotating a signing secret means a
+   * period where deliveries are signed with the old one or the new one and both have to be
+   * accepted. Like the API key, these are per-mode: a test secret will not verify live
+   * events.
+   */
+  private webhookSecrets(): string[] {
+    return (this.config.get<string>('PAYSTACK_WEBHOOK_SECRET') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   isConfigured(): boolean {
     return Boolean(this.secretKey());
   }
@@ -50,14 +82,118 @@ export class PaystackClient {
   }
 
   /**
-   * Checks the `x-paystack-signature` header against the body as it arrived.
+   * Decides whether an inbound webhook really came from Paystack.
+   *
+   * Paystack runs two signing schemes. The current one signs with a dedicated `whsec_`
+   * secret and sends a `Paystack-Signature` header carrying a timestamp; the legacy one
+   * signs with the API secret key and sends `x-paystack-signature`. Which one arrives
+   * depends on whether the integration has an active signing secret for that mode, and that
+   * can change under us without a deploy.
+   *
+   * So we accept either. That is not a weaker bar — both require a secret only Paystack and
+   * this server hold — and it means the cutover is a non-event in both directions. If the
+   * `whsec_` secret is unset, this degrades exactly to the old behaviour, which is what
+   * makes this change safe to deploy before the variable exists.
+   *
+   * Getting this wrong fails silently: the controller answers 200 either way, so Paystack
+   * records every rejected delivery as accepted and never retries it.
+   */
+  verifyWebhook(
+    rawBody: Buffer,
+    headers: IncomingHttpHeaders,
+    now?: number,
+  ): boolean {
+    if (
+      this.verifySignedHeader(
+        rawBody,
+        headerValue(headers, 'paystack-signature'),
+        now,
+      )
+    ) {
+      return true;
+    }
+    return this.verifySignature(
+      rawBody,
+      headerValue(headers, 'x-paystack-signature'),
+    );
+  }
+
+  /**
+   * The current scheme: `Paystack-Signature: t=<unix>,v1=<kid>:<hex>`.
+   *
+   * The signed bytes are the timestamp, a literal dot, then the raw body — not the body
+   * alone — so a signature that verifies here could not have been lifted from an older
+   * delivery and replayed, provided the timestamp is still within tolerance.
+   *
+   * An event may carry several `v1` entries during a secret rotation, so every one is
+   * checked against every configured secret.
+   */
+  verifySignedHeader(
+    rawBody: Buffer,
+    header: string | undefined,
+    now = Math.floor(Date.now() / 1000),
+  ): boolean {
+    const secrets = this.webhookSecrets();
+    if (!secrets.length || !header) return false;
+
+    let timestamp: number | null = null;
+    const candidates: string[] = [];
+
+    for (const part of header.split(',')) {
+      const i = part.indexOf('=');
+      if (i === -1) continue;
+      const key = part.slice(0, i).trim();
+      const value = part.slice(i + 1).trim();
+
+      if (key === 't') {
+        // A second `t` means the header is malformed or crafted. Refusing beats picking one
+        // of them and hoping.
+        if (timestamp !== null || !/^[0-9]+$/.test(value)) return false;
+        timestamp = Number(value);
+      } else if (key === 'v1') {
+        const j = value.indexOf(':');
+        // `<kid>:<signature>` — the key id only says which secret signed it, so it is the
+        // signature that has to match, not the id.
+        if (j !== -1) candidates.push(value.slice(j + 1));
+      }
+      // Anything else in the header is ignored on purpose: Paystack may add fields, and a
+      // stricter parse would start rejecting valid events the day they do.
+    }
+
+    if (timestamp === null || candidates.length === 0) return false;
+    if (Math.abs(now - timestamp) > SIGNATURE_TOLERANCE_SECONDS) return false;
+
+    for (const secret of secrets) {
+      const expected = createHmac('sha512', secret)
+        .update(`${timestamp}.`)
+        .update(rawBody)
+        .digest();
+
+      for (const hex of candidates) {
+        // Guard the shape before decoding: Buffer.from silently truncates at the first
+        // non-hex character, which would compare a short buffer and could match by accident.
+        if (!/^[0-9a-f]{128}$/.test(hex)) continue;
+        const given = Buffer.from(hex, 'hex');
+        if (
+          given.length === expected.length &&
+          timingSafeEqual(given, expected)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * The legacy scheme: `x-paystack-signature`, an HMAC of the raw body under the API secret
+   * key, with no timestamp and so no replay protection of its own.
    *
    * It must be the RAW body. Paystack signs the exact bytes it sent, so a payload that Nest
    * parsed and this code re-serialised will differ by key order or whitespace and never
    * match — and it fails looking exactly like a wrong secret key, which is why the raw body
    * is threaded all the way through rather than reconstructed here.
-   *
-   * There is no separate webhook secret in Paystack: the API secret key signs the payload.
    */
   verifySignature(rawBody: Buffer, signature: string | undefined): boolean {
     const secret = this.secretKey();
