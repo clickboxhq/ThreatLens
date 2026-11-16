@@ -42,7 +42,10 @@ import { ActivityModule } from './common/activity/activity.module';
   ],
   controllers: [HealthController],
   // HealthService but not HealthWatcherService: the worker needs its own /ready probe, and a
-  // second process emailing the same alert would just double every message.
+  // second process emailing the same alert would just double every message. What was missing
+  // until the 2026-11-14 outage is that nothing polled the /ready this process serves — the
+  // API's watcher now does, via WORKER_READY_URL, from outside this process on purpose
+  // (health-watcher.service.ts explains why it cannot live here).
   providers: [
     HealthService,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -109,6 +109,8 @@ TRUST_PROXY_HOPS=1
 APP_DB_PASSWORD=<pick a strong value, distinct from Postgres's own password>
 RESEND_API_KEY=<your Resend API key, from resend.com/api-keys>
 EMAIL_FROM=SOCVerse <onboarding@resend.dev>
+OPS_ALERT_EMAIL=<where outage alerts should go>
+WORKER_READY_URL=http://worker.railway.internal:3000/ready
 ```
 
 `RESEND_API_KEY` powers email verification and password reset (`apps/api/src/common/email/email.service.ts`)
@@ -120,6 +122,29 @@ up at resend.com, create an API key, and set it here. `EMAIL_FROM` defaults to R
 address on your own domain once you've verified that domain in Resend, so email doesn't look
 like it's coming from Resend's shared address. `worker` doesn't need either variable; it never
 sends email.
+
+`OPS_ALERT_EMAIL` and `WORKER_READY_URL` are what makes anything notice an outage
+(`apps/api/src/common/health/health-watcher.service.ts`). The watcher polls this service's own
+dependencies every 60 seconds and emails `OPS_ALERT_EMAIL` after two consecutive failures;
+with no address set it only logs, where nobody is looking. `WORKER_READY_URL` adds the
+`worker` service to what it watches, over Railway's private network — set it and a
+crash-looping worker produces an email naming the worker, instead of running until somebody
+opens the dashboard (which is how the 2026-11-14 outage went for two days). Both live on
+`api`, not `worker`: the alerting path must not share a process or a queue with what it
+watches. Set `HEALTH_WATCHER_ENABLED=false` to switch the whole thing off.
+
+Two things to get right about `WORKER_READY_URL`:
+
+- The hostname is `<service-name>.railway.internal`, so it has to match whatever you actually
+  named the worker service — `worker.railway.internal` only resolves if the service is called
+  `worker`.
+- The port is the one the worker process listens on: `WORKER_PORT`, else `PORT`, else 3000
+  (`apps/api/src/worker-main.ts`). The block in step 3 sets neither, so it is 3000 — if you
+  set either variable on `worker`, change this URL to match. Private networking needs the real
+  port; there's no edge in front of this one to route it.
+
+This still isn't an external uptime monitor. It runs inside `api`, so it cannot report that
+`api` itself is gone — point something outside Railway at `api`'s `/ready` for that.
 
 `MIGRATE_DATABASE_URL` uses Postgres's own `DATABASE_URL` directly (that plugin connection is
 already superuser-equivalent — the same role `MIGRATE_DATABASE_URL` played against the VPS's
