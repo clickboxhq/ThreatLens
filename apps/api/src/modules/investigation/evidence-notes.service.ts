@@ -262,10 +262,11 @@ export class EvidenceNotesService {
     });
   }
 
-  // See LogResponseActionDto's own comment: this panel has no entity picker, so this only
-  // ever records the audit-trail row (InvestigationAction) — it never mutates a specific
-  // device/identity/email the way POST .../devices/:id/isolate does. `targetId` is the
-  // incident itself, since there's no more specific entity to point at from here.
+  // Records the audit-trail row (InvestigationAction) the Scoring Engine matches containment
+  // expectations against (§12.4) — it does not mutate the entity the way
+  // POST .../devices/:id/isolate does. `targetId` is the identity/device the student chose;
+  // see LogResponseActionDto for why a client may still omit it for one release, in which
+  // case the row points at the incident and satisfies no targeted expectation.
   async logResponseAction(
     sessionId: string,
     incidentId: string,
@@ -274,6 +275,27 @@ export class EvidenceNotesService {
   ): Promise<{ logged: true }> {
     await this.sessionAccess.getOwnedSession(sessionId, user);
     await this.assertIncidentEditable(sessionId, incidentId);
+    if (dto.targetId) {
+      // The id comes from the client: confirm it is one of this session's own entities
+      // before it goes into a row the score is computed from.
+      const [identity, device] = await Promise.all([
+        this.prisma.identity.findFirst({
+          where: { id: dto.targetId, sessionId },
+          select: { id: true },
+        }),
+        this.prisma.device.findFirst({
+          where: { id: dto.targetId, sessionId },
+          select: { id: true },
+        }),
+      ]);
+      if (!identity && !device) {
+        throw new AppException(
+          400,
+          'INVALID_TARGET',
+          'That target does not belong to this session.',
+        );
+      }
+    }
 
     await this.investigationActions.record({
       sessionId,
@@ -281,7 +303,7 @@ export class EvidenceNotesService {
       userId: user.id,
       actionType: dto.actionType,
       targetType: dto.targetType,
-      targetId: incidentId,
+      targetId: dto.targetId ?? incidentId,
     });
 
     return { logged: true };

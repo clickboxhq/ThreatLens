@@ -104,6 +104,52 @@ export class IncidentsService {
     return this.toDto(incident.id);
   }
 
+  async unlinkAlert(
+    sessionId: string,
+    incidentId: string,
+    user: AuthenticatedUser,
+    alertId: string,
+  ): Promise<void> {
+    await this.sessionAccess.getOwnedSession(sessionId, user);
+    const incident = await this.getIncidentOrThrow(sessionId, incidentId);
+    if (incident.status === 'closed') {
+      throw new AppException(
+        409,
+        'INCIDENT_CLOSED',
+        'This incident is closed. Ask an instructor to reopen it to change its alerts.',
+      );
+    }
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, sessionId },
+    });
+    if (!alert) throw new AppException(404, 'NOT_FOUND', 'Alert not found.');
+
+    await this.prisma.incidentAlert.deleteMany({
+      where: { incidentId, alertId },
+    });
+    // Back to the queue only if no other incident still claims it — a session can hold more
+    // than one incident, and an alert linked to both should stay in_progress for the other.
+    const stillLinked = await this.prisma.incidentAlert.count({
+      where: { alertId },
+    });
+    if (stillLinked === 0 && alert.status === 'in_progress') {
+      await this.prisma.alert.update({
+        where: { id: alertId },
+        data: { status: 'new' },
+      });
+    }
+
+    await this.investigationActions.record({
+      sessionId,
+      incidentId,
+      userId: user.id,
+      actionType: 'escalate_to_incident',
+      targetType: 'incident',
+      targetId: incidentId,
+      metadata: { unlinkedAlertId: alertId },
+    });
+  }
+
   async updateStatus(
     sessionId: string,
     incidentId: string,

@@ -7,6 +7,10 @@ import { AchievementsService } from '../achievements/achievements.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { GroundTruthDefinition } from '../telemetry-generator/generator';
 import type { IncidentVerdict } from '@prisma/client';
+import {
+  RESPONSE_ACTION_TYPES,
+  type ResponseActionType,
+} from '../investigation/dto/incident.dto';
 
 // Pure and exported for direct unit testing (same rationale as computeScore in scorer.ts):
 // an item pinned as evidence AND added to the Timeline must count once, not twice, toward
@@ -25,10 +29,201 @@ export function dedupeByEvent<
   return result;
 }
 
+/** §12.1's containment_expectations entry, narrowed to what is scored today. */
+export interface ContainmentExpectation {
+  action: ResponseActionType;
+  /** A population ref — `victim_identity_1`, `patient_zero_device` — resolved via narrative_ref. */
+  target: string;
+  by_relative_time?: string;
+  weight?: number;
+}
+
 interface ScoringRubric {
   required_techniques: string[];
   required_verdict: string;
-  containment_expectations: unknown[];
+  containment_expectations: ContainmentExpectation[];
+}
+
+export interface TriageAlertFact {
+  id: string;
+  title: string;
+  status: string;
+  dismissalReason: string | null;
+  isFalsePositiveByDesign: boolean;
+  evidenceEventIds: string[];
+}
+
+export interface TriageOutcome {
+  alertCount: number;
+  realAlertsEscalated: number;
+  realAlertsDismissed: number;
+  baitAlertsDismissed: number;
+  baitAlertsMishandled: number;
+  /** The debrief's three "what went wrong" lists, plus the two that went right. */
+  escalatedCorrectly: string[];
+  dismissedCorrectly: string[];
+  escalatedBait: string[];
+  dismissedReal: string[];
+  untouched: string[];
+}
+
+/**
+ * §8.6 / §12.4 component 3: sort every alert the session raised into the decision the
+ * student made about it. Pure and exported for direct unit testing.
+ *
+ * "Escalated" means linked to a closed incident. "Dismissed" requires the reason the DTO
+ * already insists on. Pinning any of a bait alert's evidence counts as sweeping it in, the
+ * same as escalating it — the debrief says which. A real alert that was only pinned, never
+ * escalated, is untouched here; the evidence score has already credited the pin.
+ */
+export function classifyTriage(
+  alerts: TriageAlertFact[],
+  escalatedAlertIds: Set<string>,
+  pinnedEventIds: Set<string>,
+): TriageOutcome {
+  const out: TriageOutcome = {
+    alertCount: alerts.length,
+    realAlertsEscalated: 0,
+    realAlertsDismissed: 0,
+    baitAlertsDismissed: 0,
+    baitAlertsMishandled: 0,
+    escalatedCorrectly: [],
+    dismissedCorrectly: [],
+    escalatedBait: [],
+    dismissedReal: [],
+    untouched: [],
+  };
+  for (const alert of alerts) {
+    const escalated = escalatedAlertIds.has(alert.id);
+    const pinned = alert.evidenceEventIds.some((id) => pinnedEventIds.has(id));
+    const dismissed =
+      alert.status === 'dismissed' && Boolean(alert.dismissalReason);
+
+    if (alert.isFalsePositiveByDesign) {
+      if (escalated || pinned) {
+        out.baitAlertsMishandled += 1;
+        out.escalatedBait.push(alert.title);
+      } else if (dismissed) {
+        out.baitAlertsDismissed += 1;
+        out.dismissedCorrectly.push(alert.title);
+      } else {
+        out.untouched.push(alert.title);
+      }
+    } else if (escalated) {
+      out.realAlertsEscalated += 1;
+      out.escalatedCorrectly.push(alert.title);
+    } else if (dismissed) {
+      out.realAlertsDismissed += 1;
+      out.dismissedReal.push(alert.title);
+    } else {
+      out.untouched.push(alert.title);
+    }
+  }
+  return out;
+}
+
+export interface ContainmentTarget {
+  id: string;
+  label: string;
+}
+
+export interface ContainmentOutcome {
+  expectationCount: number;
+  metCount: number;
+  unnecessaryCount: number;
+  expected: { action: string; targetLabel: string }[];
+  met: { action: string; targetLabel: string }[];
+  missed: { action: string; targetLabel: string }[];
+  unnecessary: { action: string; targetLabel: string }[];
+}
+
+/**
+ * §12.4 component 4. An expectation is met when the named action was taken against the
+ * entity its ref resolves to. Anything taken that matches no expectation is "unnecessary":
+ * scored as over-containment when the rubric expected nothing, otherwise only reported. An
+ * expectation whose ref does not resolve (an authoring error the validator should have
+ * caught) is counted as expected-and-missed rather than silently dropped, so it shows up in a
+ * debrief instead of quietly inflating the score. Pure and exported for direct unit testing.
+ */
+export function evaluateContainment(
+  expectations: ContainmentExpectation[],
+  actionsTaken: { actionType: string; targetId: string }[],
+  targetByRef: Map<string, ContainmentTarget>,
+  labelById: Map<string, string>,
+): ContainmentOutcome {
+  const out: ContainmentOutcome = {
+    expectationCount: expectations.length,
+    metCount: 0,
+    unnecessaryCount: 0,
+    expected: [],
+    met: [],
+    missed: [],
+    unnecessary: [],
+  };
+  const satisfiedBy = new Set<number>();
+  expectations.forEach((exp) => {
+    const target = targetByRef.get(exp.target);
+    const entry = {
+      action: exp.action,
+      targetLabel: target?.label ?? exp.target,
+    };
+    out.expected.push(entry);
+    const hit = target
+      ? actionsTaken.findIndex(
+          (a, j) =>
+            !satisfiedBy.has(j) &&
+            a.actionType === exp.action &&
+            a.targetId === target.id,
+        )
+      : -1;
+    if (hit >= 0) {
+      satisfiedBy.add(hit);
+      out.metCount += 1;
+      out.met.push(entry);
+    } else {
+      out.missed.push(entry);
+    }
+  });
+  actionsTaken.forEach((a, j) => {
+    if (satisfiedBy.has(j)) return;
+    out.unnecessaryCount += 1;
+    out.unnecessary.push({
+      action: a.actionType,
+      targetLabel: labelById.get(a.targetId) ?? 'an unspecified target',
+    });
+  });
+  return out;
+}
+
+/**
+ * The generator's correlation grouping, re-read from Alert.relatedAlertId once the session is
+ * scored — the first moment it is safe to show. Groups of one are not a correlation and are
+ * left out. Pure and exported for direct unit testing.
+ */
+export function correlationGroups(
+  alerts: { id: string; title: string; relatedAlertId: string | null }[],
+): { alertTitles: string[] }[] {
+  const parent = new Map(alerts.map((a) => [a.id, a.id]));
+  const find = (id: string): string => {
+    let cur = id;
+    while (parent.get(cur) !== cur) cur = parent.get(cur)!;
+    return cur;
+  };
+  for (const a of alerts) {
+    if (a.relatedAlertId && parent.has(a.relatedAlertId)) {
+      parent.set(find(a.id), find(a.relatedAlertId));
+    }
+  }
+  const byRoot = new Map<string, string[]>();
+  for (const a of alerts) {
+    const root = find(a.id);
+    const list = byRoot.get(root) ?? [];
+    list.push(a.title);
+    byRoot.set(root, list);
+  }
+  return [...byRoot.values()]
+    .filter((titles) => titles.length > 1)
+    .map((alertTitles) => ({ alertTitles }));
 }
 
 @Injectable()
@@ -142,8 +337,8 @@ export class ScoringService {
       await this.findGroundTruthAmong(curatedEvidence);
     const pinnedGroundTruthEvidenceCount = groundTruthAmongCurated.size;
 
-    const falsePositiveAlerts = await this.prisma.alert.findMany({
-      where: { sessionId, isFalsePositiveByDesign: true },
+    const alerts = await this.prisma.alert.findMany({
+      where: { sessionId },
       include: { evidenceRefs: true },
     });
     const escalatedAlertIds = new Set(
@@ -151,17 +346,56 @@ export class ScoringService {
     );
     const pinnedEventIds = new Set(curatedEvidence.map((e) => e.eventId));
 
-    let falsePositiveCorrectlyHandledCount = 0;
-    let falsePositiveMishandledCount = 0;
-    for (const alert of falsePositiveAlerts) {
-      const wasEscalatedOrPinned =
-        escalatedAlertIds.has(alert.id) ||
-        alert.evidenceRefs.some((ref) => pinnedEventIds.has(ref.eventId));
-      const wasCorrectlyDismissed =
-        alert.status === 'dismissed' && Boolean(alert.dismissalReason);
-      if (wasEscalatedOrPinned) falsePositiveMishandledCount += 1;
-      else if (wasCorrectlyDismissed) falsePositiveCorrectlyHandledCount += 1;
+    const triage = classifyTriage(
+      alerts.map((a) => ({
+        id: a.id,
+        title: a.title,
+        status: a.status,
+        dismissalReason: a.dismissalReason,
+        isFalsePositiveByDesign: a.isFalsePositiveByDesign,
+        evidenceEventIds: a.evidenceRefs.map((r) => r.eventId),
+      })),
+      escalatedAlertIds,
+      pinnedEventIds,
+    );
+
+    // Containment: resolve each expectation's population ref to the row the generator made
+    // from it, then look for a matching action. isolate_device is recorded with the real
+    // device id by the device portal; the other five arrive through logResponseAction, which
+    // records the target the student picked (or the incident, for a client that sent none).
+    const [sessionIdentities, sessionDevices, responseActions] =
+      await Promise.all([
+        this.prisma.identity.findMany({
+          where: { sessionId },
+          select: { id: true, displayName: true, narrativeRef: true },
+        }),
+        this.prisma.device.findMany({
+          where: { sessionId },
+          select: { id: true, hostname: true, narrativeRef: true },
+        }),
+        this.prisma.investigationAction.findMany({
+          where: { sessionId, actionType: { in: [...RESPONSE_ACTION_TYPES] } },
+          select: { actionType: true, targetId: true },
+        }),
+      ]);
+    const targetByRef = new Map<string, ContainmentTarget>();
+    const labelById = new Map<string, string>();
+    for (const i of sessionIdentities) {
+      labelById.set(i.id, i.displayName);
+      if (i.narrativeRef)
+        targetByRef.set(i.narrativeRef, { id: i.id, label: i.displayName });
     }
+    for (const d of sessionDevices) {
+      labelById.set(d.id, d.hostname);
+      if (d.narrativeRef)
+        targetByRef.set(d.narrativeRef, { id: d.id, label: d.hostname });
+    }
+    const containment = evaluateContainment(
+      rubric.containment_expectations ?? [],
+      responseActions,
+      targetByRef,
+      labelById,
+    );
 
     const timeToResolutionSeconds = session.submittedAt
       ? Math.round(
@@ -184,11 +418,14 @@ export class ScoringService {
       totalGroundTruthEvidenceCount,
       pinnedGroundTruthEvidenceCount,
       pinnedTotalEvidenceCount,
-      falsePositiveByDesignAlertCount: falsePositiveAlerts.length,
-      falsePositiveCorrectlyHandledCount,
-      falsePositiveMishandledCount,
-      containmentExpectationCount: rubric.containment_expectations.length,
-      containmentMetCount: 0,
+      alertCount: triage.alertCount,
+      realAlertsEscalated: triage.realAlertsEscalated,
+      realAlertsDismissed: triage.realAlertsDismissed,
+      baitAlertsDismissed: triage.baitAlertsDismissed,
+      baitAlertsMishandled: triage.baitAlertsMishandled,
+      containmentExpectationCount: containment.expectationCount,
+      containmentMetCount: containment.metCount,
+      unnecessaryContainmentCount: containment.unnecessaryCount,
       requiredVerdict: rubric.required_verdict,
       submittedVerdicts,
       hintPenaltyPercent,
@@ -275,6 +512,32 @@ export class ScoringService {
         submitted: submittedVerdicts,
         required: rubric.required_verdict,
         correct: breakdown.verdictCorrect,
+      },
+      // The two components that used to lose marks silently. Each names the alerts or actions
+      // behind its number, in the same spirit as the evidence and technique lists above.
+      triage: {
+        escalatedCorrectly: triage.escalatedCorrectly,
+        dismissedCorrectly: triage.dismissedCorrectly,
+        escalatedBait: triage.escalatedBait,
+        dismissedReal: triage.dismissedReal,
+        untouched: triage.untouched,
+      },
+      response: {
+        expected: containment.expected,
+        met: containment.met,
+        missed: containment.missed,
+        unnecessary: containment.unnecessary,
+      },
+      // The generator's own grouping of the alerts — which ones were one chain — revealed here
+      // and nowhere earlier, so the student can set their triage against it.
+      correlation: {
+        groups: correlationGroups(
+          alerts.map((a) => ({
+            id: a.id,
+            title: a.title,
+            relatedAlertId: a.relatedAlertId,
+          })),
+        ),
       },
     };
 

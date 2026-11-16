@@ -211,12 +211,12 @@ export const DOC_SECTIONS: DocSection[] = [
               def: "How much of the activity that mattered you pinned, and how much you missed.",
             },
             {
-              term: "False-positive handling · 15%",
-              def: "Whether you correctly left innocent activity alone instead of sweeping it in.",
+              term: "Triage accuracy · 15%",
+              def: "Every alert the case raised, against the decision you made about it. Escalating a real alert and dismissing a planted one both count for you; dismissing a real one or sweeping a planted one in both count against. Alerts you never acted on earn nothing.",
             },
             {
               term: "Response actions · 15%",
-              def: "Whether the containment steps you took suited what you were dealing with.",
+              def: "Whether you took the containment the case called for, against the right account or device. Where the right answer was no action at all, taking one costs the whole component.",
             },
             {
               term: "Verdict · 10%",

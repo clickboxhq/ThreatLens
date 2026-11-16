@@ -205,6 +205,7 @@ export function generateTelemetry(
       isPrivileged: false,
       homeCountry: narrative.attributes.home_country,
       isGroundTruthActor: true,
+      narrativeRef: narrative.ref,
     };
     identities.push(identity);
     identityByRef.set(narrative.ref, { ...identity, id });
@@ -225,6 +226,7 @@ export function generateTelemetry(
       isolationStatus: 'not_isolated',
       lastSeenAt: new Date(),
       isGroundTruthActor: true,
+      narrativeRef: narrative.ref,
     };
     devices.push(device);
     deviceByRef.set(narrative.ref, { ...device, id });

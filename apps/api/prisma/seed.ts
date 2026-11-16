@@ -612,7 +612,11 @@ async function main() {
           required_techniques: ['T1566.002', 'T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'block_sender', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           {
@@ -701,7 +705,10 @@ async function main() {
           required_techniques: ['T1110.003', 'T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Search sign-in events by source IP — how many different accounts did it try?' },
@@ -776,7 +783,9 @@ async function main() {
           required_techniques: ['T1656'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'block_sender', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check the sender's actual domain closely against the organization's real domain." },
@@ -856,7 +865,10 @@ async function main() {
           required_techniques: ['T1621', 'T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Search sign-in events for this identity — how many MFA prompts were denied before one succeeded?' },
@@ -925,7 +937,10 @@ async function main() {
           required_techniques: ['T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Look at this identity's sign-in timeline — do any two consecutive entries look geographically odd?" },
@@ -982,7 +997,9 @@ async function main() {
           required_techniques: ['T1048'],
           required_verdict: 'true_positive',
           min_evidence_items: 1,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'disable_account', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Search outbound email — where is company data actually going?' },
@@ -1062,7 +1079,10 @@ async function main() {
           required_techniques: ['T1566.001', 'T1204.002', 'T1071.001'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+            { action: 'block_sender', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check the victim's mailbox for anything with an attachment received a few hours before the device activity." },
@@ -1161,7 +1181,11 @@ async function main() {
           required_techniques: ['T1021.002', 'T1486'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'patient_zero_device' },
+            { action: 'isolate_device', target: 'file_server_device' },
+            { action: 'disable_account', target: 'compromised_admin' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check the file server's process tree — is there anything there that shouldn't be, given no one logs into that machine directly?" },
@@ -1230,7 +1254,10 @@ async function main() {
           required_techniques: ['T1078', 'T1114.002'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this identity's MFA status, then look at its sign-in timeline for anything using an old-sounding client app." },
@@ -1299,7 +1326,10 @@ async function main() {
           required_techniques: ['T1098.001', 'T1530'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Check the Identity Portal for this account\'s cloud activity — has it ever created an access key before?' },
@@ -1370,7 +1400,9 @@ async function main() {
           required_techniques: ['T1505.003'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'web_server_device' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Check this server\'s HTTP requests for anything hitting a path that looks out of place for the application.' },
@@ -1451,7 +1483,9 @@ async function main() {
           required_techniques: ['T1059.001', 'T1547.001', 'T1071.001'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's Process Tree — is there anything unusual, even without an obvious email or download trigger?" },
@@ -1533,7 +1567,10 @@ async function main() {
           required_techniques: ['T1003.001', 'T1071.001'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's Process Tree for anything invoking a system DLL in an unusual way." },
@@ -1612,7 +1649,9 @@ async function main() {
           required_techniques: ['T1052.001', 'T1070.004'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'disable_account', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's File Timeline — is there a burst of file activity on a drive letter that isn't C:?" },
@@ -1681,7 +1720,9 @@ async function main() {
           required_techniques: ['T1530'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check the Identity Portal for this account's cloud activity — did a bucket's access policy change recently?" },
@@ -1752,7 +1793,10 @@ async function main() {
           required_techniques: ['T1190'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'web_server_device' },
+            { action: 'block_ip', target: 'web_server_device' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Check this server\'s HTTP requests for query parameters that look unusual, not just unusual paths.' },
@@ -1823,7 +1867,9 @@ async function main() {
           required_techniques: ['T1048', 'T1486'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's File Timeline — is there a burst of files being encrypted?" },
@@ -1912,7 +1958,9 @@ async function main() {
           required_techniques: ['T1204.002', 'T1053.005', 'T1071.001'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's Process Tree — is there an installer that dropped and launched a second program?" },
@@ -1998,7 +2046,10 @@ async function main() {
           required_techniques: ['T1566.002', 'T1528', 'T1114.002'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'block_sender', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this identity's mailbox for a message urging them to reconnect or re-authorize something." },
@@ -2077,7 +2128,10 @@ async function main() {
           required_techniques: ['T1558.003', 'T1078.002'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'service_account_identity_1' },
+            { action: 'isolate_device', target: 'victim_device_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's Process Tree for a tool requesting Kerberos tickets in bulk." },
@@ -2158,7 +2212,10 @@ async function main() {
           required_techniques: ['T1204.002', 'T1071.004', 'T1041'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+            { action: 'block_ip', target: 'victim_device_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: "Check this device's Process Tree for a downloaded tool with an unremarkable name." },
@@ -2380,7 +2437,10 @@ async function main() {
           required_techniques: ['T1530', 'T1070.004'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'disable_account', target: 'insider_identity_1' },
+            { action: 'revoke_tokens', target: 'insider_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Nothing alerted here. Open the identity and read its cloud activity directly — how much was read, and over what period?' },
@@ -2465,7 +2525,9 @@ async function main() {
           required_techniques: ['T1190', 'T1505.003'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'isolate_device', target: 'web_server_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Order the requests to this server by time. What changed between the early traffic and the later traffic?' },
@@ -2531,7 +2593,9 @@ async function main() {
           required_techniques: ['T1213'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'disable_account', target: 'customer_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Every request in the run succeeded. Before deciding whether that is normal, work out what the requests were asking for.' },
@@ -2593,7 +2657,9 @@ async function main() {
           required_techniques: ['T1110.001'],
           required_verdict: 'true_positive',
           min_evidence_items: 2,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Count the failures, then count how many distinct accounts they fall on. The ratio is the whole finding.' },
@@ -2665,7 +2731,10 @@ async function main() {
           required_techniques: ['T1110.004', 'T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Count the attempts per account rather than in total. One each is a deliberate choice, not a coincidence.' },
@@ -2737,7 +2806,10 @@ async function main() {
           required_techniques: ['T1098', 'T1078'],
           required_verdict: 'true_positive',
           min_evidence_items: 3,
-          containment_expectations: [],
+          containment_expectations: [
+            { action: 'disable_account', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
         },
         hints: [
           { unlock_cost_percent: 5, text: 'Open the audit log on the account, not just its sign-ins. Group and role changes are recorded separately from authentication.' },

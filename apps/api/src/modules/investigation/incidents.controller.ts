@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -64,6 +66,19 @@ export class IncidentsController {
     @Body() dto: LinkAlertsDto,
   ) {
     return this.incidentsService.linkAlerts(sessionId, id, user, dto);
+  }
+
+  // Triage is a decision a student is allowed to change their mind about before submitting.
+  @Delete(':id/alerts/:alertId')
+  @HttpCode(204)
+  @TracksActivity()
+  async unlinkAlert(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('alertId', ParseUUIDPipe) alertId: string,
+  ): Promise<void> {
+    await this.incidentsService.unlinkAlert(sessionId, id, user, alertId);
   }
 
   @Patch(':id')

@@ -66,8 +66,8 @@ Weights live in `apps/api/src/modules/scoring/scorer.ts` and are the source of t
 | --- | ---: | --- |
 | Technique accuracy | 30% | Tagged techniques vs. the rubric's required set — precision *and* recall |
 | Evidence | 30% | Ground-truth rows pinned, against rows missed |
-| False-positive handling | 15% | Whether decoy activity was correctly left alone |
-| Response actions | 15% | Whether the actions taken match what the scenario called for |
+| Triage accuracy | 15% | Every alert raised, against the decision made about it: escalating a real one and dismissing a planted one both count for; the reverse both count against; untouched earns nothing |
+| Response actions | 15% | The rubric's containment expectations met, against the right entity. Where the rubric expects none, any action scores zero |
 | Verdict | 10% | The final call |
 
 A hint penalty is then applied proportionally to each hint's authored cost. Hints are always

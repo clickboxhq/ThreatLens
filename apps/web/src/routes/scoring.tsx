@@ -19,12 +19,13 @@ export const Route = createFileRoute("/scoring")({
   },
 });
 
+// Mirrors apps/api/src/modules/scoring/scorer.ts's WEIGHTS — that file is the source of truth.
 const SCORE_WEIGHTS: [string, string][] = [
   ["Technique accuracy", "30%"],
-  ["Evidence recall", "25%"],
-  ["Evidence precision", "15%"],
-  ["Required response actions", "15%"],
-  ["Correct verdict", "15%"],
+  ["Evidence recall and precision", "30%"],
+  ["Triage accuracy", "15%"],
+  ["Response actions", "15%"],
+  ["Correct verdict", "10%"],
 ];
 
 function ScoringPage() {

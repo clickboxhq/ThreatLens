@@ -14,6 +14,7 @@ import type {
   AuthoredGroundTruthDefinition,
   CreateScenarioDto,
 } from './dto/scenario-builder.dto';
+import { RESPONSE_ACTION_TYPES } from '../investigation/dto/incident.dto';
 
 const RELATIVE_TIMESTAMP_RE = /^\+\d+h(\d+m)?$/;
 const REQUIRED_VERDICTS = [
@@ -221,6 +222,24 @@ export class ScenarioBuilderService {
         `scoring_rubric.required_verdict must be one of ${REQUIRED_VERDICTS.join(', ')}.`,
       );
     }
+    const containment = rubric.containment_expectations ?? [];
+    for (const exp of containment) {
+      if (!(RESPONSE_ACTION_TYPES as readonly string[]).includes(exp.action)) {
+        errors.push(
+          `Containment expectation action "${exp.action}" isn't one a student can take — must be one of ${RESPONSE_ACTION_TYPES.join(', ')}.`,
+        );
+      }
+      if (!identityRefs.has(exp.target) && !deviceRefs.has(exp.target)) {
+        errors.push(
+          `Containment expectation target "${exp.target}" doesn't match any narrative identity or device — the Scoring Engine could never resolve it.`,
+        );
+      }
+    }
+    if (containment.length > 0 && rubric.required_verdict !== 'true_positive') {
+      errors.push(
+        'A scenario whose correct verdict is not true_positive cannot expect containment — the right response to a benign finding is no action.',
+      );
+    }
     if (!rubric.min_evidence_items || rubric.min_evidence_items < 1) {
       errors.push('scoring_rubric.min_evidence_items must be at least 1.');
     } else if (rubric.min_evidence_items > killChain.length) {
@@ -326,26 +345,29 @@ export class ScenarioBuilderService {
     };
   }
 
-  // Completes the authored definition with the fields real consumers require to exist even
-  // though they're always empty in practice today — ScoringService reads
-  // `rubric.containment_expectations.length` unconditionally (containment scoring isn't actually
-  // implemented; `containmentMetCount` is hardcoded to 0 regardless), so a stored definition
-  // missing the key entirely throws inside the scoring job the same way a missing
-  // `attributes` wrapper throws inside telemetry generation — silently, with the session never
-  // leaving `submitted`. `distractor_pool` has no reader anywhere in the codebase (confirmed by
-  // grep, not assumed) and is included purely for schema fidelity with prisma/seed.ts's shape.
+  // Completes the authored definition with the fields real consumers require to exist.
+  // `containment_expectations` is optional for an author but the Scoring Engine reads it as a
+  // list, so an omitted key is stored as the empty list it means ("expect no containment").
+  // `distractor_pool` has no reader anywhere in the codebase (confirmed by grep, not assumed)
+  // and is included purely for schema fidelity with prisma/seed.ts's shape.
   private toStoredDefinition(
     def: AuthoredGroundTruthDefinition,
   ): AuthoredGroundTruthDefinition & {
     distractor_pool: unknown[];
     scoring_rubric: AuthoredGroundTruthDefinition['scoring_rubric'] & {
-      containment_expectations: unknown[];
+      containment_expectations: NonNullable<
+        AuthoredGroundTruthDefinition['scoring_rubric']['containment_expectations']
+      >;
     };
   } {
     return {
       ...def,
       distractor_pool: [],
-      scoring_rubric: { ...def.scoring_rubric, containment_expectations: [] },
+      scoring_rubric: {
+        ...def.scoring_rubric,
+        containment_expectations:
+          def.scoring_rubric.containment_expectations ?? [],
+      },
     };
   }
 

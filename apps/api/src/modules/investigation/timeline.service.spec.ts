@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { TimelineService } from './timeline.service';
+import { relatedByEscalatedAlerts, TimelineService } from './timeline.service';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 
 const USER: AuthenticatedUser = {
@@ -82,6 +82,8 @@ describe('TimelineService.listMine', () => {
       incident: { findMany: jest.fn(async () => incidents) },
       evidenceCollection: { findMany: jest.fn(async () => []) },
       timelineItem: { findMany: jest.fn(async () => []) },
+      incidentAlert: { findMany: jest.fn(async () => []) },
+      alertEvidenceRef: { findMany: jest.fn(async () => []) },
       signInEvent: { findUnique: jest.fn() },
     };
     const sessionAccess = { getOwnedSession: jest.fn() };
@@ -100,7 +102,7 @@ describe('TimelineService.listMine', () => {
     await expect(service.listMine(USER)).resolves.toEqual([]);
   });
 
-  it('merges evidence + manual items across two different incidents and never links their correlation ids together', async () => {
+  it('merges evidence + manual items across two different incidents and never relates them to each other', async () => {
     const incidentA = {
       id: 'incident-a',
       sessionId: 'session-a',
@@ -124,8 +126,8 @@ describe('TimelineService.listMine', () => {
     prisma.timelineItem.findMany.mockImplementation(async () => [
       { incidentId: 'incident-b', eventTable: 'sign_in_events', eventId: 'e2' },
     ]);
-    // Both incidents' events happen to share the same correlation_id string — a coincidence
-    // that must NOT show up as a cross-incident correlation line.
+    // Nothing has been escalated in either incident, so nothing is related — and the raw
+    // correlation_id both events happen to carry must play no part in that.
     prisma.signInEvent.findUnique.mockImplementation(
       async (args: { where: { id: string } }) => {
         const base = {
@@ -155,5 +157,78 @@ describe('TimelineService.listMine', () => {
     expect(result.map((r) => r.incidentTitle)).toEqual(['Case A', 'Case B']);
     expect(result.find((r) => r.id === 'e1')!.relatedItemIds).toEqual([]);
     expect(result.find((r) => r.id === 'e2')!.relatedItemIds).toEqual([]);
+  });
+});
+
+// relatedItemIds is now the student's own correlation: two timeline items are related when
+// both are cited by alerts they escalated into the same incident. The graph draws what they
+// connected, and only that.
+describe('relatedByEscalatedAlerts', () => {
+  const item = (eventId: string, scope = 'inc-1') => ({ eventId, scope });
+
+  it('relates two items cited by the same escalated alert', () => {
+    const a = item('e1');
+    const b = item('e2');
+    const related = relatedByEscalatedAlerts(
+      [a, b],
+      [{ scope: 'inc-1', alertId: 'alert-x' }],
+      [
+        { alertId: 'alert-x', eventId: 'e1' },
+        { alertId: 'alert-x', eventId: 'e2' },
+      ],
+    );
+    expect(related.get(a)).toEqual(['e2']);
+    expect(related.get(b)).toEqual(['e1']);
+  });
+
+  it('relates nothing through an alert that was never escalated', () => {
+    const a = item('e1');
+    const b = item('e2');
+    const related = relatedByEscalatedAlerts(
+      [a, b],
+      [],
+      [
+        { alertId: 'alert-x', eventId: 'e1' },
+        { alertId: 'alert-x', eventId: 'e2' },
+      ],
+    );
+    expect(related.get(a)).toEqual([]);
+    expect(related.get(b)).toEqual([]);
+  });
+
+  it('keeps incidents apart: an alert escalated in one says nothing about another', () => {
+    const a = item('e1', 'inc-1');
+    const b = item('e2', 'inc-2');
+    const related = relatedByEscalatedAlerts(
+      [a, b],
+      [{ scope: 'inc-1', alertId: 'alert-x' }],
+      [
+        { alertId: 'alert-x', eventId: 'e1' },
+        { alertId: 'alert-x', eventId: 'e2' },
+      ],
+    );
+    expect(related.get(a)).toEqual([]);
+    expect(related.get(b)).toEqual([]);
+  });
+
+  it('bridges items across two escalated alerts that share an event', () => {
+    // Alert X cites e1+e2, alert Y cites e2+e3: e2 is related to both, e1 and e3 only to e2.
+    const [a, b, c] = [item('e1'), item('e2'), item('e3')];
+    const related = relatedByEscalatedAlerts(
+      [a, b, c],
+      [
+        { scope: 'inc-1', alertId: 'x' },
+        { scope: 'inc-1', alertId: 'y' },
+      ],
+      [
+        { alertId: 'x', eventId: 'e1' },
+        { alertId: 'x', eventId: 'e2' },
+        { alertId: 'y', eventId: 'e2' },
+        { alertId: 'y', eventId: 'e3' },
+      ],
+    );
+    expect(related.get(a)).toEqual(['e2']);
+    expect(related.get(b)!.sort()).toEqual(['e1', 'e3']);
+    expect(related.get(c)).toEqual(['e2']);
   });
 });

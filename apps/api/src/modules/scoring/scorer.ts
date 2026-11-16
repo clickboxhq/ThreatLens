@@ -8,11 +8,28 @@ export interface ScoringInput {
   totalGroundTruthEvidenceCount: number;
   pinnedGroundTruthEvidenceCount: number;
   pinnedTotalEvidenceCount: number;
-  falsePositiveByDesignAlertCount: number;
-  falsePositiveCorrectlyHandledCount: number;
-  falsePositiveMishandledCount: number;
+
+  // Triage (§8.6, §12.4 component 3). Every alert the session raised falls into exactly one
+  // of: escalated into the incident, dismissed with a reason, or left alone. A "real" alert
+  // is one whose evidence includes at least one ground-truth event; "bait" is one whose
+  // evidence is entirely noise (isFalsePositiveByDesign).
+  alertCount: number;
+  realAlertsEscalated: number;
+  realAlertsDismissed: number;
+  baitAlertsDismissed: number;
+  /** Bait that was escalated, or whose evidence was pinned — either sweeps noise in. */
+  baitAlertsMishandled: number;
+
+  // Containment (§12.4 component 4). An expectation is met when the named action was taken
+  // against the named entity before submission. `by_relative_time` and `weight` from the
+  // rubric schema (§12.1) are deliberately not scored yet — there is no live/time-phased mode
+  // (§12.7) for a deadline to be relative to, and equal weighting is what every authored
+  // scenario currently assumes.
   containmentExpectationCount: number;
   containmentMetCount: number;
+  /** Containment actions taken when the rubric expected none at all. */
+  unnecessaryContainmentCount: number;
+
   requiredVerdict: string;
   submittedVerdicts: string[];
   hintPenaltyPercent: number;
@@ -23,7 +40,8 @@ export interface RubricBreakdown {
   techniqueAccuracyPercent: number;
   evidencePrecisionPercent: number;
   evidenceRecallPercent: number;
-  falsePositiveHandlingPercent: number;
+  triageAccuracyPercent: number;
+  /** Bait alerts swept into the investigation. Persisted as scores.false_positive_count. */
   falsePositiveCount: number;
   responsePercent: number;
   verdictCorrect: boolean;
@@ -33,13 +51,17 @@ export interface RubricBreakdown {
 const WEIGHTS = {
   technique: 0.3,
   evidence: 0.3,
-  falsePositive: 0.15,
+  triage: 0.15,
   response: 0.15,
   verdict: 0.1,
 };
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function clampPercent(n: number): number {
+  return Math.max(0, Math.min(100, n));
 }
 
 export function computeScore(input: ScoringInput): RubricBreakdown {
@@ -72,27 +94,32 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
   const evidenceComponentPercent =
     (evidencePrecisionPercent + evidenceRecallPercent) / 2;
 
-  // Rewards correctly dismissing false-positive bait, penalizes escalating/pinning it as
-  // evidence — and, deliberately, does NOT default to a high score for simply never
-  // touching those alerts. Inaction must not be scoreable as good false-positive handling.
-  const falsePositiveHandlingPercent =
-    input.falsePositiveByDesignAlertCount > 0
-      ? Math.max(
-          0,
-          Math.min(
-            100,
-            ((input.falsePositiveCorrectlyHandledCount -
-              input.falsePositiveMishandledCount) /
-              input.falsePositiveByDesignAlertCount) *
-              100,
-          ),
+  // Triage accuracy: right decisions minus wrong ones, over every alert raised. Escalating a
+  // real alert and dismissing bait with a reason both count for; dismissing a real alert and
+  // sweeping bait in both count against. An alert never acted on counts for neither — but it
+  // still sits in the denominator, so inaction is not scoreable as good triage. A scenario
+  // with no alerts has nothing to triage and scores full marks here.
+  const triageCorrect = input.realAlertsEscalated + input.baitAlertsDismissed;
+  const triageIncorrect =
+    input.realAlertsDismissed + input.baitAlertsMishandled;
+  const triageAccuracyPercent =
+    input.alertCount > 0
+      ? clampPercent(
+          ((triageCorrect - triageIncorrect) / input.alertCount) * 100,
         )
       : 100;
 
+  // Response: the fraction of expected containment taken against the right target. When the
+  // rubric expects nothing — a false or benign positive — the correct response is no action,
+  // and taking one is the over-containment the investigation checklist warns about: it scores
+  // zero, not a discount. Extra actions in a scenario that does expect containment are
+  // reported in the debrief but not penalised here.
   const responsePercent =
     input.containmentExpectationCount > 0
       ? (input.containmentMetCount / input.containmentExpectationCount) * 100
-      : 100;
+      : input.unnecessaryContainmentCount > 0
+        ? 0
+        : 100;
 
   const verdictCorrect = input.submittedVerdicts.includes(
     input.requiredVerdict,
@@ -101,21 +128,18 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
   const weightedSum =
     techniqueAccuracyPercent * WEIGHTS.technique +
     evidenceComponentPercent * WEIGHTS.evidence +
-    falsePositiveHandlingPercent * WEIGHTS.falsePositive +
+    triageAccuracyPercent * WEIGHTS.triage +
     responsePercent * WEIGHTS.response +
     (verdictCorrect ? 100 : 0) * WEIGHTS.verdict;
 
-  const overallPercent = Math.max(
-    0,
-    Math.min(100, weightedSum - input.hintPenaltyPercent),
-  );
+  const overallPercent = clampPercent(weightedSum - input.hintPenaltyPercent);
 
   return {
     techniqueAccuracyPercent: round2(techniqueAccuracyPercent),
     evidencePrecisionPercent: round2(evidencePrecisionPercent),
     evidenceRecallPercent: round2(evidenceRecallPercent),
-    falsePositiveHandlingPercent: round2(falsePositiveHandlingPercent),
-    falsePositiveCount: input.falsePositiveMishandledCount,
+    triageAccuracyPercent: round2(triageAccuracyPercent),
+    falsePositiveCount: input.baitAlertsMishandled,
     responsePercent: round2(responsePercent),
     verdictCorrect,
     overallPercent: round2(overallPercent),
