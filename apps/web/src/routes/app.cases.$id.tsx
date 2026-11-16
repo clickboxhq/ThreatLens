@@ -13,9 +13,10 @@ import {
   STAGES,
   type Stage,
 } from "@/components/soc/investigation/investigation-stepper";
+import { StageTriage } from "@/components/soc/investigation/stage-triage";
 import { StageInvestigate } from "@/components/soc/investigation/stage-investigate";
 import { StageEvidence } from "@/components/soc/investigation/stage-evidence";
-import { StageResponse } from "@/components/soc/investigation/stage-response";
+import { StageResponse, type TakenAction } from "@/components/soc/investigation/stage-response";
 import { StageIntelligence } from "@/components/soc/investigation/stage-intelligence";
 import { StageNotes } from "@/components/soc/investigation/stage-notes";
 import { StageReview } from "@/components/soc/investigation/stage-review";
@@ -30,9 +31,10 @@ import {
 } from "@/hooks/use-investigations";
 import { ApiError } from "@/lib/api-client";
 import { useIdentities } from "@/hooks/use-identities";
-import { useEndpoints } from "@/hooks/use-endpoints";
+import { useEndpoints, useIsolateDevice } from "@/hooks/use-endpoints";
+import { useAlerts, useUpdateAlertStatus } from "@/hooks/use-alerts";
 import { toast } from "sonner";
-import type { IncidentVerdict, ResponseActionType } from "@/types/threatlens-investigation";
+import type { IncidentVerdict } from "@/types/threatlens-investigation";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 
 const STAGE_IDS = new Set(STAGES.map((s) => s.id));
@@ -155,6 +157,10 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     addNote,
     unlockHint,
     logResponseAction,
+    linkAlerts,
+    unlinkAlert,
+    triaging,
+    refreshTriage,
     closeIncident,
     closingIncident,
     submitSession,
@@ -165,6 +171,11 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
     lookingUpThreatIntel,
   } = useInvestigation(sessionId, incidentId);
   const { data: session } = useSessionReadiness(sessionId);
+  // The queue, inside the case: Triage is the first stage, and the alerts it works are the
+  // same list the Alert Center shows.
+  const alertsQuery = useAlerts(sessionId);
+  const updateAlertStatus = useUpdateAlertStatus(sessionId);
+  const isolateDevice = useIsolateDevice(sessionId);
 
   const { stage } = Route.useSearch();
   const navigate = useNavigate();
@@ -180,7 +191,7 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const [transitioning, setTransitioning] = useState(false);
 
   const [pendingRemoveEvidenceId, setPendingRemoveEvidenceId] = useState<string | null>(null);
-  const [takenActions, setTakenActions] = useState<ResponseActionType[]>([]);
+  const [takenActions, setTakenActions] = useState<TakenAction[]>([]);
   const [openEmailId, setOpenEmailId] = useState<string | null>(null);
   const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
@@ -200,7 +211,13 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const pinnedIds = new Set(evidence.map((e) => `${e.eventTable}:${e.eventId}`));
   const timelineIds = new Set(timeline.map((t) => `${t.eventTable}:${t.id}`));
   const pendingRemoveEvidenceItem = evidence.find((e) => e.id === pendingRemoveEvidenceId) ?? null;
-  const activeStage: Stage = stage ?? (locked ? "submit" : "investigate");
+  const activeStage: Stage = stage ?? (locked ? "submit" : "triage");
+
+  const alerts = alertsQuery.data ?? [];
+  const linkedAlertIds = new Set(incident.linkedAlertIds);
+  const alertsDecided = alerts.filter(
+    (a) => linkedAlertIds.has(a.id) || a.status === "dismissed",
+  ).length;
 
   function handleBegin() {
     setTransitioning(true);
@@ -252,12 +269,13 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
 
       <SectionHeader
         title={session.scenarioTitle}
-        description={`${incident.linkedAlertIds.length} linked alerts`}
+        description={`${incident.linkedAlertIds.length} of ${alerts.length} alerts escalated into this incident`}
       />
 
       <InvestigationStepper
         active={activeStage}
         done={{
+          triage: alerts.length > 0 && alertsDecided === alerts.length,
           evidence: evidence.length > 0,
           notes: notes.length > 0,
           response: takenActions.length > 0,
@@ -267,6 +285,33 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
         hints={hints}
         onUnlockHint={(index) => unlockHint(index)}
       />
+
+      {activeStage === "triage" && (
+        <StageTriage
+          sessionId={sessionId}
+          alerts={alerts}
+          alertsLoading={alertsQuery.isPending}
+          linkedAlertIds={incident.linkedAlertIds}
+          locked={locked}
+          busy={triaging || updateAlertStatus.isPending}
+          onEscalate={(alertId) => linkAlerts([alertId])}
+          onUnescalate={(alertId) => unlinkAlert(alertId)}
+          onDismiss={async (alertId, reason) => {
+            await updateAlertStatus.mutateAsync({
+              alertId,
+              status: "dismissed",
+              dismissalReason: reason,
+            });
+            refreshTriage();
+          }}
+          onUndismiss={async (alertId) => {
+            await updateAlertStatus.mutateAsync({ alertId, status: "new" });
+            refreshTriage();
+          }}
+          onOpenIdentity={setOpenIdentityId}
+          onOpenDevice={setOpenDeviceId}
+        />
+      )}
 
       {activeStage === "investigate" && (
         <StageInvestigate
@@ -307,10 +352,35 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
       {activeStage === "response" && (
         <StageResponse
           takenActions={takenActions}
+          identities={(sessionIdentities ?? []).map((i) => ({
+            id: i.id,
+            displayName: i.displayName,
+          }))}
+          devices={(sessionDevices ?? []).map((d) => ({
+            id: d.id,
+            hostname: d.hostname,
+            isolationStatus: d.isolationStatus,
+          }))}
           locked={locked}
-          onLogAction={async (actionType, targetType) => {
-            await logResponseAction({ actionType, targetType });
-            setTakenActions((prev) => [...prev, actionType]);
+          onLogAction={async (actionType, targetType, targetId) => {
+            await logResponseAction({ actionType, targetType, targetId });
+            setTakenActions((prev) => [
+              ...prev,
+              { actionType, targetId, targetLabel: nameFor(targetId) ?? "target" },
+            ]);
+          }}
+          onIsolateDevice={async (deviceId) => {
+            // The real endpoint: flips the device's state and records the action with the
+            // device id, which is what the scorer matches an isolate_device expectation on.
+            await isolateDevice.mutateAsync(deviceId);
+            setTakenActions((prev) => [
+              ...prev,
+              {
+                actionType: "isolate_device",
+                targetId: deviceId,
+                targetLabel: nameFor(deviceId) ?? "device",
+              },
+            ]);
           }}
         />
       )}
@@ -333,6 +403,8 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           sessionId={sessionId}
           incidentId={incident.id}
           locked={locked}
+          alertsDecided={alertsDecided}
+          alertsTotal={alerts.length}
           evidenceCount={evidence.length}
           timelineCount={timeline.length}
           actionsCount={takenActions.length}
@@ -439,10 +511,26 @@ function ScoreResult({
     );
   }
 
-  const rubric = [
+  // The five components and their real weights (apps/api's scorer.ts WEIGHTS). Older scores
+  // carry falsePositiveHandlingPercent instead of triageAccuracyPercent and no responsePercent
+  // (that component was a constant 100 before it was scored for real) — shown as such.
+  const rb = score.rubricBreakdown;
+  const triage =
+    rb.triageAccuracyPercent != null
+      ? { label: "Triage accuracy", value: rb.triageAccuracyPercent }
+      : rb.falsePositiveHandlingPercent != null
+        ? { label: "False-positive handling", value: rb.falsePositiveHandlingPercent }
+        : { label: "Triage accuracy", value: null };
+  const rubric: { label: string; value: number | null; weight: string; detail?: string }[] = [
     { label: "Technique accuracy", value: score.techniqueAccuracyPercent, weight: "30%" },
-    { label: "Evidence recall", value: score.evidenceRecallPercent, weight: "15%" },
-    { label: "Evidence precision", value: score.evidencePrecisionPercent, weight: "15%" },
+    {
+      label: "Evidence",
+      value: (score.evidenceRecallPercent + score.evidencePrecisionPercent) / 2,
+      weight: "30%",
+      detail: `recall ${Math.round(score.evidenceRecallPercent)}% · precision ${Math.round(score.evidencePrecisionPercent)}%`,
+    },
+    { ...triage, weight: "15%" },
+    { label: "Response actions", value: rb.responsePercent ?? 100, weight: "15%" },
     { label: "Verdict", value: score.verdictCorrect ? 100 : 0, weight: "10%" },
   ];
 
@@ -462,13 +550,18 @@ function ScoreResult({
             <div className="flex items-center justify-between text-[11.5px]">
               <span>
                 {r.label} <span className="text-muted-foreground">({r.weight})</span>
+                {r.detail && (
+                  <span className="ml-1.5 text-[10.5px] text-muted-foreground">{r.detail}</span>
+                )}
               </span>
-              <span className="tabular-nums">{Math.round(r.value)}%</span>
+              <span className="tabular-nums">
+                {r.value == null ? "—" : `${Math.round(r.value)}%`}
+              </span>
             </div>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
               <div
                 className="h-full rounded-full bg-[color:var(--info)]"
-                style={{ width: `${r.value}%` }}
+                style={{ width: `${r.value ?? 0}%` }}
               />
             </div>
           </li>

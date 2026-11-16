@@ -2,11 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { alertsService } from "@/services/alerts";
 import type { AlertStatus } from "@/types/threatlens-operations";
 
-const keys = {
+// Exported so the case workspace can invalidate the queue after escalating or dismissing from
+// the Triage stage — the same list this page reads.
+export const alertKeys = {
   list: (sessionId: string) => ["session", sessionId, "alerts"] as const,
   evidence: (sessionId: string, alertId: string) =>
     ["session", sessionId, "alerts", alertId, "evidence"] as const,
 };
+const keys = alertKeys;
 
 export function useAlerts(sessionId: string | undefined) {
   return useQuery({

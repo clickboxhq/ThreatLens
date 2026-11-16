@@ -29,6 +29,15 @@ export const apiInvestigationsService: InvestigationsService = {
   getIncident: (sessionId, incidentId) =>
     apiClient.get<IncidentDto>(`/sessions/${sessionId}/incidents/${incidentId}`),
 
+  linkAlerts: (sessionId, incidentId, alertIds) =>
+    apiClient.post<IncidentDto>(`/sessions/${sessionId}/incidents/${incidentId}/alerts`, {
+      alertIds,
+    }),
+
+  unlinkAlert: async (sessionId, incidentId, alertId) => {
+    await apiClient.delete(`/sessions/${sessionId}/incidents/${incidentId}/alerts/${alertId}`);
+  },
+
   closeIncident: (sessionId, incidentId, input) =>
     apiClient.post<IncidentDto>(`/sessions/${sessionId}/incidents/${incidentId}/close`, input),
 
@@ -71,10 +80,11 @@ export const apiInvestigationsService: InvestigationsService = {
   unlockHint: (sessionId, index) =>
     apiClient.post<HintDto[]>(`/sessions/${sessionId}/hints/${index}/unlock`),
 
-  logResponseAction: async (sessionId, incidentId, actionType, targetType) => {
+  logResponseAction: async (sessionId, incidentId, actionType, targetType, targetId) => {
     await apiClient.post(`/sessions/${sessionId}/incidents/${incidentId}/actions`, {
       actionType,
       targetType,
+      targetId,
     });
   },
 

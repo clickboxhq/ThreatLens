@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileSearch,
   Lightbulb,
+  ListChecks,
   NotebookPen,
   Radar,
   ShieldCheck,
@@ -13,9 +14,20 @@ import { HintsDialog } from "@/components/soc/investigation/hints-dialog";
 import type { HintDto } from "@/types/threatlens-investigation";
 
 export type Stage =
-  "investigate" | "evidence" | "response" | "intelligence" | "notes" | "review" | "submit";
+  | "triage"
+  | "investigate"
+  | "evidence"
+  | "response"
+  | "intelligence"
+  | "notes"
+  | "review"
+  | "submit";
 
+// Triage comes first because that is where a real investigation starts: the queue. Deciding
+// which alerts are this incident — and which are noise — is the correlation the platform used
+// to do for the student, and it is scored.
 export const STAGES: { id: Stage; label: string; icon: typeof FileSearch }[] = [
+  { id: "triage", label: "Triage", icon: ListChecks },
   { id: "investigate", label: "Investigate", icon: FileSearch },
   { id: "evidence", label: "Evidence", icon: ClipboardList },
   { id: "response", label: "Response", icon: Zap },

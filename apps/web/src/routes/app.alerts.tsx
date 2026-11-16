@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Panel, SectionHeader, SeverityBadge, StatusBadge } from "@/components/soc/primitives";
@@ -7,10 +7,13 @@ import { NoActiveSession } from "@/components/soc/no-active-session";
 import { Skeleton, EmptyState } from "@/components/soc/ui/skeleton";
 import { IdentityDetailDrawer } from "@/components/soc/identity-detail-drawer";
 import { DeviceDetailDrawer } from "@/components/soc/device-detail-drawer";
+import { AlertEvidence } from "@/components/soc/alert-evidence";
+import { DismissAlertDialog } from "@/components/soc/dismiss-alert-dialog";
 import { useActiveSession } from "@/hooks/use-active-session";
-import { useAlerts, useUpdateAlertStatus, useAlertEvidence } from "@/hooks/use-alerts";
+import { useAlerts, useUpdateAlertStatus } from "@/hooks/use-alerts";
+import { useLinkAlertsToIncident, useSessionIncident } from "@/hooks/use-investigations";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { Check, X as XIcon } from "lucide-react";
+import { ArrowUpRight, Ban, X as XIcon } from "lucide-react";
 import type {
   AlertDto,
   AlertEntityType,
@@ -71,6 +74,12 @@ function AlertsPage() {
   } = useActiveSession();
   const alertsQuery = useAlerts(selectedSessionId);
   const updateStatus = useUpdateAlertStatus(selectedSessionId);
+  // Escalating needs the session's incident; every session has exactly one (see
+  // useLaunchScenario). "Mark resolved" used to be the only action here, and it is the one
+  // decision the score does not recognise — triage is escalate or dismiss, with a reason.
+  const { data: incident } = useSessionIncident(selectedSessionId);
+  const linkAlerts = useLinkAlertsToIncident(selectedSessionId, incident?.id);
+  const [dismissTargets, setDismissTargets] = useState<AlertDto[]>([]);
   // An alert names the entity it fired on ("Possible LSASS memory dump on IT-WKS-07") and
   // carries its id, but until now the queue dead-ended there: you had to go find that host
   // yourself among every other device in the session. The alert is where an investigation
@@ -137,20 +146,33 @@ function AlertsPage() {
     });
   };
 
-  const bulkResolve = async () => {
-    const ids = [...selected];
+  const bulkDismiss = async (reason: string) => {
+    const ids = dismissTargets.map((a) => a.id);
     let ok = 0;
     for (const alertId of ids) {
       try {
-        await updateStatus.mutateAsync({ alertId, status: "resolved" });
+        await updateStatus.mutateAsync({ alertId, status: "dismissed", dismissalReason: reason });
         ok++;
       } catch {
         // individual failure surfaced via the count below; keep going for the rest
       }
     }
     setSelected(new Set());
-    if (ok === ids.length) toast.success(`Resolved ${ok} alert${ok === 1 ? "" : "s"}`);
-    else toast.error(`Resolved ${ok} of ${ids.length} — try the rest again`);
+    if (ok === ids.length) toast.success(`Dismissed ${ok} alert${ok === 1 ? "" : "s"}`);
+    else toast.error(`Dismissed ${ok} of ${ids.length} — try the rest again`);
+  };
+
+  const escalate = async (ids: string[]) => {
+    if (!incident) return;
+    try {
+      await linkAlerts.mutateAsync(ids);
+      setSelected(new Set());
+      toast.success(
+        ids.length === 1 ? "Escalated into the investigation" : `Escalated ${ids.length} alerts`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not escalate. Try again.");
+    }
   };
 
   return (
@@ -244,11 +266,18 @@ function AlertsPage() {
         <div className="mb-3 flex items-center gap-3 rounded-md border border-[color:var(--info)]/40 bg-[color:var(--info)]/10 px-3 py-2 text-[12px]">
           <span className="font-medium text-[color:var(--info)]">{selected.size} selected</span>
           <button
-            onClick={bulkResolve}
-            disabled={updateStatus.isPending}
+            onClick={() => escalate([...selected])}
+            disabled={linkAlerts.isPending || !incident}
             className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--info)]/40 bg-card px-2.5 py-1 text-[11.5px] text-foreground hover:bg-background disabled:opacity-50"
           >
-            <Check className="size-3.5" /> Mark resolved
+            <ArrowUpRight className="size-3.5" /> Escalate to investigation
+          </button>
+          <button
+            onClick={() => setDismissTargets(allAlerts.filter((a) => selected.has(a.id)))}
+            disabled={updateStatus.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-[11.5px] text-secondary hover:text-foreground disabled:opacity-50"
+          >
+            <Ban className="size-3.5" /> Dismiss…
           </button>
           <button
             onClick={() => setSelected(new Set())}
@@ -358,18 +387,35 @@ function AlertsPage() {
                         {formatRelativeTime(a.lastSeenAt)}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        {a.status === "new" || a.status === "in_progress" ? (
-                          <button
-                            disabled={updateStatus.isPending}
-                            onClick={() =>
-                              updateStatus.mutate({ alertId: a.id, status: "resolved" })
-                            }
-                            className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
+                        {a.status === "in_progress" && selectedSessionId ? (
+                          <Link
+                            to="/app/cases/$id"
+                            params={{ id: selectedSessionId }}
+                            search={{ stage: "triage" }}
+                            className="text-[11px] text-[color:var(--info)] hover:underline"
                           >
-                            Mark resolved
-                          </button>
-                        ) : (
+                            In case →
+                          </Link>
+                        ) : a.status === "dismissed" ? (
                           <span className="text-[11px] text-muted-foreground">—</span>
+                        ) : (
+                          <span className="inline-flex gap-1">
+                            <button
+                              disabled={linkAlerts.isPending || !incident}
+                              onClick={() => escalate([a.id])}
+                              title="Escalate into the investigation"
+                              className="rounded-md border border-[color:var(--info)]/40 px-2 py-1 text-[11px] text-[color:var(--info)] hover:bg-[color:var(--info)]/10 disabled:opacity-50"
+                            >
+                              Escalate
+                            </button>
+                            <button
+                              disabled={updateStatus.isPending}
+                              onClick={() => setDismissTargets([a])}
+                              className="rounded-md border border-border px-2 py-1 text-[11px] text-secondary hover:text-foreground disabled:opacity-50"
+                            >
+                              Dismiss…
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -404,50 +450,13 @@ function AlertsPage() {
           quickPreviewLinkTo={`/app/endpoints/${selectedSessionId}/${openDeviceId}`}
         />
       )}
-    </div>
-  );
-}
 
-/** The events a detection fired on, shown inline under its row. Surfaces the rule's working
- * so a learner can see the reasoning rather than infer it — and so the pivot from "an alert
- * exists" to "here is the telemetry behind it" takes one click instead of a manual hunt. */
-function AlertEvidence({ sessionId, alertId }: { sessionId: string; alertId: string }) {
-  const { data, isPending, isError } = useAlertEvidence(sessionId, alertId);
-
-  if (isPending) {
-    return <div className="py-2 text-[11.5px] text-muted-foreground">Loading evidence…</div>;
-  }
-  if (isError || !data) {
-    return (
-      <div className="py-2 text-[11.5px] text-muted-foreground">
-        Could not load what triggered this alert.
-      </div>
-    );
-  }
-  if (data.evidence.length === 0) {
-    return (
-      <div className="py-2 text-[11.5px] text-muted-foreground">
-        This alert recorded no individual triggering events.
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-md border border-border bg-card p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        What triggered this alert · {data.evidence.length}{" "}
-        {data.evidence.length === 1 ? "event" : "events"}
-      </div>
-      <ul className="mt-2 flex flex-col gap-1.5">
-        {data.evidence.map((e) => (
-          <li key={`${e.eventTable}:${e.eventId}`} className="flex items-baseline gap-2">
-            <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
-              {new Date(e.occurredAt).toISOString().slice(11, 16)}
-            </span>
-            <span className="text-[11.5px] text-secondary">{e.summary}</span>
-          </li>
-        ))}
-      </ul>
+      <DismissAlertDialog
+        open={dismissTargets.length > 0}
+        onOpenChange={(open) => !open && setDismissTargets([])}
+        alertTitles={dismissTargets.map((a) => a.title)}
+        onConfirm={bulkDismiss}
+      />
     </div>
   );
 }

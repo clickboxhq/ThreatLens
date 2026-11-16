@@ -62,7 +62,8 @@ export interface AlertDto {
    * device's hostname, or null if the entity's own record couldn't be found. */
   entityDisplay: string | null;
   mitreTechnique: { id: string; techniqueId: string; name: string } | null;
-  relatedAlertId: string | null;
+  // No relatedAlertId: which alerts belong to one chain is what triage asks the student to
+  // decide, so the server withholds its own grouping until the debrief.
   dedupCount: number;
   firstSeenAt: string;
   lastSeenAt: string;

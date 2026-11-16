@@ -103,8 +103,9 @@ export interface MitreTechniqueDto {
 }
 
 // The 6 options ThreatLens's "Response actions" panel offers — see
-// apps/api/.../dto/incident.dto.ts's LogResponseActionDto for why this is a flat list with no
-// per-entity target, not 6 different entity-scoped calls.
+// apps/api/.../dto/incident.dto.ts's LogResponseActionDto. Each is logged against a specific
+// identity or device; the Scoring Engine matches a rubric's containment expectations on
+// (action, target), so "disable the account" means *that* account.
 export const RESPONSE_ACTION_TYPES = [
   "isolate_device",
   "disable_account",
@@ -125,6 +126,27 @@ export interface ScoreRubricBreakdown {
   incorrectTechniques?: { id: string; techniqueId: string; name: string }[];
   unnecessaryEvidence?: { eventTable: string; summary: string }[];
   verdict?: { submitted: string[]; required: string; correct: boolean };
+  // The per-component percentages are spread into the breakdown at scoring time. Scores
+  // written before triage replaced false-positive handling carry the old key instead.
+  triageAccuracyPercent?: number;
+  falsePositiveHandlingPercent?: number;
+  responsePercent?: number;
+  /** Every alert, by the decision made about it. Titles only — never alert ids. */
+  triage?: {
+    escalatedCorrectly: string[];
+    dismissedCorrectly: string[];
+    escalatedBait: string[];
+    dismissedReal: string[];
+    untouched: string[];
+  };
+  response?: {
+    expected: { action: string; targetLabel: string }[];
+    met: { action: string; targetLabel: string }[];
+    missed: { action: string; targetLabel: string }[];
+    unnecessary: { action: string; targetLabel: string }[];
+  };
+  /** The scenario's own grouping of the alerts, revealed once the session is scored. */
+  correlation?: { groups: { alertTitles: string[] }[] };
   [key: string]: unknown;
 }
 

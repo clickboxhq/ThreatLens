@@ -33,6 +33,9 @@ export interface InvestigationsService {
   createIncident(sessionId: string, title: string): Promise<IncidentDto>;
   listIncidents(sessionId: string): Promise<IncidentSummaryDto[]>;
   getIncident(sessionId: string, incidentId: string): Promise<IncidentDto>;
+  /** Triage: escalate alerts into the incident. Reversible with unlinkAlert until submission. */
+  linkAlerts(sessionId: string, incidentId: string, alertIds: string[]): Promise<IncidentDto>;
+  unlinkAlert(sessionId: string, incidentId: string, alertId: string): Promise<void>;
   closeIncident(
     sessionId: string,
     incidentId: string,
@@ -71,11 +74,15 @@ export interface InvestigationsService {
   listHints(sessionId: string): Promise<HintDto[]>;
   unlockHint(sessionId: string, index: number): Promise<HintDto[]>;
 
+  /** Records a containment action against a specific identity or device. isolate_device has
+   * its own endpoint (endpointsService.isolate) that also flips the device's state — use that
+   * for it; this is for the other five. */
   logResponseAction(
     sessionId: string,
     incidentId: string,
     actionType: ResponseActionType,
     targetType: string,
+    targetId: string,
   ): Promise<void>;
 
   search(

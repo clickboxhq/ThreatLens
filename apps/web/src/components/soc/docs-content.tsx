@@ -106,7 +106,7 @@ export const DOC_SECTIONS: DocSection[] = [
             {
               title: "Work the case, then submit",
               detail:
-                "Investigate, pin what matters, commit to a verdict and submit. Your score comes back with a breakdown of where the marks went.",
+                "Triage the alert queue — escalate what is the incident, dismiss what is not — then investigate, pin what matters, take containment against the right account or device where it is warranted, commit to a verdict and submit. Your score comes back with a breakdown of where the marks went.",
             },
           ]}
         />
@@ -254,7 +254,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               term: "Alert Center",
-              def: "Everything the detections raised in the current session.",
+              def: "Everything the detections raised in the current session. Escalate or dismiss from here, or from the case's own Triage stage — both are the same queue.",
             },
             {
               term: "Incident Queue",
