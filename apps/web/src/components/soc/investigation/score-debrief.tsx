@@ -102,7 +102,11 @@ export function ScoreDebrief({ breakdown }: { breakdown: ScoreRubricBreakdown })
   const untouched = triage?.untouched ?? [];
   const missedContainment = response?.missed ?? [];
   const unnecessaryContainment = response?.unnecessary ?? [];
-  const expectedNone = (response?.expected.length ?? 0) === 0;
+  // Over-containment only costs marks on a false or benign positive (scorer.ts). A true
+  // positive with no listed containment — an older scenario version — reports extra actions
+  // as neutral, the same as one that does list containment.
+  const expectedNone =
+    (response?.expected.length ?? 0) === 0 && verdict?.required !== "true_positive";
   const groups = correlation?.groups ?? [];
 
   const hasAnything =
