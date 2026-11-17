@@ -219,7 +219,8 @@ export function StageTriage({
         <p className="max-w-xl text-[12.5px] leading-relaxed text-secondary">
           Decide which alerts are this incident. <span className="text-foreground">Escalate</span>{" "}
           what belongs; <span className="text-foreground">dismiss</span> what doesn&apos;t, and say
-          why. Both are scored — and so is leaving an alert undecided.
+          why. Both are scored — and so is leaving an alert undecided. Escalating is not a verdict:
+          an incident can turn out to be authorised, and you say so when you submit.
         </p>
         <div className="flex items-center gap-2 text-[11.5px]">
           {alerts.length > 0 && decided === alerts.length ? (

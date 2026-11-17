@@ -12,6 +12,7 @@ const ENTITY_TYPE_LABEL: Record<string, string> = {
   file_event: "Files",
   network_event: "Network",
   http_request: "Web",
+  directory_audit_event: "Directory",
 };
 
 const EVENT_TABLE_BY_ENTITY_TYPE: Record<SearchEntityType, string> = {
@@ -22,13 +23,19 @@ const EVENT_TABLE_BY_ENTITY_TYPE: Record<SearchEntityType, string> = {
   file_event: "file_events",
   network_event: "network_events",
   http_request: "http_requests",
+  directory_audit_event: "directory_audit_events",
 };
 
 function severityForEntity(
   entityType: SearchEntityType,
 ): "critical" | "high" | "medium" | "low" | "info" {
   if (entityType === "process_event" || entityType === "network_event") return "high";
-  if (entityType === "email_message" || entityType === "cloud_event") return "medium";
+  if (
+    entityType === "email_message" ||
+    entityType === "cloud_event" ||
+    entityType === "directory_audit_event"
+  )
+    return "medium";
   return "info";
 }
 
@@ -41,7 +48,13 @@ type Pivot = {
 
 function pivotsFor(entityType: SearchEntityType, data: Record<string, unknown>): Pivot[] {
   const pivots: Pivot[] = [];
-  const identityId = typeof data.identityId === "string" ? data.identityId : null;
+  // A directory change names its account as the target, not as identityId.
+  const identityId =
+    typeof data.identityId === "string"
+      ? data.identityId
+      : typeof data.targetIdentityId === "string"
+        ? data.targetIdentityId
+        : null;
   const deviceId = typeof data.deviceId === "string" ? data.deviceId : null;
   if (entityType === "email_message") {
     pivots.push({ kind: "email", id: String(data.id), label: "Open message", icon: Mail });

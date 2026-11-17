@@ -4,6 +4,7 @@ import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { EventOwnershipService } from '../session-core/event-ownership.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { describeDirectoryAuditEvent } from '../../common/dto/directory-audit.dto';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type { AddToTimelineDto } from './dto/incident.dto';
 
@@ -461,6 +462,26 @@ export class TimelineService {
           entityId: event.deviceId ?? event.id,
           entityLabel: event.device?.hostname ?? 'Unknown server',
           summary: `${event.method} ${event.url}`,
+        };
+      }
+      // A pinned directory change used to resolve to nothing here and quietly drop off the
+      // timeline — so an inbox rule or a new MFA method could be evidence and never appear in
+      // the chronology it belongs in. It sits in the account's own lane.
+      case 'directory_audit_events': {
+        const event = await this.prisma.directoryAuditEvent.findUnique({
+          where: { id: eventId },
+          include: { targetIdentity: { select: { displayName: true } } },
+        });
+        if (!event) return null;
+        return {
+          occurredAt: event.occurredAt,
+          entityType: 'identity',
+          entityId: event.targetIdentityId,
+          entityLabel: event.targetIdentity.displayName,
+          summary: describeDirectoryAuditEvent(
+            event,
+            event.targetIdentity.displayName,
+          ),
         };
       }
       default:

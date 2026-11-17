@@ -62,8 +62,10 @@ export function DismissAlertDialog({
             {count === 1 ? "Dismiss this alert?" : `Dismiss ${count} alerts?`}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-secondary-foreground">
-            You are saying this is not part of the incident. Write down why — the reason is what
-            makes it a decision rather than a click, and it is scored.
+            You are saying this is not part of the incident — not that it is harmless. If it is
+            about the activity you are investigating, escalate it even if you think that activity is
+            authorised; the verdict is where you say so. Write down why — the reason is what makes
+            it a decision rather than a click, and it is scored.
           </AlertDialogDescription>
           {count === 1 ? (
             <p className="t-h2 text-foreground">{alertTitles[0]}</p>

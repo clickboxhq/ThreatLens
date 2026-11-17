@@ -5,6 +5,7 @@ import { InvestigationActionsService } from '../session-core/investigation-actio
 import { toStudentSignInDto } from '../../common/dto/sign-in.dto';
 import { toStudentEmailDto } from '../../common/dto/email.dto';
 import { toStudentCloudEventDto } from '../../common/dto/cloud.dto';
+import { toStudentDirectoryAuditDto } from '../../common/dto/directory-audit.dto';
 import {
   toStudentProcessEventDto,
   toStudentFileEventDto,
@@ -167,6 +168,9 @@ export class SearchService {
     const httpWhere: Prisma.HttpRequestWhereInput = {
       sessionId: sessionScope,
     };
+    const auditWhere: Prisma.DirectoryAuditEventWhereInput = {
+      sessionId: sessionScope,
+    };
 
     for (const filter of filters) {
       if (SIGN_IN_FIELDS.has(filter.field)) {
@@ -241,9 +245,43 @@ export class SearchService {
         { filePath: { contains: freetext, mode: 'insensitive' } },
       ];
       httpWhere.OR = [{ url: { contains: freetext, mode: 'insensitive' } }];
+      // Sign-ins, network connections and the directory audit trail were never searched by
+      // freetext at all, so an alert reading "sign-in from Lagos" could not be followed by
+      // typing "Lagos" — nor the attacker's address, nor the account's name. Identity work is
+      // half the catalogue; this is the search it needs.
+      const byAccount = {
+        OR: [
+          { displayName: { contains: freetext, mode: 'insensitive' as const } },
+          {
+            userPrincipalName: {
+              contains: freetext,
+              mode: 'insensitive' as const,
+            },
+          },
+        ],
+      };
+      signInWhere.OR = [
+        { sourceIp: { contains: freetext, mode: 'insensitive' } },
+        { sourceCity: { contains: freetext, mode: 'insensitive' } },
+        { sourceCountry: { contains: freetext, mode: 'insensitive' } },
+        { application: { contains: freetext, mode: 'insensitive' } },
+        { clientApp: { contains: freetext, mode: 'insensitive' } },
+        { failureReason: { contains: freetext, mode: 'insensitive' } },
+        { identity: byAccount },
+      ];
+      networkWhere.OR = [
+        { remoteIp: { contains: freetext, mode: 'insensitive' } },
+      ];
+      auditWhere.OR = [
+        { action: { contains: freetext, mode: 'insensitive' } },
+        { actorDisplayName: { contains: freetext, mode: 'insensitive' } },
+        { sourceIp: { contains: freetext, mode: 'insensitive' } },
+        { targetIdentity: byAccount },
+      ];
     }
 
-    const hasSignInFilter = filters.some((f) => SIGN_IN_FIELDS.has(f.field));
+    const hasSignInFilter =
+      filters.some((f) => SIGN_IN_FIELDS.has(f.field)) || Boolean(freetext);
     const hasEmailFilter =
       filters.some((f) => EMAIL_FIELDS.has(f.field)) || Boolean(freetext);
     const hasCloudFilter =
@@ -252,7 +290,10 @@ export class SearchService {
       filters.some((f) => PROCESS_FIELDS.has(f.field)) || Boolean(freetext);
     const hasFileFilter =
       filters.some((f) => FILE_FIELDS.has(f.field)) || Boolean(freetext);
-    const hasNetworkFilter = filters.some((f) => NETWORK_FIELDS.has(f.field));
+    const hasNetworkFilter =
+      filters.some((f) => NETWORK_FIELDS.has(f.field)) || Boolean(freetext);
+    // No structured filter fields for the audit trail yet; freetext, or browse.
+    const hasAuditFilter = Boolean(freetext);
     const hasHttpFilter =
       filters.some((f) => HTTP_FIELDS.has(f.field)) || Boolean(freetext);
     const searchEverything = filters.length === 0 && !freetext;
@@ -265,6 +306,7 @@ export class SearchService {
       fileEvents,
       networkEvents,
       httpRequests,
+      auditEvents,
     ] = await Promise.all([
       hasSignInFilter || searchEverything
         ? this.prisma.signInEvent.findMany({
@@ -316,6 +358,13 @@ export class SearchService {
             take: PER_TYPE_LIMIT,
           })
         : Promise.resolve([]),
+      hasAuditFilter || searchEverything
+        ? this.prisma.directoryAuditEvent.findMany({
+            where: auditWhere,
+            orderBy: { occurredAt: 'desc' },
+            take: PER_TYPE_LIMIT,
+          })
+        : Promise.resolve([]),
     ]);
 
     return {
@@ -326,6 +375,7 @@ export class SearchService {
       fileEvents,
       networkEvents,
       httpRequests,
+      auditEvents,
     };
   }
 
@@ -372,6 +422,12 @@ export class SearchService {
         occurredAt: event.occurredAt,
         sessionId: event.sessionId,
         data: toStudentHttpRequestDto(event),
+      })),
+      ...rows.auditEvents.map((event) => ({
+        entityType: 'directory_audit_event' as const,
+        occurredAt: event.occurredAt,
+        sessionId: event.sessionId,
+        data: toStudentDirectoryAuditDto(event),
       })),
     ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
   }

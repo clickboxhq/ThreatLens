@@ -4,6 +4,7 @@ import { SessionAccessService } from '../session-core/session-access.service';
 import { InvestigationActionsService } from '../session-core/investigation-actions.service';
 import { EventOwnershipService } from '../session-core/event-ownership.service';
 import { AppException } from '../../common/exceptions/app-exception';
+import { describeDirectoryAuditEvent } from '../../common/dto/directory-audit.dto';
 import type { AuthenticatedUser } from '../../common/guards/jwt-auth.guard';
 import type {
   CreateNoteDto,
@@ -216,6 +217,20 @@ export class EvidenceNotesService {
         return {
           title: `${event.method} ${event.url}`,
           summary: event.device?.hostname ?? 'Unknown server',
+        };
+      }
+      case 'directory_audit_events': {
+        const event = await this.prisma.directoryAuditEvent.findUnique({
+          where: { id: eventId },
+          include: { targetIdentity: { select: { displayName: true } } },
+        });
+        if (!event) return null;
+        return {
+          title: `${event.action}: ${event.targetIdentity.displayName}`,
+          summary: describeDirectoryAuditEvent(
+            event,
+            event.targetIdentity.displayName,
+          ),
         };
       }
       default:

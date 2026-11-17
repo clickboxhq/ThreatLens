@@ -40,7 +40,7 @@ allow-list direction matters.
 
 ## Event templates
 
-52 templates in `generator.ts`. A template is the unit a scenario's kill chain composes: it
+57 templates in `generator.ts`. A template is the unit a scenario's kill chain composes: it
 knows how to materialise one narrative beat — a phishing email, a lateral-movement logon, a
 mass-encryption burst — into concrete rows across the right tables, with the ground-truth
 columns set.
@@ -53,11 +53,12 @@ Templates group into families:
 | Cloud | 4 | Access-key creation, bucket exposure |
 | OAuth | 3 | Illicit consent grant and follow-on mailbox access |
 | Malicious activity | 3 | Attachment execution, C2 callback |
-| **Legitimate activity** | 3 | Batch export, uptime monitoring, genuine vendor mail |
+| **Legitimate activity** | 6 | Batch export, uptime monitoring, genuine vendor mail, a traveller's verified MFA reset, an approved vendor mail rule, signed admin PowerShell |
 | Legacy auth | 3 | Basic-auth sign-in bypassing enforced MFA |
 | Insider | 3 | USB copy, personal-webmail send, bulk cloud download |
 | DNS | 3 | Tunnelling, high-frequency lookups |
 | Credential attacks | 4 | Password spray, brute force, credential stuffing, MFA fatigue |
+| Account persistence | 2 | External inbox-forwarding rule, attacker-registered MFA method |
 | Others | 20 | Ransomware, Kerberoasting, LSASS dumping, persistence, BEC |
 
 The `legitimate_*` and `benign_*` families exist so a scenario can raise a real alert on
@@ -69,7 +70,7 @@ genuinely new attack shape means adding a template first.
 
 ## Detection rules
 
-20 rules in `apps/api/src/modules/alert-engine/rules.ts` run over the generated telemetry and
+22 rules in `apps/api/src/modules/alert-engine/rules.ts` run over the generated telemetry and
 produce the alerts a student starts from. Rules read the same rows a student can see — they
 never consult `is_ground_truth_evidence`, which is what allows a rule to fire on innocent
 activity and produce a genuine false positive.
@@ -80,6 +81,8 @@ activity and produce a genuine false positive.
 - MFA Fatigue Pattern Detected
 - Impossible Travel Detected
 - Legacy Authentication Bypassed Enforced MFA
+- Inbox Rule Forwards or Hides Mail *(reads the directory audit trail)*
+- MFA Method Registered After Foreign Sign-in *(directory audit trail and sign-ins together)*
 
 **Device**
 - Office Application Spawned a Script Interpreter

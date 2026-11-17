@@ -166,7 +166,7 @@ export function ScoreDebrief({ breakdown }: { breakdown: ScoreRubricBreakdown })
         <Section
           title={`Real alerts you dismissed (${dismissedReal.length})`}
           tone="wrong"
-          explanation="These were part of the incident. A dismissal with a reason is still a wrong call when the alert was real."
+          explanation="These were part of the incident — even where the incident turned out to be authorised. Dismiss means not part of this incident, not harmless: an alert about the activity you are investigating belongs in it, and the verdict is where you say it was benign."
         >
           <TitleList items={dismissedReal} />
         </Section>

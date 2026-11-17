@@ -22,7 +22,27 @@ export function labelForResult(
       return `${String(data.direction)} → ${String(data.remoteIp)}:${String(data.remotePort)}`;
     case "http_request":
       return `${String(data.method)} ${String(data.url)}`;
+    case "directory_audit_event":
+      return String(data.action);
   }
+}
+
+/** The specifics of a directory change worth reading at a glance — what group, which
+ * rule and where it forwards, which MFA method — from its free-form detail. */
+function directoryDetail(detail: unknown): string {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return "";
+  const d = detail as Record<string, unknown>;
+  return [
+    d.group && `group ${String(d.group)}`,
+    d.role && `role ${String(d.role)}`,
+    d.ruleName && `rule "${String(d.ruleName)}"`,
+    d.forwardTo && `→ ${String(d.forwardTo)}`,
+    d.method && String(d.method),
+    d.ticket && String(d.ticket),
+    d.change && String(d.change),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**
@@ -58,5 +78,19 @@ export function detailForResult(
       return `${prefix}${String(data.protocol)} · ${Number(data.bytesSent) + Number(data.bytesReceived)} bytes`;
     case "http_request":
       return `${prefix}${Number(data.statusCode)} · ${String(data.userAgent)}`;
+    case "directory_audit_event": {
+      // The account it was done to, then who did it and from where — the actor and the source
+      // address are what separate a service-desk reset from an attacker in the victim's session.
+      const target =
+        typeof data.targetIdentityId === "string" ? nameFor?.(data.targetIdentityId) : undefined;
+      const specifics = directoryDetail(data.detail);
+      return [
+        target,
+        specifics,
+        `by ${String(data.actorDisplayName)} from ${String(data.sourceIp)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
   }
 }

@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, FileText, Globe, Link as LinkIcon, Mail, Network, UserRound } from "lucide-react";
+import {
+  Cpu,
+  FileText,
+  Globe,
+  Link as LinkIcon,
+  Mail,
+  Network,
+  UserCog,
+  UserRound,
+} from "lucide-react";
 import { searchService } from "@/services/search";
 import { queryKeys } from "./query-keys";
 import type { SearchEntityType } from "@/types/threatlens-investigation";
@@ -19,6 +28,7 @@ export const ENTITY_TYPE_META: Record<
   file_event: { label: "Files", icon: FileText },
   network_event: { label: "Network", icon: Network },
   http_request: { label: "Web requests", icon: LinkIcon },
+  directory_audit_event: { label: "Directory changes", icon: UserCog },
 };
 
 export function useSearch() {

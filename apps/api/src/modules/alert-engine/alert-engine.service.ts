@@ -11,7 +11,9 @@ import {
   evaluateKerberoastingRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
+  evaluateMailboxForwardingRule,
   evaluateMassEncryptionRule,
+  evaluateMfaAfterForeignSignInRule,
   evaluateMfaFatigueRule,
   evaluateNewCountryRule,
   evaluateOAuthConsentGrantRule,
@@ -31,7 +33,9 @@ import {
   KERBEROASTING_RULE_NAME,
   LATERAL_MOVEMENT_RULE_NAME,
   LEGACY_AUTH_BYPASS_RULE_NAME,
+  MAILBOX_FORWARDING_RULE_NAME,
   MASS_ENCRYPTION_RULE_NAME,
+  MFA_AFTER_RISKY_SIGNIN_RULE_NAME,
   MFA_FATIGUE_RULE_NAME,
   NEW_COUNTRY_RULE_NAME,
   OAUTH_CONSENT_GRANT_RULE_NAME,
@@ -172,7 +176,49 @@ export class AlertEngineService {
       }),
     ]);
 
+    // Loaded alongside rather than inside the positional Promise.all above, which is already
+    // thirty entries long. The directory audit trail is where account takeover persists —
+    // inbox rules, new MFA methods — and until now no rule read it at all.
+    //
+    // findFirst, not findFirstOrThrow like the rules above, on purpose. A new rule's row only
+    // exists once prisma:seed has run, and CI deploys on merge while seeding is a manual step.
+    // Throwing here would fail alert generation for every session in that window — every
+    // investigation with no alerts at all. A missing row skips only its own rule.
+    const [
+      directoryAuditEvents,
+      mailboxForwardingRule,
+      mfaAfterForeignSignInRule,
+    ] = await Promise.all([
+      this.prisma.directoryAuditEvent.findMany({ where: { sessionId } }),
+      this.prisma.detectionRule.findFirst({
+        where: { name: MAILBOX_FORWARDING_RULE_NAME },
+      }),
+      this.prisma.detectionRule.findFirst({
+        where: { name: MFA_AFTER_RISKY_SIGNIN_RULE_NAME },
+      }),
+    ]);
+    for (const [name, row] of [
+      [MAILBOX_FORWARDING_RULE_NAME, mailboxForwardingRule],
+      [MFA_AFTER_RISKY_SIGNIN_RULE_NAME, mfaAfterForeignSignInRule],
+    ] as const) {
+      if (!row) {
+        this.logger.warn(
+          `Detection rule "${name}" is not seeded yet; skipping it for session ${sessionId}. Run prisma:seed.`,
+        );
+      }
+    }
+
     const allCandidates: AlertCandidate[] = [
+      ...(mailboxForwardingRule
+        ? evaluateMailboxForwardingRule(directoryAuditEvents, identities)
+        : []),
+      ...(mfaAfterForeignSignInRule
+        ? evaluateMfaAfterForeignSignInRule(
+            directoryAuditEvents,
+            signIns,
+            identities,
+          )
+        : []),
       ...evaluateSpfFailRule(emails, identities),
       ...evaluateNewCountryRule(signIns, identities),
       ...evaluatePasswordSprayRule(signIns, identities),
@@ -217,6 +263,11 @@ export class AlertEngineService {
       groundTruthByKey.set(`http_requests:${e.id}`, e.isGroundTruthEvidence);
     for (const e of networkEvents)
       groundTruthByKey.set(`network_events:${e.id}`, e.isGroundTruthEvidence);
+    for (const e of directoryAuditEvents)
+      groundTruthByKey.set(
+        `directory_audit_events:${e.id}`,
+        e.isGroundTruthEvidence,
+      );
     const isFalsePositiveByDesign = (candidate: AlertCandidate) =>
       candidate.evidenceRefs.length > 0 &&
       candidate.evidenceRefs.every(
@@ -245,6 +296,8 @@ export class AlertEngineService {
       [OAUTH_CONSENT_GRANT_RULE_NAME, oauthConsentGrantRule],
       [KERBEROASTING_RULE_NAME, kerberoastingRule],
       [DNS_TUNNELING_RULE_NAME, dnsTunnelingRule],
+      [MAILBOX_FORWARDING_RULE_NAME, mailboxForwardingRule],
+      [MFA_AFTER_RISKY_SIGNIN_RULE_NAME, mfaAfterForeignSignInRule],
     ]);
 
     const createdAlerts = await this.prisma.$transaction(

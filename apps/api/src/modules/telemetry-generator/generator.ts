@@ -53,6 +53,11 @@ import {
   SQLI_PROBE_PAYLOADS,
   SQLI_UNION_EXFIL_PAYLOAD,
   TRAVEL_COUNTRIES,
+  ATTACKER_INBOX_RULE_NAMES,
+  ATTACKER_FORWARD_DOMAINS,
+  AP_AUTOMATION_FORWARD_ADDRESS,
+  IT_CHANGE_ACTORS,
+  BENIGN_ADMIN_SCRIPT_COMMAND_LINE,
   TROJAN_DROPPED_PAYLOAD_PATH,
   TROJAN_INSTALLER_FILENAME,
   WEB_SQLI_ENDPOINT_PATH,
@@ -2079,9 +2084,250 @@ function applyEventTemplate(templateId: string, ctx: TemplateContext): void {
       }
       break;
     }
+
+    // ---- Account-takeover persistence in the directory audit trail ----------------------
+    // What an attacker does in the first minutes inside a mailbox. Neither is a sign-in, so
+    // neither shows up where a beginner looks first. Both are recorded with the victim as the
+    // actor — the attacker is using the victim's own session — exactly as the baseline
+    // housekeeping is, so the tell is the content and the source address, not the actor.
+    case 'mailbox_forwarding_rule_external_v1': {
+      const from = attackerSourceFor(ctx);
+      const localPart = `${ctx.rng.pick(['archive', 'mailcopy', 'backup'])}${ctx.rng.intBetween(10, 99)}`;
+      ctx.directoryAuditEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        targetIdentityId: ctx.identity.id,
+        actorIdentityId: ctx.identity.id,
+        actorDisplayName: ctx.identity.displayName as string,
+        category: 'mailbox_rule',
+        action: 'Create inbox rule',
+        result: 'success',
+        detail: {
+          ruleName: ctx.rng.pick(ATTACKER_INBOX_RULE_NAMES),
+          conditions: 'All incoming messages',
+          forwardTo: `${localPart}@${ctx.rng.pick(ATTACKER_FORWARD_DOMAINS)}`,
+          deleteAfterForward: true,
+          markAsRead: true,
+          via: 'Outlook on the web',
+        },
+        sourceIp: from.ip,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+    case 'mfa_method_registered_attacker_v1': {
+      const from = attackerSourceFor(ctx);
+      ctx.directoryAuditEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        targetIdentityId: ctx.identity.id,
+        actorIdentityId: ctx.identity.id,
+        actorDisplayName: ctx.identity.displayName as string,
+        category: 'mfa',
+        action: 'User registered security info',
+        result: 'success',
+        detail: {
+          method: 'Authenticator app',
+          deviceName: ctx.rng.pick([
+            'Galaxy A14',
+            'Redmi Note 11',
+            'iPhone 11',
+          ]),
+          via: 'My Sign-ins',
+        },
+        sourceIp: from.ip,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+
+    // ---- The benign twins --------------------------------------------------------------
+    // Each fires the same detection as an attack and is entirely authorised. They are what
+    // turns "an alert fired" into a question rather than an answer.
+
+    // A traveller loses their phone abroad, cannot complete MFA, calls the service desk,
+    // gets a verified reset, and registers a new authenticator — from abroad. Foreign
+    // sign-in followed by a new MFA method is the account-takeover signature; here every
+    // step is accounted for by a named person and a ticket.
+    case 'benign_traveller_mfa_reset_v1': {
+      const travel = ctx.rng.pick(TRAVEL_COUNTRIES);
+      const travelIp = syntheticIp(ctx.rng);
+      const at = (minutes: number) =>
+        new Date(ctx.occurredAt.getTime() + minutes * 60 * 1000);
+      const signIn = (
+        occurredAt: Date,
+        result: 'success' | 'mfa_denied',
+        failureReason?: string,
+      ) =>
+        ctx.signInEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt,
+          correlationId: ctx.correlationId,
+          raw: { source: 'scenario', pattern: 'traveller_mfa_reset' },
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+          identityId: ctx.identity.id,
+          sourceIp: travelIp,
+          sourceCountry: travel.country,
+          sourceCity: travel.city,
+          application: 'Office 365 Exchange Online',
+          result,
+          failureReason: failureReason ?? null,
+          isLegacyAuth: false,
+          clientApp: 'Modern Auth Client',
+        });
+      const audit = (
+        occurredAt: Date,
+        category: 'credential' | 'mfa',
+        action: string,
+        actor: { id: string | null; name: string },
+        sourceIp: string,
+        detail: Prisma.InputJsonValue,
+      ) =>
+        ctx.directoryAuditEvents.push({
+          id: randomUUID(),
+          sessionId: ctx.sessionId,
+          occurredAt,
+          correlationId: ctx.correlationId,
+          targetIdentityId: ctx.identity.id,
+          actorIdentityId: actor.id,
+          actorDisplayName: actor.name,
+          category,
+          action,
+          result: 'success',
+          detail,
+          sourceIp,
+          isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+          mitreTechniqueId: ctx.mitreTechniqueId,
+        });
+      const self = {
+        id: ctx.identity.id,
+        name: ctx.identity.displayName as string,
+      };
+      const ticket = `INC-${ctx.rng.intBetween(40000, 49999)}`;
+
+      signIn(at(0), 'success');
+      signIn(
+        at(18),
+        'mfa_denied',
+        'MFA required: no response from registered device',
+      );
+      signIn(
+        at(21),
+        'mfa_denied',
+        'MFA required: no response from registered device',
+      );
+      audit(
+        at(44),
+        'credential',
+        'Reset user password',
+        { id: null, name: IT_CHANGE_ACTORS[1] },
+        `10.20.${ctx.rng.intBetween(1, 40)}.${ctx.rng.intBetween(2, 250)}`,
+        {
+          ticket,
+          reason:
+            'User lost phone while travelling. Identity verified by call-back to manager on file.',
+        },
+      );
+      audit(at(51), 'mfa', 'User deleted security info', self, travelIp, {
+        method: 'Authenticator app',
+        deviceName: 'iPhone 13',
+      });
+      audit(at(53), 'mfa', 'User registered security info', self, travelIp, {
+        method: 'Authenticator app',
+        deviceName: 'iPhone 15',
+        ticket,
+      });
+      signIn(at(55), 'success');
+      break;
+    }
+    // Supplier invoices auto-forwarded to the accounts-payable automation vendor, configured
+    // by IT under a change ticket. An external forwarding rule, created from inside the
+    // network by a named administrator rather than by the mailbox owner from abroad.
+    case 'benign_vendor_forwarding_rule_v1': {
+      ctx.directoryAuditEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        targetIdentityId: ctx.identity.id,
+        actorIdentityId: null,
+        actorDisplayName: IT_CHANGE_ACTORS[0],
+        category: 'mailbox_rule',
+        action: 'Create inbox rule',
+        result: 'success',
+        detail: {
+          ruleName: 'Supplier invoices to AP automation',
+          conditions: 'Subject contains "Invoice"',
+          forwardTo: AP_AUTOMATION_FORWARD_ADDRESS,
+          deleteAfterForward: false,
+          change: `CHG-${ctx.rng.intBetween(20000, 29999)}`,
+          via: 'Exchange admin center',
+        },
+        sourceIp: `10.20.${ctx.rng.intBetween(1, 40)}.${ctx.rng.intBetween(2, 250)}`,
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+      });
+      break;
+    }
+    // An administrator running a signed patch-compliance script from a file share. PowerShell
+    // on a workstation is not, by itself, a finding; what launched it and what it ran are.
+    case 'benign_admin_powershell_v1': {
+      if (!ctx.device) break;
+      const parentGuid = deterministicUuidFromSeed(
+        `${ctx.device.id}:${ctx.occurredAt.getTime()}:explorer`,
+      );
+      ctx.processEvents.push({
+        id: randomUUID(),
+        sessionId: ctx.sessionId,
+        occurredAt: ctx.occurredAt,
+        correlationId: ctx.correlationId,
+        raw: { source: 'scenario', pattern: 'admin_patch_script' },
+        isGroundTruthEvidence: ctx.isGroundTruthEvidence,
+        mitreTechniqueId: ctx.mitreTechniqueId,
+        deviceId: ctx.device.id,
+        processGuid: deterministicUuidFromSeed(`${parentGuid}:child`),
+        parentProcessGuid: parentGuid,
+        imagePath:
+          'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        commandLine: BENIGN_ADMIN_SCRIPT_COMMAND_LINE,
+        hashSha256: syntheticHash(ctx.rng),
+        parentImagePath: 'C:\\Windows\\explorer.exe',
+        integrityLevel: 'High',
+        identityId: ctx.identity.id,
+      });
+      break;
+    }
     default:
       break;
   }
+}
+
+/**
+ * Where an attacker's follow-on action comes from. If this kill chain already put a
+ * successful sign-in on the account, reuse its address and location — the inbox rule and the
+ * new MFA method should come from the same place the attacker signed in, because that match
+ * is the thread an investigator pulls. Otherwise fall back to a seeded attacker profile.
+ */
+function attackerSourceFor(ctx: TemplateContext): { ip: string } {
+  for (let i = ctx.signInEvents.length - 1; i >= 0; i--) {
+    const e = ctx.signInEvents[i];
+    if (
+      e.identityId === ctx.identity.id &&
+      e.correlationId === ctx.correlationId &&
+      e.result === 'success'
+    ) {
+      return { ip: e.sourceIp };
+    }
+  }
+  return { ip: attackerProfileFromSeed(ctx.correlationId ?? 'ato').ip };
 }
 
 function syntheticIp(rng: SeededRng): string {

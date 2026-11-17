@@ -271,6 +271,7 @@ describe('ScoringService.findGroundTruthAmong', () => {
       networkEvent: model('network_events'),
       cloudEvent: model('cloud_events'),
       httpRequest: model('http_requests'),
+      directoryAuditEvent: model('directory_audit_events'),
     } as unknown as PrismaService;
 
     const service = new ScoringService(
@@ -305,7 +306,9 @@ describe('ScoringService.findGroundTruthAmong', () => {
 
   it('spans every telemetry table rather than whichever one came first', async () => {
     // Each surface is a separate table, and one left out of the lookup silently stops
-    // counting — the same gap the Device Portal tables hit once already.
+    // counting — the same gap the Device Portal tables hit once already, and the directory
+    // audit trail hit again: an identity scenario's group change or inbox rule could be
+    // pinned and never count.
     const tables = [
       'email_messages',
       'sign_in_events',
@@ -314,6 +317,7 @@ describe('ScoringService.findGroundTruthAmong', () => {
       'network_events',
       'cloud_events',
       'http_requests',
+      'directory_audit_events',
     ];
     const find = build(Object.fromEntries(tables.map((t) => [t, [`${t}-gt`]])));
 

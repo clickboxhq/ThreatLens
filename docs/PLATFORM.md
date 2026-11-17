@@ -11,8 +11,8 @@ evidence that matters, tag the MITRE techniques the evidence supports, take a re
 and commit to a verdict. A server-side engine then grades the *investigation*, not just the
 answer.
 
-- **[Event catalogue](EVENT-CATALOG.md)** — the eight telemetry tables, 52 event templates, 20 detection rules
-- **[Scenario catalogue](SCENARIO-CATALOG.md)** — all 30 scenarios, what each teaches, and the correct verdict
+- **[Event catalogue](EVENT-CATALOG.md)** — the eight telemetry tables, 57 event templates, 22 detection rules
+- **[Scenario catalogue](SCENARIO-CATALOG.md)** — all 36 scenarios, what each teaches, and the correct verdict
 
 ## The session lifecycle
 
@@ -25,7 +25,7 @@ POST /sessions
 [telemetry-generation queue]
   ↓  materialise the population, baseline noise, and kill chain into the 8 tables
 [alert-correlation queue]
-  ↓  run the 20 detection rules over what was generated → alerts
+  ↓  run the 22 detection rules over what was generated → alerts
   ↓
 STUDENT WORKS THE CASE
   ↓  read portals · pin evidence · build timeline · tag techniques · take actions · request hints

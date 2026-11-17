@@ -288,6 +288,7 @@ export class ScoringService {
       groundTruthNetwork,
       groundTruthCloud,
       groundTruthHttp,
+      groundTruthDirectoryAudit,
     ] = await Promise.all([
       this.prisma.emailMessage.count({
         where: { sessionId, isGroundTruthEvidence: true },
@@ -310,6 +311,12 @@ export class ScoringService {
       this.prisma.httpRequest.count({
         where: { sessionId, isGroundTruthEvidence: true },
       }),
+      // The directory audit trail was missing from all three of these lists, so a scenario's
+      // group change, inbox rule or MFA registration — the finding itself, in identity cases —
+      // could be neither found among what was pinned nor named as missed.
+      this.prisma.directoryAuditEvent.count({
+        where: { sessionId, isGroundTruthEvidence: true },
+      }),
     ]);
     const totalGroundTruthEvidenceCount =
       groundTruthEmails +
@@ -318,7 +325,8 @@ export class ScoringService {
       groundTruthFiles +
       groundTruthNetwork +
       groundTruthCloud +
-      groundTruthHttp;
+      groundTruthHttp +
+      groundTruthDirectoryAudit;
 
     // §2.9: "that curated set [the Timeline] is itself part of what the Scoring Engine
     // evaluates (did they include the right events; did they include noise)" — folded into
@@ -648,6 +656,11 @@ export class ScoringService {
         where: { id: { in: ids }, isGroundTruthEvidence: true },
         select: { id: true },
       }),
+    directory_audit_events: (ids) =>
+      this.prisma.directoryAuditEvent.findMany({
+        where: { id: { in: ids }, isGroundTruthEvidence: true },
+        select: { id: true },
+      }),
   };
 
   /** Which of the curated items are real evidence. Precision is this set's size over the whole. */
@@ -747,6 +760,17 @@ export class ScoringService {
     http_requests: async (sessionId, excludeIds) =>
       (
         await this.prisma.httpRequest.findMany({
+          where: {
+            sessionId,
+            isGroundTruthEvidence: true,
+            id: { notIn: excludeIds },
+          },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    directory_audit_events: async (sessionId, excludeIds) =>
+      (
+        await this.prisma.directoryAuditEvent.findMany({
           where: {
             sessionId,
             isGroundTruthEvidence: true,

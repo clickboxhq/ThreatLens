@@ -9,8 +9,8 @@ Derived from the code. Keep these current when behaviour changes.
 | Document | Covers |
 | --- | --- |
 | **[PLATFORM.md](PLATFORM.md)** | Session lifecycle, scoring, the ground-truth boundary, roles and cohort access, deployment |
-| **[EVENT-CATALOG.md](EVENT-CATALOG.md)** | The eight telemetry tables, 52 event templates, 20 detection rules |
-| **[SCENARIO-CATALOG.md](SCENARIO-CATALOG.md)** | All 30 scenarios — category, difficulty, techniques, correct verdict |
+| **[EVENT-CATALOG.md](EVENT-CATALOG.md)** | The eight telemetry tables, 57 event templates, 22 detection rules |
+| **[SCENARIO-CATALOG.md](SCENARIO-CATALOG.md)** | All 36 scenarios — category, difficulty, techniques, correct verdict |
 
 These are checked against the code by `apps/api/src/common/docs/docs-in-sync.spec.ts`, which
 runs in the normal API test job. It fails when the counts quoted here — scenarios, templates,

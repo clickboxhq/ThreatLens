@@ -170,7 +170,10 @@ export type SearchEntityType =
   | "process_event"
   | "file_event"
   | "network_event"
-  | "http_request";
+  | "http_request"
+  // The directory audit trail: what was done *to* an account — inbox rules, MFA methods,
+  // group and role changes, password resets. Searchable and pinnable like any other source.
+  | "directory_audit_event";
 
 export interface SearchResultItem {
   entityType: SearchEntityType;

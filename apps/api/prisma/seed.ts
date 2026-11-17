@@ -257,6 +257,22 @@ const MITRE_TECHNIQUES = [
     description: 'Adversaries move stolen data out of an environment over the same channel already used for command-and-control, rather than a separate exfiltration-specific connection.',
     url: 'https://attack.mitre.org/techniques/T1041/',
   },
+  {
+    techniqueId: 'T1114.003',
+    name: 'Email Collection: Email Forwarding Rule',
+    tactic: 'TA0009',
+    description:
+      'Adversaries set up a mailbox rule that copies or redirects incoming mail to an address they control, often deleting the original so the owner never sees it. It keeps collecting long after the password is changed.',
+    url: 'https://attack.mitre.org/techniques/T1114/003/',
+  },
+  {
+    techniqueId: 'T1098.005',
+    name: 'Account Manipulation: Device Registration',
+    tactic: 'TA0003',
+    description:
+      'Adversaries register their own device or authenticator against a compromised account, so they can satisfy multi-factor authentication themselves and keep access after the original session is revoked.',
+    url: 'https://attack.mitre.org/techniques/T1098/005/',
+  },
 ];
 
 const DETECTION_RULES = [
@@ -406,6 +422,24 @@ const DETECTION_RULES = [
     logicSummary: "count(network_events WHERE remote_port = 53) grouped by (device_id, remote_ip) >= 8.",
     defaultSeverity: 'critical' as const,
     mitreTechniqueSlug: 'T1071.004',
+  },
+  {
+    name: 'Identity: Inbox Rule Forwards or Hides Mail',
+    description:
+      'Fires when a mailbox rule forwards mail to a domain the organisation does not own, or deletes mail after forwarding it. Blind to who created the rule, so an administrator wiring invoices to an automation vendor trips it as readily as an attacker.',
+    logicSummary:
+      "directory_audit.category = mailbox_rule AND (detail.forwardTo domain NOT IN the tenant's UPN domains OR detail.deleteAfterForward = true).",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1114.003',
+  },
+  {
+    name: 'Identity: MFA Method Registered After Foreign Sign-in',
+    description:
+      'Fires when an account registers a new MFA method within 24 hours of a successful sign-in from outside its home country. Fires on a verified service-desk reset for a traveller just as it does on takeover.',
+    logicSummary:
+      "directory_audit.action = 'User registered security info' AND a successful sign-in for the same identity with source_country != home_country in the preceding 24h.",
+    defaultSeverity: 'high' as const,
+    mitreTechniqueSlug: 'T1098.005',
   },
 ];
 
@@ -2888,10 +2922,615 @@ async function main() {
     techniqueBySlug,
   );
 
+  // ---- Everyday SOC: one incident across identity, email and endpoint ----------------------
+  // The six below are the shape of a real queue rather than a textbook: several alerts at
+  // once, a real chain hidden among authorised activity that trips the same detections, and
+  // a finding that only makes sense once alerts from different sources are put together.
+  // Every attack step in a scenario shares one correlation group, so the debrief can show the
+  // chain the student was meant to assemble in triage. Each plants at least one benign twin
+  // of its own attack signature.
+
+  await seedScenario(
+    {
+      slug: 'monday-phish-queue',
+      title: 'Email — Monday Phish Queue: Who Clicked?',
+      summary:
+        'The same invoice email reached several Finance and Operations inboxes overnight and SPF alerts are stacking up alongside the usual noise. Work out how wide the campaign went, whether anyone engaged with it, and what happened to any account that did.',
+      category: 'email',
+      difficulty: 'beginner',
+      estimatedMinutes: 25,
+      requiredTechniques: ['T1566.002', 'T1078', 'T1114.003'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'email',
+          difficulty: 'beginner',
+          estimated_minutes: 25,
+          narrative_summary:
+            'A credential-phishing campaign hits three mailboxes. Two recipients never open it. The third clicks through to the lookalike login page, and within the hour the attacker signs in from abroad with the harvested password and creates an inbox rule that forwards everything to an external address and deletes the originals. The campaign is the scope; one account is the impact.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Accounts Payable Clerk', home_country: 'GB' } },
+            { ref: 'recipient_identity_2', attributes: { department: 'Finance', job_title: 'Financial Analyst', home_country: 'GB' } },
+            { ref: 'recipient_identity_3', attributes: { department: 'Operations', job_title: 'Office Manager', home_country: 'GB' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'FIN-WKS-14', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 12, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'recipient_identity_2',
+            event_template_id: 'phishing_email_invoice_lookalike_login_v1',
+            relative_timestamp: '+1h',
+            correlation_group: 'phish-campaign-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'recipient_identity_3',
+            event_template_id: 'phishing_email_invoice_lookalike_login_v1',
+            relative_timestamp: '+1h5m',
+            correlation_group: 'phish-campaign-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'victim_identity_1',
+            // Only this recipient has a workstation in the chain, so only this copy records a
+            // click — the other two are delivered and never touched.
+            device_ref: 'victim_device_1',
+            event_template_id: 'phishing_email_invoice_lookalike_login_v1',
+            relative_timestamp: '+1h10m',
+            correlation_group: 'phish-campaign-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 4,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+1h55m',
+            correlation_group: 'phish-campaign-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 5,
+            mitre_technique_id: 'T1114.003',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mailbox_forwarding_rule_external_v1',
+            relative_timestamp: '+2h5m',
+            correlation_group: 'phish-campaign-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.08,
+          false_positive_bait: [
+            { event_template_id: 'benign_it_admin_email_v1', count: 2 },
+            { event_template_id: 'benign_vendor_forwarding_rule_v1', count: 1 },
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.002', 'T1078', 'T1114.003'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 4,
+          containment_expectations: [
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Several SPF alerts share a sender. Count the recipients before you decide what this incident is about.' },
+          { unlock_cost_percent: 10, text: 'Delivery is not engagement. For each recipient, look for evidence that the link was actually opened, and for anything unusual on the account afterwards.' },
+          { unlock_cost_percent: 15, text: 'An attacker with a mailbox wants to keep reading it. Check the account directory audit trail, not only its sign-ins, and compare who created each rule and from where.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'secure-invoice-portal-verify.com',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed phishing kit',
+          context: 'Lookalike domain hosting a credential-harvesting login page impersonating an invoicing portal.',
+        },
+        {
+          indicatorType: 'domain',
+          value: 'ap-automation-partner.example.net',
+          reputation: 'known_good',
+          context: 'Accounts-payable automation vendor under contract with the Finance team; receives supplier invoices by approved mail rule.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'quiet-account-takeover',
+      title: 'Identity — MFA Fatigue, Then Quiet Persistence',
+      summary:
+        'An engineer was bombarded with sign-in prompts one evening until one was approved. No alert has fired since that sign-in. Find out what the session was used for before the account is reset, because a password reset alone may not end it.',
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1621', 'T1078', 'T1098.005', 'T1114.003'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 30,
+          narrative_summary:
+            'An attacker holding a valid password floods the victim with MFA pushes until one is approved, then spends the next twenty minutes making the access survive a reset: registering their own authenticator on the account and adding an inbox rule that forwards and deletes mail. A traveller elsewhere in the organisation loses their phone the same day and legitimately registers a new authenticator after a verified service-desk reset — the same detection, the opposite story.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Engineering', job_title: 'Site Reliability Engineer', home_country: 'CA' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 14, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1621',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_fatigue_batch_v1',
+            relative_timestamp: '+3h',
+            correlation_group: 'mfa-ato-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_fatigue_success_signin_v1',
+            relative_timestamp: '+3h25m',
+            correlation_group: 'mfa-ato-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1098.005',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_method_registered_attacker_v1',
+            relative_timestamp: '+3h40m',
+            correlation_group: 'mfa-ato-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 4,
+            mitre_technique_id: 'T1114.003',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mailbox_forwarding_rule_external_v1',
+            relative_timestamp: '+3h48m',
+            correlation_group: 'mfa-ato-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.06,
+          false_positive_bait: [
+            { event_template_id: 'benign_traveller_mfa_reset_v1', count: 1 },
+            { event_template_id: 'benign_vendor_forwarding_rule_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1621', 'T1078', 'T1098.005', 'T1114.003'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 4,
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Two accounts registered a new MFA method after a sign-in from abroad. The detection cannot tell them apart; the audit trail can.' },
+          { unlock_cost_percent: 10, text: 'For each registration, ask who else was involved. A verified reset leaves a ticket and a named person; a takeover leaves nothing but the account itself.' },
+          { unlock_cost_percent: 15, text: 'Compare the source address of the new MFA method with the address the account last signed in from, and look at what else changed on the account in the same minutes.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'phish-to-foothold',
+      title: 'Endpoint — From Payroll Attachment to Stolen Session',
+      summary:
+        'A payroll document was opened on a finance laptop, and an hour later the same user signed in from overseas. Decide whether this is one incident or two, how far it reached, and which device and account need containing.',
+      category: 'endpoint',
+      difficulty: 'intermediate',
+      estimatedMinutes: 35,
+      requiredTechniques: ['T1566.001', 'T1204.002', 'T1071.001', 'T1078'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'endpoint',
+          difficulty: 'intermediate',
+          estimated_minutes: 35,
+          narrative_summary:
+            'A macro-enabled "payroll statement" is opened on a finance laptop. Word spawns hidden PowerShell, which drops a payload and starts beaconing out. The same implant harvests the browser session, and the attacker signs in as the user from abroad. Elsewhere, IT staff run signed PowerShell scripts on their own workstation all day — PowerShell is not the finding; what launched it is.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Finance', job_title: 'Payroll Specialist', home_country: 'US' } },
+          ],
+          narrative_devices: [
+            { ref: 'victim_device_1', attributes: { hostname: 'FIN-LT-22', os_platform: 'windows' } },
+            { ref: 'it_device_1', attributes: { hostname: 'IT-WKS-03', os_platform: 'windows' } },
+          ],
+          decoy_population_size: { identities: 12, devices: 10 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.001',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'malicious_attachment_email_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'foothold-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1204.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_process_execution_v1',
+            relative_timestamp: '+2h12m',
+            correlation_group: 'foothold-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1071.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'malicious_c2_beacon_v1',
+            relative_timestamp: '+2h16m',
+            correlation_group: 'foothold-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 4,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+3h5m',
+            correlation_group: 'foothold-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.05,
+          false_positive_bait: [
+            { event_template_id: 'benign_admin_powershell_v1', count: 2, device_ref: 'it_device_1' },
+            { event_template_id: 'benign_it_admin_email_v1', count: 1 },
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.001', 'T1204.002', 'T1071.001', 'T1078'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 4,
+          containment_expectations: [
+            { action: 'isolate_device', target: 'victim_device_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+          ],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'There is PowerShell on more than one machine today. For each instance, read what launched it before you read what it ran.' },
+          { unlock_cost_percent: 10, text: 'Put the endpoint activity and the foreign sign-in on one timeline. Same person, an hour apart — ask what would connect them.' },
+          { unlock_cost_percent: 15, text: 'Containing the laptop stops the implant; it does not end a session already taken from it. Decide what each action actually removes.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'billing-statements-delivery.example.org',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed malware delivery infrastructure',
+          context: 'Domain used to deliver macro-enabled documents that drop a PowerShell-based payload.',
+        },
+        {
+          indicatorType: 'ip',
+          value: '185.220.101.47',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed C2 infrastructure',
+          context: 'Observed as a command-and-control destination for outbound beacon traffic on port 443.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'helpdesk-reset-after-travel',
+      title: 'Identity — New MFA Method After a Foreign Sign-in',
+      summary:
+        'A consultant on a client trip signed in from abroad, failed MFA twice, then registered a brand-new authenticator from the same city. Two kinds of alert fired. Decide whether this is an account takeover, and what, if anything, to do about it.',
+      category: 'identity',
+      difficulty: 'beginner',
+      estimatedMinutes: 15,
+      requiredTechniques: [],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'beginner',
+          estimated_minutes: 15,
+          narrative_summary:
+            'A consultant loses their phone on a client trip, cannot complete MFA, and calls the service desk. The desk verifies them by call-back to their manager, resets the password under a ticket, and the consultant removes the old authenticator and registers a new phone — all from the hotel, all within the hour. Every signal of an account takeover is present and every one is accounted for. The right call is benign_positive, and the right response is no action: locking the account out would strand a consultant abroad for no reason.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'traveller_identity_1', attributes: { department: 'Sales', job_title: 'Solutions Consultant', home_country: 'GB' } },
+          ],
+          narrative_devices: [],
+          decoy_population_size: { identities: 10, devices: 6 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1098.005',
+            entity_ref: 'traveller_identity_1',
+            event_template_id: 'benign_traveller_mfa_reset_v1',
+            relative_timestamp: '+4h',
+            correlation_group: 'traveller-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.1,
+          false_positive_bait: [
+            { event_template_id: 'benign_it_admin_email_v1', count: 1 },
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: [],
+          required_verdict: 'benign_positive',
+          min_evidence_items: 2,
+          containment_expectations: [],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Read the whole sequence on the account in order: sign-ins, failures, and every directory change in between.' },
+          { unlock_cost_percent: 10, text: 'One of the directory changes was not made by the account itself. Who made it, from where, and what did they write down?' },
+          { unlock_cost_percent: 15, text: 'An attacker registers MFA from wherever they are. A traveller registers it from wherever they have been all along. Compare the addresses.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'spray-to-dump',
+      title: 'Identity to Endpoint — Password Spray to Credential Dump',
+      summary:
+        'A burst of failed sign-ins against a dozen accounts ended in a single success. A few hours later a file server ran a remote service and wrote a memory dump. Connect the two or prove they are unrelated, then contain what needs containing.',
+      category: 'endpoint',
+      difficulty: 'advanced',
+      estimatedMinutes: 35,
+      requiredTechniques: ['T1110.003', 'T1078', 'T1021.002', 'T1003.001'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'endpoint',
+          difficulty: 'advanced',
+          estimated_minutes: 35,
+          narrative_summary:
+            'An attacker sprays one common password across many accounts and gets in as a systems administrator. Using that account they move from the administrator workstation to a file server over SMB and run a remote service, then dump LSASS memory there to harvest every credential cached on it. The same workstation runs signed administrative PowerShell all day, which is ordinary. The thread that ties the identity alerts to the endpoint ones is the account, not the device.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'IT', job_title: 'Systems Administrator', home_country: 'DE' } },
+          ],
+          narrative_devices: [
+            { ref: 'admin_workstation_1', attributes: { hostname: 'IT-WKS-07', os_platform: 'windows' } },
+            { ref: 'file_server_1', attributes: { hostname: 'FS-FIN-01', os_platform: 'windows' } },
+          ],
+          decoy_population_size: { identities: 18, devices: 8 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1110.003',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'password_spray_batch_v1',
+            relative_timestamp: '+2h',
+            correlation_group: 'spray-dump-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'password_spray_success_signin_v1',
+            relative_timestamp: '+2h20m',
+            correlation_group: 'spray-dump-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1021.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'admin_workstation_1',
+            event_template_id: 'lateral_movement_source_connection_v1',
+            relative_timestamp: '+3h10m',
+            correlation_group: 'spray-dump-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 4,
+            mitre_technique_id: 'T1021.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'file_server_1',
+            event_template_id: 'lateral_movement_remote_exec_v1',
+            relative_timestamp: '+3h15m',
+            correlation_group: 'spray-dump-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 5,
+            mitre_technique_id: 'T1003.001',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'file_server_1',
+            event_template_id: 'credential_dumping_lsass_dump_v1',
+            relative_timestamp: '+3h22m',
+            correlation_group: 'spray-dump-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.04,
+          false_positive_bait: [
+            { event_template_id: 'benign_admin_powershell_v1', count: 2, device_ref: 'admin_workstation_1' },
+            { event_template_id: 'legitimate_travel_signin_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1110.003', 'T1078', 'T1021.002', 'T1003.001'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 5,
+          containment_expectations: [
+            { action: 'isolate_device', target: 'admin_workstation_1' },
+            { action: 'isolate_device', target: 'file_server_1' },
+            { action: 'disable_account', target: 'victim_identity_1' },
+          ],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'The spray tried many accounts. Find the one where it worked, then look at everything that account did afterwards — not just where it signed in from.' },
+          { unlock_cost_percent: 10, text: 'The endpoint alerts name devices; the processes behind them name an account. Check whose account ran the remote service and the dump.' },
+          { unlock_cost_percent: 15, text: 'A credential dump means every account cached on that server may now be known. Contain the path the attacker took, and the account they took it with.' },
+        ],
+      },
+      threatIntel: [],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
+  await seedScenario(
+    {
+      slug: 'noisy-tuesday',
+      title: 'Identity — The Real One in a Noisy Queue',
+      summary:
+        'A dozen alerts, one analyst, a Tuesday. Travellers, IT notices, an approved mail rule and a service-desk reset are all tripping detections. One account is genuinely compromised. Find it, prove it from the evidence, and contain it without touching anyone else.',
+      category: 'identity',
+      difficulty: 'intermediate',
+      estimatedMinutes: 30,
+      requiredTechniques: ['T1566.002', 'T1078', 'T1098.005'],
+      groundTruthDefinition: {
+        metadata: {
+          category: 'identity',
+          difficulty: 'intermediate',
+          estimated_minutes: 30,
+          narrative_summary:
+            'An HR partner clicks a credential phish; the attacker signs in from abroad within the hour and registers an authenticator of their own. Around it, the queue is full of the same alert types fired by legitimate activity: two staff travelling, a maintenance notice that fails SPF, an approved external mail rule, and a traveller re-registering MFA after a verified reset. Triage is the exercise — the real chain is three alerts in a queue of a dozen.',
+        },
+        population: {
+          narrative_identities: [
+            { ref: 'victim_identity_1', attributes: { department: 'Human Resources', job_title: 'HR Business Partner', home_country: 'DE' } },
+          ],
+          narrative_devices: [{ ref: 'victim_device_1', attributes: { hostname: 'HR-WKS-05', os_platform: 'windows' } }],
+          decoy_population_size: { identities: 16, devices: 10 },
+          world_time_window_hours: 24,
+        },
+        kill_chain: [
+          {
+            step_order: 1,
+            mitre_technique_id: 'T1566.002',
+            entity_ref: 'victim_identity_1',
+            device_ref: 'victim_device_1',
+            event_template_id: 'phishing_email_invoice_lookalike_login_v1',
+            relative_timestamp: '+5h',
+            correlation_group: 'noisy-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 2,
+            mitre_technique_id: 'T1078',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'risky_signin_new_country_v1',
+            relative_timestamp: '+5h50m',
+            correlation_group: 'noisy-1',
+            is_required_for_full_credit: true,
+          },
+          {
+            step_order: 3,
+            mitre_technique_id: 'T1098.005',
+            entity_ref: 'victim_identity_1',
+            event_template_id: 'mfa_method_registered_attacker_v1',
+            relative_timestamp: '+6h2m',
+            correlation_group: 'noisy-1',
+            is_required_for_full_credit: true,
+          },
+        ],
+        noise_profile: {
+          signal_to_noise_ratio: 0.03,
+          false_positive_bait: [
+            { event_template_id: 'benign_it_admin_email_v1', count: 2 },
+            { event_template_id: 'legitimate_travel_signin_v1', count: 2 },
+            { event_template_id: 'benign_traveller_mfa_reset_v1', count: 1 },
+            { event_template_id: 'benign_vendor_forwarding_rule_v1', count: 1 },
+          ],
+        },
+        distractor_pool: [],
+        scoring_rubric: {
+          required_techniques: ['T1566.002', 'T1078', 'T1098.005'],
+          required_verdict: 'true_positive',
+          min_evidence_items: 3,
+          containment_expectations: [
+            { action: 'revoke_tokens', target: 'victim_identity_1' },
+            { action: 'force_password_reset', target: 'victim_identity_1' },
+          ],
+        },
+        hints: [
+          { unlock_cost_percent: 5, text: 'Group the queue by account before you judge any single alert. One account has alerts from more than one source.' },
+          { unlock_cost_percent: 10, text: 'Every alert type here has an innocent explanation somewhere in this queue. For each account, ask whether the innocent explanation is actually in the data.' },
+          { unlock_cost_percent: 15, text: 'Two accounts registered a new MFA method after signing in from abroad. Only one of them has a ticket, a named service-desk agent, and a consistent address.' },
+        ],
+      },
+      threatIntel: [
+        {
+          indicatorType: 'domain',
+          value: 'secure-invoice-portal-verify.com',
+          reputation: 'malicious',
+          actorAttribution: 'Unattributed phishing kit',
+          context: 'Lookalike domain hosting a credential-harvesting login page impersonating an invoicing portal.',
+        },
+      ],
+    },
+    systemAuthor.id,
+    techniqueBySlug,
+  );
+
   await seedLearningPlatform();
 
   console.log(
-    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 30 scenarios, learning platform content.`,
+    `Seeded: ${MITRE_TECHNIQUES.length} MITRE techniques, ${DETECTION_RULES.length} detection rules, 36 scenarios, learning platform content.`,
   );
 }
 
