@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { sessionsService } from "@/services/sessions";
 import { SectionHeader } from "@/components/soc/primitives";
 import { HydrationBoundary } from "@/components/soc/ui/hydration-boundary";
 import { EmailDetailDrawer } from "@/components/soc/email-detail-drawer";
@@ -34,7 +36,11 @@ import { useIdentities } from "@/hooks/use-identities";
 import { useEndpoints, useIsolateDevice } from "@/hooks/use-endpoints";
 import { useAlerts, useUpdateAlertStatus } from "@/hooks/use-alerts";
 import { toast } from "sonner";
-import type { IncidentVerdict } from "@/types/threatlens-investigation";
+import {
+  RESPONSE_ACTION_TYPES,
+  type IncidentVerdict,
+  type ResponseActionType,
+} from "@/types/threatlens-investigation";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 
 const STAGE_IDS = new Set(STAGES.map((s) => s.id));
@@ -191,7 +197,30 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
   const [transitioning, setTransitioning] = useState(false);
 
   const [pendingRemoveEvidenceId, setPendingRemoveEvidenceId] = useState<string | null>(null);
-  const [takenActions, setTakenActions] = useState<TakenAction[]>([]);
+  // What containment has been taken comes from the server's own record of it — the same
+  // activity log the Review stage shows — not from local state. Local state emptied on every
+  // reload, so the Response stage forgot what had been done (inviting duplicates) and Review
+  // reported zero actions beside a log listing three. Same query key as ActivityLogPanel, so
+  // logging an action refreshes both.
+  const queryClient = useQueryClient();
+  const activityKey = ["session", sessionId, "activity"] as const;
+  const { data: activity } = useQuery({
+    queryKey: activityKey,
+    queryFn: () => sessionsService.getActivity(sessionId),
+  });
+  const takenActions = useMemo<TakenAction[]>(
+    () =>
+      (activity?.entries ?? [])
+        .filter((e) => (RESPONSE_ACTION_TYPES as readonly string[]).includes(e.actionType))
+        .reverse()
+        .map((e) => ({
+          actionType: e.actionType as ResponseActionType,
+          targetId: e.targetId,
+          targetLabel: e.targetLabel ?? "an unspecified target",
+        })),
+    [activity],
+  );
+  const refreshActivity = () => queryClient.invalidateQueries({ queryKey: activityKey });
   const [openEmailId, setOpenEmailId] = useState<string | null>(null);
   const [openIdentityId, setOpenIdentityId] = useState<string | null>(null);
   const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
@@ -364,23 +393,13 @@ function CaseWorkspaceInner({ sessionId, incidentId }: { sessionId: string; inci
           locked={locked}
           onLogAction={async (actionType, targetType, targetId) => {
             await logResponseAction({ actionType, targetType, targetId });
-            setTakenActions((prev) => [
-              ...prev,
-              { actionType, targetId, targetLabel: nameFor(targetId) ?? "target" },
-            ]);
+            await refreshActivity();
           }}
           onIsolateDevice={async (deviceId) => {
             // The real endpoint: flips the device's state and records the action with the
             // device id, which is what the scorer matches an isolate_device expectation on.
             await isolateDevice.mutateAsync(deviceId);
-            setTakenActions((prev) => [
-              ...prev,
-              {
-                actionType: "isolate_device",
-                targetId: deviceId,
-                targetLabel: nameFor(deviceId) ?? "device",
-              },
-            ]);
+            await refreshActivity();
           }}
         />
       )}
