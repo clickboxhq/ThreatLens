@@ -21,7 +21,6 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { MfaVerifyDto } from './dto/mfa-verify.dto';
 import { MfaEnableDto } from './dto/mfa-enable.dto';
-import { MfaDisableDto } from './dto/mfa-disable.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { EmailVerificationConfirmDto } from './dto/email-verification-confirm.dto';
@@ -226,17 +225,9 @@ export class AuthController {
   @Post('mfa/disable')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async mfaDisable(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: MfaDisableDto,
-    @Req() req: Request,
-  ) {
-    await this.authService.mfaDisable(
-      user.id,
-      dto.password,
-      req.ip,
-      correlationIdOf(req),
-    );
+  async mfaDisable() {
+    // Always refused — MFA is mandatory for every account (see AuthService.mfaDisable).
+    await this.authService.mfaDisable();
   }
 
   @Post('password-reset/request')

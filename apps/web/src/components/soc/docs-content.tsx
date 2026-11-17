@@ -399,11 +399,11 @@ export const DOC_SECTIONS: DocSection[] = [
           rows={[
             {
               term: "Two-factor authentication",
-              def: "Available to everyone and recommended. Save your recovery codes somewhere safe when you switch it on — they are shown once.",
+              def: "Required on every account — you set it up when you create your account, and it can't be turned off. Save your recovery codes somewhere safe: they are shown once.",
             },
             {
               term: "Lost your authenticator",
-              def: "Use the password reset link. Completing a reset also clears two-factor, so you can get back in.",
+              def: "Sign in with one of the recovery codes you saved instead of a code from the app. If you have lost those too, contact support — resetting your password does not turn two-factor off.",
             },
             {
               term: "Signing out everywhere",

@@ -182,7 +182,7 @@ function MfaPanel() {
           </div>
           <p className="mt-0.5 text-[12px] text-secondary">
             {status.mandatory
-              ? "Required for your account role — it can't be turned off."
+              ? "Required on every ThreatLens account — it can't be turned off."
               : "Adds a one-time code from an authenticator app when you log in."}
           </p>
 

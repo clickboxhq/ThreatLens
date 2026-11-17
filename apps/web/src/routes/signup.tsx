@@ -6,6 +6,7 @@ import { Mark, BrandLockup } from "@/components/soc/marketing/brand";
 import { EvidenceGraph, displayFont, monoFont } from "@/components/soc/marketing/atmos";
 import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import { MfaEnrolment } from "@/components/soc/mfa-enrolment";
 import {
   Select,
   SelectContent,
@@ -68,13 +69,21 @@ function SignupPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set once the account exists: two-factor is mandatory, so signing up ends in enrolment
+  // rather than a session, and the account is only usable once it is done.
+  const [enrolmentChallengeId, setEnrolmentChallengeId] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await signup(email, password, displayName, role);
+      const outcome = await signup(email, password, displayName, role);
+      if ("mfaEnrolmentRequired" in outcome) {
+        setSubmitting(false);
+        setEnrolmentChallengeId(outcome.enrolmentChallengeId);
+        return;
+      }
       navigate({ to: afterSignup });
     } catch (err) {
       setSubmitting(false);
@@ -145,107 +154,117 @@ function SignupPage() {
         </div>
 
         <div className="flex flex-1 items-center justify-center px-6 py-10">
-          <div className="w-full max-w-[480px]">
-            <h2
-              className="text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
-              style={displayFont}
-            >
-              Get Started with ThreatLens
-            </h2>
-            <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
-              Choose how you will use ThreatLens.
-            </p>
-
-            <div className="mt-6">
-              <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                Account Type
-              </span>
-              <Select value={role} onValueChange={(v) => setRole(v as "student" | "instructor")}>
-                <SelectTrigger className="h-[52px] w-full rounded-lg border-black/15 bg-black/[0.015] text-[14px] text-[#0A0C0F]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.key} value={opt.key}>
-                      <span className="flex items-center gap-2">
-                        <opt.icon className="size-4" />
-                        {opt.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="mt-2 text-[12.5px] leading-[1.6] text-black/55">
-                {ACCOUNT_OPTIONS.find((opt) => opt.key === role)?.description}
-              </p>
-            </div>
-
-            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                  Full name
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Jane Doe"
-                  className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-black/70">
-                  Work email
-                </span>
-                <input
-                  type="email"
-                  required
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@organization.com"
-                  className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-black/70">Password</span>
-                <input
-                  type="password"
-                  required
-                  minLength={12}
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="12+ characters"
-                  className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
-                />
-              </label>
-
-              {error && (
-                <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
-                  {error}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+          {enrolmentChallengeId ? (
+            <MfaEnrolment
+              enrolmentChallengeId={enrolmentChallengeId}
+              context="signup"
+              onDone={() => navigate({ to: afterSignup })}
+            />
+          ) : (
+            <div className="w-full max-w-[480px]">
+              <h2
+                className="text-[24px] font-semibold tracking-[-0.02em] text-[#0A0C0F]"
+                style={displayFont}
               >
-                {submitting ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" /> Creating account…
-                  </>
-                ) : (
-                  <>
-                    {role === "instructor" ? "Create organization" : "Get started"}{" "}
-                    <ArrowRight className="size-3.5" />
-                  </>
+                Get Started with ThreatLens
+              </h2>
+              <p className="mt-2 text-[14px] leading-[1.6] text-black/55">
+                Choose how you will use ThreatLens.
+              </p>
+
+              <div className="mt-6">
+                <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                  Account Type
+                </span>
+                <Select value={role} onValueChange={(v) => setRole(v as "student" | "instructor")}>
+                  <SelectTrigger className="h-[52px] w-full rounded-lg border-black/15 bg-black/[0.015] text-[14px] text-[#0A0C0F]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.key} value={opt.key}>
+                        <span className="flex items-center gap-2">
+                          <opt.icon className="size-4" />
+                          {opt.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-2 text-[12.5px] leading-[1.6] text-black/55">
+                  {ACCOUNT_OPTIONS.find((opt) => opt.key === role)?.description}
+                </p>
+              </div>
+
+              <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                    Full name
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Jane Doe"
+                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                    Work email
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    autoComplete="username"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@organization.com"
+                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] font-medium text-black/70">
+                    Password
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    minLength={12}
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="12+ characters"
+                    className="w-full rounded-lg border border-black/15 bg-black/[0.015] px-3.5 py-3 text-[14px] text-[#0A0C0F] outline-none transition-colors placeholder:text-black/30 focus:border-black/40"
+                  />
+                </label>
+
+                {error && (
+                  <p className="rounded-lg border border-[color:var(--critical)]/30 bg-[color:var(--critical)]/5 px-3 py-2 text-[12.5px] text-[color:var(--critical)]">
+                    {error}
+                  </p>
                 )}
-              </button>
-            </form>
-          </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn-primary mt-2 w-full justify-center py-3 disabled:opacity-60"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" /> Creating account…
+                    </>
+                  ) : (
+                    <>
+                      {role === "instructor" ? "Create organization" : "Get started"}{" "}
+                      <ArrowRight className="size-3.5" />
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-black/8 px-6 py-5 text-[12px] text-black/40">

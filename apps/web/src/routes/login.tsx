@@ -67,7 +67,7 @@ function LoginPage() {
   // was right (see AuthService.mfaVerify), so a wrong code can't just be retried against the
   // same challenge — the error below sends the user back to re-enter their password instead.
   const [mfaChallengeId, setMfaChallengeId] = useState<string | null>(null);
-  // Set when a privileged account signs in without MFA enrolled — see MfaEnrolment.
+  // Set when an account signs in without MFA enrolled — see MfaEnrolment.
   const [enrolmentChallengeId, setEnrolmentChallengeId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [verifyingMfa, setVerifyingMfa] = useState(false);
@@ -79,8 +79,8 @@ function LoginPage() {
     try {
       const result = await login(email, password);
       if ("mfaEnrolmentRequired" in result) {
-        // A privileged account that has never enrolled MFA. It cannot finish signing in until
-        // it does, so hand off to the enrolment step rather than reporting a failure.
+        // An account that has never enrolled MFA. It cannot finish signing in until it does,
+        // so hand off to the enrolment step rather than reporting a failure.
         setSubmitting(false);
         setEnrolmentChallengeId(result.enrolmentChallengeId);
         return;
@@ -184,7 +184,13 @@ function LoginPage() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10">
           {enrolmentChallengeId ? (
-            <MfaEnrolment enrolmentChallengeId={enrolmentChallengeId} />
+            <MfaEnrolment
+              enrolmentChallengeId={enrolmentChallengeId}
+              context="login"
+              onDone={async (user) =>
+                navigate({ to: explicitNext ?? (await resolveLandingPath(user)) })
+              }
+            />
           ) : (
             <div className="w-full max-w-[400px]">
               <h2

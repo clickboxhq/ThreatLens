@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { generate as generateTotp } from 'otplib';
 import type { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import {
@@ -64,13 +65,33 @@ describe('Investigation flow (e2e)', () => {
       .send({ token: verificationToken })
       .expect(204);
 
+    // Two-factor is mandatory for every account, so a password alone issues no session: a new
+    // account is handed an enrolment challenge, and the session comes from finishing enrolment.
     const login = await http
       .post('/api/v1/auth/login')
       .send({ email, password })
       .expect(200);
-    expect(login.body.accessToken).toBeTruthy();
-    expect(login.body.user.emailVerified).toBe(true);
-    accessToken = login.body.accessToken;
+    expect(login.body.accessToken).toBeUndefined();
+    const { enrolmentChallengeId } = login.body as {
+      enrolmentChallengeId: string;
+    };
+    expect(enrolmentChallengeId).toBeTruthy();
+
+    const setup = await http
+      .post('/api/v1/auth/mfa/enrol/setup')
+      .send({ enrolmentChallengeId })
+      .expect(200);
+    const enrolled = await http
+      .post('/api/v1/auth/mfa/enrol/complete')
+      .send({
+        enrolmentChallengeId,
+        code: await generateTotp({ secret: setup.body.secret as string }),
+      })
+      .expect(200);
+    expect(enrolled.body.accessToken).toBeTruthy();
+    expect(enrolled.body.recoveryCodes.length).toBeGreaterThan(0);
+    expect(enrolled.body.user.emailVerified).toBe(true);
+    accessToken = enrolled.body.accessToken;
     userId = signup.body.userId;
   });
 
