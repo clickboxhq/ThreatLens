@@ -36,8 +36,13 @@ export class InvestigationActionsService {
         where: { id: { in: idsFor('email_message') } },
         select: { id: true, subject: true },
       }),
+      // Mailbox-scoped actions (block_sender) are recorded against the mailbox owner's
+      // identity id — there is no mailbox table — so they resolve through identities too.
+      // Without this the log read "Blocked sender the mailbox" with no name.
       this.prisma.identity.findMany({
-        where: { id: { in: idsFor('identity') } },
+        where: {
+          id: { in: [...idsFor('identity'), ...idsFor('mailbox')] },
+        },
         select: { id: true, displayName: true },
       }),
       this.prisma.device.findMany({

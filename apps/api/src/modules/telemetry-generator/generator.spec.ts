@@ -2246,3 +2246,227 @@ describe('generateTelemetry — DNS tunneling scenario (§7.2, §8.2)', () => {
     expect(candidates[0].evidenceRefs.length).toBeGreaterThanOrEqual(30);
   });
 });
+
+// ---- Account-takeover persistence and its benign twins -----------------------------------
+// The everyday identity work the catalogue was missing: what an attacker does in the first
+// minutes inside a mailbox, and the authorised activity that trips the same detections.
+function buildTakeoverDefinition(): GroundTruthDefinition {
+  return {
+    metadata: {},
+    population: {
+      narrative_identities: [
+        {
+          ref: 'victim_identity_1',
+          attributes: {
+            department: 'Engineering',
+            job_title: 'Site Reliability Engineer',
+            home_country: 'CA',
+          },
+        },
+      ],
+      narrative_devices: [
+        {
+          ref: 'it_device_1',
+          attributes: { hostname: 'IT-WKS-03', os_platform: 'windows' },
+        },
+      ],
+      decoy_population_size: { identities: 10, devices: 4 },
+      world_time_window_hours: 24,
+    },
+    kill_chain: [
+      {
+        step_order: 1,
+        mitre_technique_id: 'T1621',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mfa_fatigue_batch_v1',
+        relative_timestamp: '+3h',
+        correlation_group: 'ato-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 2,
+        mitre_technique_id: 'T1078',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mfa_fatigue_success_signin_v1',
+        relative_timestamp: '+3h25m',
+        correlation_group: 'ato-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 3,
+        mitre_technique_id: 'T1098.005',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mfa_method_registered_attacker_v1',
+        relative_timestamp: '+3h40m',
+        correlation_group: 'ato-1',
+        is_required_for_full_credit: true,
+      },
+      {
+        step_order: 4,
+        mitre_technique_id: 'T1114.003',
+        entity_ref: 'victim_identity_1',
+        event_template_id: 'mailbox_forwarding_rule_external_v1',
+        relative_timestamp: '+3h48m',
+        correlation_group: 'ato-1',
+        is_required_for_full_credit: true,
+      },
+    ],
+    noise_profile: {
+      false_positive_bait: [
+        { event_template_id: 'benign_traveller_mfa_reset_v1', count: 1 },
+        { event_template_id: 'benign_vendor_forwarding_rule_v1', count: 1 },
+        {
+          event_template_id: 'benign_admin_powershell_v1',
+          count: 2,
+          device_ref: 'it_device_1',
+        },
+      ],
+    },
+  };
+}
+
+describe('generateTelemetry — account-takeover persistence (§7.2, §8.2)', () => {
+  const techniqueIdBySlug = new Map([
+    ['T1621', randomUUID()],
+    ['T1078', randomUUID()],
+    ['T1098.005', randomUUID()],
+    ['T1114.003', randomUUID()],
+  ]);
+  const generate = () =>
+    generateTelemetry(
+      randomUUID(),
+      11n,
+      buildTakeoverDefinition(),
+      techniqueIdBySlug,
+    );
+
+  it('records the attacker inbox rule and MFA method from the address the attacker signed in from', () => {
+    const result = generate();
+    const victim = result.identities.find(
+      (i) => i.narrativeRef === 'victim_identity_1',
+    )!;
+    const attackerSignIn = result.signInEvents.find(
+      (s) =>
+        s.isGroundTruthEvidence &&
+        s.result === 'success' &&
+        s.identityId === victim.id,
+    )!;
+    const persistence = result.directoryAuditEvents.filter(
+      (e) => e.isGroundTruthEvidence && e.targetIdentityId === victim.id,
+    );
+
+    expect(persistence.map((e) => e.action).sort()).toEqual([
+      'Create inbox rule',
+      'User registered security info',
+    ]);
+    // The thread an investigator pulls: same address as the attacker's sign-in.
+    for (const e of persistence) {
+      expect(e.sourceIp).toBe(attackerSignIn.sourceIp);
+      // Recorded as the victim themselves — the attacker is in the victim's session.
+      expect(e.actorIdentityId).toBe(victim.id);
+    }
+  });
+
+  it('plays the benign traveller as a whole story: foreign sign-in, failed MFA, verified reset, new method from the same place', () => {
+    const result = generate();
+    const resets = result.directoryAuditEvents.filter(
+      (e) =>
+        e.action === 'Reset user password' &&
+        !e.isGroundTruthEvidence &&
+        e.detail &&
+        typeof e.detail === 'object' &&
+        'ticket' in (e.detail as object),
+    );
+    expect(resets).toHaveLength(1);
+    const traveller = resets[0].targetIdentityId;
+    // Reset by a named service-desk agent, not the account itself.
+    expect(resets[0].actorIdentityId).toBeNull();
+
+    const travelSignIns = result.signInEvents.filter(
+      (s) =>
+        s.identityId === traveller &&
+        (s.raw as { pattern?: string })?.pattern === 'traveller_mfa_reset',
+    );
+    expect(travelSignIns.filter((s) => s.result === 'mfa_denied')).toHaveLength(
+      2,
+    );
+    const travelIps = new Set(travelSignIns.map((s) => s.sourceIp));
+    expect(travelIps.size).toBe(1);
+
+    const registered = result.directoryAuditEvents.find(
+      (e) =>
+        e.targetIdentityId === traveller &&
+        e.action === 'User registered security info' &&
+        e.detail &&
+        typeof e.detail === 'object' &&
+        'ticket' in (e.detail as object),
+    )!;
+    expect(travelIps.has(registered.sourceIp)).toBe(true);
+    expect(registered.isGroundTruthEvidence).toBe(false);
+  });
+
+  it('fires each new identity rule once on the attack and once on its benign twin, and only the attack is ground truth', async () => {
+    const { evaluateMailboxForwardingRule, evaluateMfaAfterForeignSignInRule } =
+      await import('../alert-engine/rules');
+    const result = generate();
+    type Rule = typeof evaluateMfaAfterForeignSignInRule;
+    const audit = result.directoryAuditEvents as unknown as Parameters<Rule>[0];
+    const signIns = result.signInEvents as unknown as Parameters<Rule>[1];
+    const identities = result.identities as unknown as Parameters<Rule>[2];
+    const gtAudit = new Map(
+      result.directoryAuditEvents.map((e) => [
+        e.id as string,
+        e.isGroundTruthEvidence,
+      ]),
+    );
+    const firstAuditRef = (c: {
+      evidenceRefs: { eventTable: string; eventId: string }[];
+    }) =>
+      c.evidenceRefs.find((r) => r.eventTable === 'directory_audit_events')!
+        .eventId;
+
+    const forwarding = evaluateMailboxForwardingRule(audit, identities);
+    expect(forwarding).toHaveLength(2);
+    expect(forwarding.map((c) => gtAudit.get(firstAuditRef(c))).sort()).toEqual(
+      [false, true],
+    );
+
+    const mfa = evaluateMfaAfterForeignSignInRule(audit, signIns, identities);
+    expect(mfa).toHaveLength(2);
+    expect(mfa.map((c) => gtAudit.get(firstAuditRef(c))).sort()).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it('runs signed admin PowerShell from explorer.exe — PowerShell that the Office-macro rule must not flag', async () => {
+    const { evaluateSuspiciousProcessRule } =
+      await import('../alert-engine/rules');
+    const result = generate();
+    const admin = result.processEvents.filter(
+      (p) => (p.raw as { pattern?: string })?.pattern === 'admin_patch_script',
+    );
+    expect(admin).toHaveLength(2);
+    for (const p of admin) {
+      expect(p.parentImagePath).toBe('C:\\Windows\\explorer.exe');
+      expect(p.commandLine).toContain('AllSigned');
+      expect(p.isGroundTruthEvidence).toBe(false);
+    }
+    type P = Parameters<typeof evaluateSuspiciousProcessRule>;
+    expect(
+      evaluateSuspiciousProcessRule(
+        result.processEvents as unknown as P[0],
+        result.devices as unknown as P[1],
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('stamps every narrative identity and device with the ref it came from, and decoys with none', () => {
+    const result = generate();
+    const narrative = result.identities.filter((i) => i.narrativeRef);
+    expect(narrative.map((i) => i.narrativeRef)).toEqual(['victim_identity_1']);
+    expect(
+      result.devices.filter((d) => d.narrativeRef).map((d) => d.narrativeRef),
+    ).toEqual(['it_device_1']);
+  });
+});

@@ -37,8 +37,10 @@ function buildService(alerts: ReturnType<typeof buildAlert>[]) {
         ...(args.data as Record<string, unknown>),
       })),
     },
+    incidentAlert: { deleteMany: jest.fn(async () => ({ count: 0 })) },
     identity: { findMany: jest.fn(async () => []) },
     device: { findMany: jest.fn(async () => []) },
+    $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const sessionAccess = {
     getOwnedSession: jest.fn(async () => ({ id: 'session-1' })),

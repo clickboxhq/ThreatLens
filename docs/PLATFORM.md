@@ -11,8 +11,8 @@ evidence that matters, tag the MITRE techniques the evidence supports, take a re
 and commit to a verdict. A server-side engine then grades the *investigation*, not just the
 answer.
 
-- **[Event catalogue](EVENT-CATALOG.md)** — the eight telemetry tables, 52 event templates, 20 detection rules
-- **[Scenario catalogue](SCENARIO-CATALOG.md)** — all 30 scenarios, what each teaches, and the correct verdict
+- **[Event catalogue](EVENT-CATALOG.md)** — the eight telemetry tables, 57 event templates, 22 detection rules
+- **[Scenario catalogue](SCENARIO-CATALOG.md)** — all 36 scenarios, what each teaches, and the correct verdict
 
 ## The session lifecycle
 
@@ -25,7 +25,7 @@ POST /sessions
 [telemetry-generation queue]
   ↓  materialise the population, baseline noise, and kill chain into the 8 tables
 [alert-correlation queue]
-  ↓  run the 20 detection rules over what was generated → alerts
+  ↓  run the 22 detection rules over what was generated → alerts
   ↓
 STUDENT WORKS THE CASE
   ↓  read portals · pin evidence · build timeline · tag techniques · take actions · request hints
@@ -66,8 +66,8 @@ Weights live in `apps/api/src/modules/scoring/scorer.ts` and are the source of t
 | --- | ---: | --- |
 | Technique accuracy | 30% | Tagged techniques vs. the rubric's required set — precision *and* recall |
 | Evidence | 30% | Ground-truth rows pinned, against rows missed |
-| False-positive handling | 15% | Whether decoy activity was correctly left alone |
-| Response actions | 15% | Whether the actions taken match what the scenario called for |
+| Triage accuracy | 15% | Every alert raised, against the decision made about it: escalating a real one and dismissing a planted one both count for; the reverse both count against; untouched earns nothing |
+| Response actions | 15% | The rubric's containment expectations met, against the right entity. On a false or benign positive, any action scores zero |
 | Verdict | 10% | The final call |
 
 A hint penalty is then applied proportionally to each hint's authored cost. Hints are always

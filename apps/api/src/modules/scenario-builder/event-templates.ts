@@ -1,7 +1,7 @@
 // The complete, real catalog of event templates the Telemetry Generator can actually render
 // (apps/api/src/modules/telemetry-generator/generator.ts's `applyEventTemplate` switch — every
 // `case` there has exactly one entry here, verified by diffing the two lists). A scenario
-// author can only ever *compose* these 47 existing templates into a new kill chain; inventing a
+// author can only ever *compose* these existing templates into a new kill chain; inventing a
 // genuinely new attack narrative still requires a new `case` block in generator.ts itself — this
 // catalog is what makes that real boundary visible to the UI instead of silently accepting a
 // made-up template id that would 500 the first time someone launches the scenario.
@@ -410,7 +410,49 @@ export const EVENT_TEMPLATES: EventTemplateDefinition[] = [
     isNoiseOnly: false,
   },
 
+  {
+    id: 'mailbox_forwarding_rule_external_v1',
+    label: 'Inbox rule forwarding all mail externally, then deleting it',
+    portal: 'identity',
+    requiresDevice: false,
+    suggestedTechniqueIds: ['T1114.003'],
+    isNoiseOnly: false,
+  },
+  {
+    id: 'mfa_method_registered_attacker_v1',
+    label: 'New MFA method registered from the attacker’s address',
+    portal: 'identity',
+    requiresDevice: false,
+    suggestedTechniqueIds: ['T1098.005'],
+    isNoiseOnly: false,
+  },
+
   // Noise / false-positive bait only — benign by design, no technique, never ground truth.
+  {
+    id: 'benign_traveller_mfa_reset_v1',
+    label:
+      'Benign — traveller loses phone, verified reset, new MFA method abroad',
+    portal: 'identity',
+    requiresDevice: false,
+    suggestedTechniqueIds: [],
+    isNoiseOnly: true,
+  },
+  {
+    id: 'benign_vendor_forwarding_rule_v1',
+    label: 'Benign — IT forwards supplier invoices to the AP automation vendor',
+    portal: 'identity',
+    requiresDevice: false,
+    suggestedTechniqueIds: [],
+    isNoiseOnly: true,
+  },
+  {
+    id: 'benign_admin_powershell_v1',
+    label: 'Benign — administrator runs a signed patch-compliance script',
+    portal: 'endpoint',
+    requiresDevice: true,
+    suggestedTechniqueIds: [],
+    isNoiseOnly: true,
+  },
   {
     id: 'legitimate_travel_signin_v1',
     label: 'Benign — legitimate travel sign-in',

@@ -8,6 +8,10 @@ import {
   toStudentHttpRequestDto,
 } from './device.dto';
 import { toStudentCloudEventDto } from './cloud.dto';
+import {
+  describeDirectoryAuditEvent,
+  toStudentDirectoryAuditDto,
+} from './directory-audit.dto';
 
 export interface EvidenceRefSummary {
   eventTable: string;
@@ -141,6 +145,22 @@ export async function summarizeEvidenceRef(
         ? `${event.method} ${event.url} on ${device?.hostname ?? 'a server'} (${event.userAgent})`
         : 'Event no longer available.',
       detail: event ? toStudentHttpRequestDto(event) : null,
+    };
+  }
+
+  if (eventTable === 'directory_audit_events') {
+    const event = await prisma.directoryAuditEvent.findUnique({
+      where: { id: eventId },
+      include: { targetIdentity: { select: { displayName: true } } },
+    });
+    return {
+      eventTable,
+      eventId,
+      occurredAt: event?.occurredAt ?? null,
+      summary: event
+        ? describeDirectoryAuditEvent(event, event.targetIdentity.displayName)
+        : 'Event no longer available.',
+      detail: event ? toStudentDirectoryAuditDto(event) : null,
     };
   }
 

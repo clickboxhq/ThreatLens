@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type {
   CloudEvent,
   Device,
+  DirectoryAuditEvent,
   EmailAttachment,
   EmailMessage,
   FileEvent,
@@ -69,6 +70,10 @@ export const OAUTH_CONSENT_GRANT_RULE_NAME =
   'Cloud: Suspicious OAuth App Consent Followed by Mailbox Access';
 export const KERBEROASTING_RULE_NAME =
   'Device: Kerberoasting Ticket Request Detected';
+export const MAILBOX_FORWARDING_RULE_NAME =
+  'Identity: Inbox Rule Forwards or Hides Mail';
+export const MFA_AFTER_RISKY_SIGNIN_RULE_NAME =
+  'Identity: MFA Method Registered After Foreign Sign-in';
 export const DNS_TUNNELING_RULE_NAME =
   'Device: High-Frequency DNS Traffic to a Single External Address';
 
@@ -380,7 +385,10 @@ export function evaluateImpossibleTravelRule(
           { eventTable: 'sign_in_events', eventId: prev.id },
           { eventTable: 'sign_in_events', eventId: curr.id },
         ],
-        correlationId: curr.correlationId,
+        // Either sign-in may be the attacker's. Taking only the later one dropped the alert
+        // out of its chain whenever the attacker signed in first and the victim's routine
+        // sign-in came after — the commonest order there is.
+        correlationId: curr.correlationId ?? prev.correlationId,
         occurredAt: curr.occurredAt,
       });
     }
@@ -1083,6 +1091,136 @@ export function evaluateDnsTunnelingRule(
       })),
       correlationId: latest.correlationId,
       occurredAt: latest.occurredAt,
+    });
+  }
+  return candidates;
+}
+
+const MFA_AFTER_FOREIGN_SIGNIN_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function detailOf(event: DirectoryAuditEvent): Record<string, unknown> {
+  return event.detail &&
+    typeof event.detail === 'object' &&
+    !Array.isArray(event.detail)
+    ? (event.detail as Record<string, unknown>)
+    : {};
+}
+
+function domainOf(address: string): string {
+  return address.slice(address.lastIndexOf('@') + 1).toLowerCase();
+}
+
+/**
+ * Fires when an inbox rule forwards mail outside the organisation, or deletes or silently
+ * reads mail it has forwarded. The commonest persistence after a mailbox is taken over, and
+ * invisible in sign-in logs.
+ *
+ * Deliberately naive about *who* created the rule (§8.1): an administrator wiring supplier
+ * invoices to an automation vendor trips it exactly as an attacker does. "Outside the
+ * organisation" is read from the accounts' own UPN domains — the tenant's accepted domains —
+ * not from anything the generator knows.
+ */
+export function evaluateMailboxForwardingRule(
+  auditEvents: DirectoryAuditEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const orgDomains = new Set(
+    identities.map((i) => domainOf(i.userPrincipalName)),
+  );
+
+  return auditEvents
+    .filter((e) => e.category === 'mailbox_rule' && e.result === 'success')
+    .filter((e) => {
+      const d = detailOf(e);
+      const forwardTo = typeof d.forwardTo === 'string' ? d.forwardTo : null;
+      const external =
+        forwardTo !== null && !orgDomains.has(domainOf(forwardTo));
+      return external || d.deleteAfterForward === true;
+    })
+    .map((e) => {
+      const identity = identityById.get(e.targetIdentityId);
+      const d = detailOf(e);
+      const forwardTo =
+        typeof d.forwardTo === 'string' ? d.forwardTo : 'an address';
+      const hides =
+        d.deleteAfterForward === true ? ', then deletes the original' : '';
+      return {
+        id: randomUUID(),
+        detectionRuleName: MAILBOX_FORWARDING_RULE_NAME,
+        title: `Inbox rule on ${identity?.displayName ?? 'a mailbox'} forwards mail externally`,
+        description: `Rule "${String(d.ruleName ?? 'unnamed')}" forwards to ${forwardTo}${hides}. Created by ${e.actorDisplayName} from ${e.sourceIp}.`,
+        primaryEntityType: 'mailbox' as const,
+        primaryEntityId: e.targetIdentityId,
+        evidenceRefs: [{ eventTable: 'directory_audit_events', eventId: e.id }],
+        correlationId: e.correlationId,
+        occurredAt: e.occurredAt,
+      };
+    });
+}
+
+/**
+ * Fires when an account registers a new MFA method within a day of signing in successfully
+ * from outside its home country — the step an attacker takes so a password reset does not
+ * lock them back out. Cites both the registration and the sign-in that preceded it.
+ *
+ * Fires just as readily on a traveller who lost their phone and was reset by the service
+ * desk (§8.6). Telling those apart is the job: who reset what, under which ticket, and
+ * whether the registration came from the same place the traveller had been signing in.
+ */
+export function evaluateMfaAfterForeignSignInRule(
+  auditEvents: DirectoryAuditEvent[],
+  signIns: SignInEvent[],
+  identities: Identity[],
+): AlertCandidate[] {
+  const identityById = new Map(identities.map((i) => [i.id, i]));
+  const foreignSuccessesByIdentity = new Map<string, SignInEvent[]>();
+  for (const s of signIns) {
+    if (s.result !== 'success') continue;
+    const identity = identityById.get(s.identityId);
+    if (!identity || s.sourceCountry === identity.homeCountry) continue;
+    const list = foreignSuccessesByIdentity.get(s.identityId) ?? [];
+    list.push(s);
+    foreignSuccessesByIdentity.set(s.identityId, list);
+  }
+
+  const candidates: AlertCandidate[] = [];
+  for (const e of auditEvents) {
+    if (
+      e.category !== 'mfa' ||
+      e.action !== 'User registered security info' ||
+      e.result !== 'success'
+    )
+      continue;
+    const prior = (foreignSuccessesByIdentity.get(e.targetIdentityId) ?? [])
+      .filter((s) => {
+        const gap = e.occurredAt.getTime() - s.occurredAt.getTime();
+        return gap >= 0 && gap <= MFA_AFTER_FOREIGN_SIGNIN_WINDOW_MS;
+      })
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0];
+    if (!prior) continue;
+
+    const identity = identityById.get(e.targetIdentityId);
+    const hours = Math.max(
+      1,
+      Math.round(
+        (e.occurredAt.getTime() - prior.occurredAt.getTime()) / 3600000,
+      ),
+    );
+    const method = detailOf(e).method;
+    candidates.push({
+      id: randomUUID(),
+      detectionRuleName: MFA_AFTER_RISKY_SIGNIN_RULE_NAME,
+      title: `${identity?.displayName ?? 'An account'} registered a new MFA method after a foreign sign-in`,
+      description: `${typeof method === 'string' ? method : 'A security method'} registered from ${e.sourceIp}, within ${hours}h of a successful sign-in from ${prior.sourceCity}, ${prior.sourceCountry}.`,
+      primaryEntityType: 'identity' as const,
+      primaryEntityId: e.targetIdentityId,
+      evidenceRefs: [
+        { eventTable: 'directory_audit_events', eventId: e.id },
+        { eventTable: 'sign_in_events', eventId: prior.id },
+      ],
+      correlationId: e.correlationId ?? prior.correlationId,
+      occurredAt: e.occurredAt,
     });
   }
   return candidates;

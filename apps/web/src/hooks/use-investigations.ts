@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { investigationsService } from "@/services/investigations";
+import { alertKeys } from "@/hooks/use-alerts";
 import type { IncidentVerdict, ResponseActionType } from "@/types/threatlens-investigation";
 
 const keys = {
@@ -153,10 +154,37 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     mutationFn: ({
       actionType,
       targetType,
+      targetId,
     }: {
       actionType: ResponseActionType;
       targetType: string;
-    }) => investigationsService.logResponseAction(sessionId, incidentId, actionType, targetType),
+      targetId: string;
+    }) =>
+      investigationsService.logResponseAction(
+        sessionId,
+        incidentId,
+        actionType,
+        targetType,
+        targetId,
+      ),
+  });
+  // Triage: escalating changes both the incident (linkedAlertIds) and the alert queue (status
+  // moves to in_progress), so both caches are refreshed.
+  const invalidateTriage = () => {
+    invalidateIncident();
+    queryClient.invalidateQueries({ queryKey: alertKeys.list(sessionId) });
+    // The graph's relations come from escalations now, not from a hidden grouping.
+    invalidateTimeline();
+  };
+  const linkAlerts = useMutation({
+    mutationFn: (alertIds: string[]) =>
+      investigationsService.linkAlerts(sessionId, incidentId, alertIds),
+    onSuccess: invalidateTriage,
+  });
+  const unlinkAlert = useMutation({
+    mutationFn: (alertId: string) =>
+      investigationsService.unlinkAlert(sessionId, incidentId, alertId),
+    onSuccess: invalidateTriage,
   });
   const closeIncident = useMutation({
     mutationFn: (input: {
@@ -194,6 +222,12 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     addNote: addNote.mutateAsync,
     unlockHint: unlockHint.mutateAsync,
     logResponseAction: logResponseAction.mutateAsync,
+    linkAlerts: linkAlerts.mutateAsync,
+    unlinkAlert: unlinkAlert.mutateAsync,
+    triaging: linkAlerts.isPending || unlinkAlert.isPending,
+    // Dismissing goes through useUpdateAlertStatus (the queue's own mutation), but the server
+    // also unlinks a dismissed alert from the incident — so the caller refreshes here too.
+    refreshTriage: invalidateTriage,
     closeIncident: closeIncident.mutateAsync,
     closingIncident: closeIncident.isPending,
     closeIncidentError: closeIncident.error,
@@ -204,6 +238,25 @@ export function useInvestigation(sessionId: string, incidentId: string) {
     lookupThreatIntel: lookupThreatIntel.mutateAsync,
     lookingUpThreatIntel: lookupThreatIntel.isPending,
   };
+}
+
+/** Escalate from the cross-session Alert Center, where the full case workspace (and its dozen
+ * queries) is not in scope — just the one mutation, refreshing the queue and the incident. */
+export function useLinkAlertsToIncident(
+  sessionId: string | undefined,
+  incidentId: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertIds: string[]) =>
+      investigationsService.linkAlerts(sessionId!, incidentId!, alertIds),
+    onSuccess: () => {
+      if (!sessionId || !incidentId) return;
+      queryClient.invalidateQueries({ queryKey: alertKeys.list(sessionId) });
+      queryClient.invalidateQueries({ queryKey: keys.incident(sessionId, incidentId) });
+      queryClient.invalidateQueries({ queryKey: keys.incidents(sessionId) });
+    },
+  });
 }
 
 /**

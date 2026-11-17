@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type {
   CloudEvent,
   Device,
+  DirectoryAuditEvent,
   EmailAttachment,
   EmailMessage,
   FileEvent,
@@ -19,7 +20,9 @@ import {
   evaluateKerberoastingRule,
   evaluateLateralMovementRule,
   evaluateLegacyAuthBypassRule,
+  evaluateMailboxForwardingRule,
   evaluateMassEncryptionRule,
+  evaluateMfaAfterForeignSignInRule,
   evaluateMfaFatigueRule,
   evaluateNewCountryRule,
   evaluateOAuthConsentGrantRule,
@@ -1340,5 +1343,194 @@ describe('evaluateDnsTunnelingRule (§8.2)', () => {
     expect(
       evaluateDnsTunnelingRule([...toFirst, ...toSecond], [dev]),
     ).toHaveLength(0);
+  });
+});
+
+function auditEvent(
+  targetIdentityId: string,
+  overrides: Partial<DirectoryAuditEvent> = {},
+): DirectoryAuditEvent {
+  return {
+    id: randomUUID(),
+    sessionId: randomUUID(),
+    occurredAt: new Date('2026-11-17T12:00:00Z'),
+    correlationId: null,
+    targetIdentityId,
+    actorIdentityId: targetIdentityId,
+    actorDisplayName: 'Test Victim',
+    category: 'mailbox_rule',
+    action: 'Create inbox rule',
+    result: 'success',
+    detail: {},
+    sourceIp: '10.20.1.5',
+    isGroundTruthEvidence: false,
+    mitreTechniqueId: null,
+    ...overrides,
+  } as DirectoryAuditEvent;
+}
+
+// The directory audit trail is where account takeover persists, and until this rule nothing
+// read it. Naive about who made the rule, on purpose: the approved vendor forward must fire too.
+describe('evaluateMailboxForwardingRule (§8.2)', () => {
+  const victim = identity();
+
+  it('fires on a rule forwarding to a domain the organisation does not own', () => {
+    const e = auditEvent(victim.id, {
+      detail: { ruleName: 'RSS Feeds', forwardTo: 'archive42@protonmail.com' },
+      correlationId: 'chain-1',
+    });
+    const [c, ...rest] = evaluateMailboxForwardingRule([e], [victim]);
+    expect(rest).toHaveLength(0);
+    expect(c.primaryEntityType).toBe('mailbox');
+    expect(c.primaryEntityId).toBe(victim.id);
+    expect(c.evidenceRefs).toEqual([
+      { eventTable: 'directory_audit_events', eventId: e.id },
+    ]);
+    expect(c.correlationId).toBe('chain-1');
+    expect(c.description).toContain('archive42@protonmail.com');
+  });
+
+  it('fires on an authorised external forward too — the rule cannot see intent', () => {
+    const e = auditEvent(victim.id, {
+      actorIdentityId: null,
+      actorDisplayName: 'Marcus Webb (IT Operations)',
+      detail: { forwardTo: 'invoices@ap-automation-partner.example.net' },
+    });
+    expect(evaluateMailboxForwardingRule([e], [victim])).toHaveLength(1);
+  });
+
+  it('does not fire on a forward inside the organisation', () => {
+    const e = auditEvent(victim.id, {
+      detail: { forwardTo: 'shared-ap@contoso-finance.example.com' },
+    });
+    expect(evaluateMailboxForwardingRule([e], [victim])).toHaveLength(0);
+  });
+
+  it('fires on an internal forward that also deletes the original — that is hiding mail', () => {
+    const e = auditEvent(victim.id, {
+      detail: {
+        forwardTo: 'someone@contoso-finance.example.com',
+        deleteAfterForward: true,
+      },
+    });
+    expect(evaluateMailboxForwardingRule([e], [victim])).toHaveLength(1);
+  });
+
+  it('ignores ordinary housekeeping rules and other audit categories', () => {
+    const tidy = auditEvent(victim.id, {
+      detail: { ruleName: 'Move newsletters' },
+    });
+    const mfa = auditEvent(victim.id, {
+      category: 'mfa',
+      action: 'User registered security info',
+      detail: { forwardTo: 'x@protonmail.com' },
+    });
+    expect(evaluateMailboxForwardingRule([tidy, mfa], [victim])).toHaveLength(
+      0,
+    );
+  });
+});
+
+describe('evaluateMfaAfterForeignSignInRule (§8.2)', () => {
+  const victim = identity({ homeCountry: 'CA' });
+  const registration = (overrides: Partial<DirectoryAuditEvent> = {}) =>
+    auditEvent(victim.id, {
+      category: 'mfa',
+      action: 'User registered security info',
+      occurredAt: new Date('2026-11-17T12:00:00Z'),
+      detail: { method: 'Authenticator app' },
+      sourceIp: '45.1.2.3',
+      ...overrides,
+    });
+
+  it('fires within a day of a successful foreign sign-in and cites both events', () => {
+    const s = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T11:40:00Z'),
+      sourceCountry: 'NG',
+      sourceCity: 'Lagos',
+      correlationId: 'chain-9',
+    });
+    const reg = registration();
+    const [c, ...rest] = evaluateMfaAfterForeignSignInRule(
+      [reg],
+      [s],
+      [victim],
+    );
+    expect(rest).toHaveLength(0);
+    expect(c.evidenceRefs).toEqual([
+      { eventTable: 'directory_audit_events', eventId: reg.id },
+      { eventTable: 'sign_in_events', eventId: s.id },
+    ]);
+    // The registration carries no chain id of its own here, so it inherits the sign-in's.
+    expect(c.correlationId).toBe('chain-9');
+    expect(c.description).toContain('Lagos, NG');
+  });
+
+  it('does not fire after a sign-in from the home country', () => {
+    const s = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T11:40:00Z'),
+      sourceCountry: 'CA',
+      sourceCity: 'Toronto',
+    });
+    expect(
+      evaluateMfaAfterForeignSignInRule([registration()], [s], [victim]),
+    ).toHaveLength(0);
+  });
+
+  it('does not fire when the foreign sign-in is more than a day old, or came after', () => {
+    const old = signIn(victim.id, {
+      occurredAt: new Date('2026-11-16T10:00:00Z'),
+      sourceCountry: 'NG',
+    });
+    const later = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T13:00:00Z'),
+      sourceCountry: 'NG',
+    });
+    expect(
+      evaluateMfaAfterForeignSignInRule(
+        [registration()],
+        [old, later],
+        [victim],
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('does not fire on a failed foreign sign-in, or on removing a method', () => {
+    const failed = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T11:40:00Z'),
+      sourceCountry: 'NG',
+      result: 'mfa_denied',
+    });
+    const removal = registration({ action: 'User deleted security info' });
+    expect(
+      evaluateMfaAfterForeignSignInRule(
+        [registration(), removal],
+        [failed],
+        [victim],
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+// The reveal in the debrief rebuilds chains from correlation ids, and an impossible-travel
+// alert used to take its id only from the later sign-in. With the attacker first and the
+// victim's routine sign-in second — the commonest order — the alert fell out of its chain.
+describe('evaluateImpossibleTravelRule correlation', () => {
+  it('keeps the chain id when only the earlier sign-in belongs to the attack', () => {
+    const victim = identity({ homeCountry: 'US' });
+    const attacker = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T15:45:00Z'),
+      sourceCountry: 'NG',
+      sourceCity: 'Lagos',
+      correlationId: 'chain-attack',
+    });
+    const routine = signIn(victim.id, {
+      occurredAt: new Date('2026-11-17T17:00:00Z'),
+      sourceCountry: 'US',
+      sourceCity: 'Chicago',
+      correlationId: null,
+    });
+    const [c] = evaluateImpossibleTravelRule([attacker, routine], [victim]);
+    expect(c.correlationId).toBe('chain-attack');
   });
 });

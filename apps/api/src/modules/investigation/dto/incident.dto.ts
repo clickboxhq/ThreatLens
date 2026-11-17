@@ -70,15 +70,10 @@ export class AddToTimelineDto {
   eventId!: string;
 }
 
-// The 6 options ThreatLens's "Response actions" panel offers. That panel is a flat button
-// list with no entity picker (verified against the frontend: it logs { actionId, label, target }
-// with `target` just a category string like "device", never a specific device/identity/email
-// id) — so unlike POST .../devices/:id/isolate (which really flips a specific device's state),
-// this is a generic "log that this category of response action was taken on this incident"
-// endpoint. Real per-entity mutation stays on the dedicated portal endpoints for whichever
-// action already has one (isolate_device); the rest audit-only until/unless a target-entity
-// picker exists to drive a real per-entity effect.
-const RESPONSE_ACTION_TYPES = [
+// The 6 options ThreatLens's "Response actions" panel offers. Exported because the Scoring
+// Engine (§12.4) and the scenario validator both need the same list: a rubric's
+// containment_expectations may only name actions a student can actually take.
+export const RESPONSE_ACTION_TYPES = [
   'isolate_device',
   'disable_account',
   'force_password_reset',
@@ -86,14 +81,27 @@ const RESPONSE_ACTION_TYPES = [
   'block_sender',
   'block_ip',
 ] as const;
+export type ResponseActionType = (typeof RESPONSE_ACTION_TYPES)[number];
 
+// `targetId` is the specific identity/device the action was taken against, and is what the
+// Scoring Engine matches a containment expectation on — "disable the account" means *that*
+// account, not any account. Optional for one release only: the api deploys ~60s before the web
+// (ci.yml), and the current panel does not send it yet. An action logged without a target is
+// recorded against the incident and never satisfies a targeted expectation. Make it required
+// once the web ships its entity picker. isolate_device has its own real endpoint
+// (POST .../devices/:id/isolate) that flips device state and records the action with the
+// device id — the web should call that, not this.
 export class LogResponseActionDto {
   @IsIn(RESPONSE_ACTION_TYPES)
-  actionType!: (typeof RESPONSE_ACTION_TYPES)[number];
+  actionType!: ResponseActionType;
 
   @IsString()
   @MinLength(1)
   targetType!: string;
+
+  @IsOptional()
+  @IsUUID()
+  targetId?: string;
 }
 
 export class SetTaskCompletionDto {

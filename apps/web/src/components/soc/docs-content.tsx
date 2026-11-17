@@ -106,7 +106,7 @@ export const DOC_SECTIONS: DocSection[] = [
             {
               title: "Work the case, then submit",
               detail:
-                "Investigate, pin what matters, commit to a verdict and submit. Your score comes back with a breakdown of where the marks went.",
+                "Triage the alert queue — escalate what is the incident, dismiss what is not — then investigate, pin what matters, take containment against the right account or device where it is warranted, commit to a verdict and submit. Your score comes back with a breakdown of where the marks went.",
             },
           ]}
         />
@@ -211,12 +211,12 @@ export const DOC_SECTIONS: DocSection[] = [
               def: "How much of the activity that mattered you pinned, and how much you missed.",
             },
             {
-              term: "False-positive handling · 15%",
-              def: "Whether you correctly left innocent activity alone instead of sweeping it in.",
+              term: "Triage accuracy · 15%",
+              def: "Every alert the case raised, against the decision you made about it. Escalating a real alert and dismissing a planted one both count for you; dismissing a real one or sweeping a planted one in both count against. Alerts you never acted on earn nothing.",
             },
             {
               term: "Response actions · 15%",
-              def: "Whether the containment steps you took suited what you were dealing with.",
+              def: "Whether you took the containment the case called for, against the right account or device. Where the right answer was no action at all, taking one costs the whole component.",
             },
             {
               term: "Verdict · 10%",
@@ -254,7 +254,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               term: "Alert Center",
-              def: "Everything the detections raised in the current session.",
+              def: "Everything the detections raised in the current session. Escalate or dismiss from here, or from the case's own Triage stage — both are the same queue.",
             },
             {
               term: "Incident Queue",

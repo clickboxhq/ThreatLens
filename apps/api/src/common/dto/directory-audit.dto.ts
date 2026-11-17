@@ -16,6 +16,35 @@ export interface StudentDirectoryAuditDto {
   sourceIp: string;
 }
 
+/**
+ * One line describing a directory change, shared by everywhere a pinned or missed one is
+ * named — the evidence list, the debrief, the timeline — so all three say the same thing.
+ * Reads only fields a Student can already see in the audit trail.
+ */
+export function describeDirectoryAuditEvent(
+  event: Pick<
+    DirectoryAuditEvent,
+    'action' | 'actorDisplayName' | 'sourceIp' | 'detail'
+  >,
+  targetName: string,
+): string {
+  const d =
+    event.detail &&
+    typeof event.detail === 'object' &&
+    !Array.isArray(event.detail)
+      ? (event.detail as Record<string, unknown>)
+      : {};
+  const specifics = [
+    d.group && `group ${String(d.group)}`,
+    d.role && `role ${String(d.role)}`,
+    d.ruleName && `rule "${String(d.ruleName)}"`,
+    d.forwardTo && `forwarding to ${String(d.forwardTo)}`,
+    d.method && String(d.method),
+  ].filter(Boolean);
+  const what = specifics.length ? ` (${specifics.join(', ')})` : '';
+  return `${event.action} on ${targetName}${what} by ${event.actorDisplayName} from ${event.sourceIp}`;
+}
+
 export function toStudentDirectoryAuditDto(
   event: DirectoryAuditEvent,
 ): StudentDirectoryAuditDto {

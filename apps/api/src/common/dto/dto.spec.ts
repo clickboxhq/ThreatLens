@@ -29,6 +29,11 @@ const FORBIDDEN_SUBSTRINGS = [
   'isGroundTruthActor',
   'isFalsePositiveByDesign',
   'correlationId',
+  // The generator's grouping re-keyed by alert id — which alerts are one chain is what triage
+  // asks the student to decide, so it is withheld until the debrief.
+  'relatedAlertId',
+  // Which population ref a row was generated from: says which account the scenario is about.
+  'narrativeRef',
 ];
 
 function assertNoForbiddenFields(value: unknown) {
@@ -46,6 +51,7 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
     const identity = {
       id: 'id-1',
       isGroundTruthActor: true,
+      narrativeRef: 'victim_identity_1',
       displayName: 'Test',
       userPrincipalName: 'test@example.com',
       department: 'Finance',
@@ -125,7 +131,7 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
       primaryEntityType: 'identity',
       primaryEntityId: 'id-1',
       mitreTechniqueId: 'technique-1',
-      relatedAlertId: null,
+      relatedAlertId: 'a-0',
       dedupCount: 1,
       firstSeenAt: new Date(),
       lastSeenAt: new Date(),
@@ -148,6 +154,7 @@ describe('Student DTO layer never leaks ground truth (§12.3, §18.3)', () => {
     const dev = {
       id: 'd-1',
       isGroundTruthActor: true,
+      narrativeRef: 'victim_device_1',
       sessionId: 's-1',
       hostname: 'FIN-WKS-07',
       osPlatform: 'windows',

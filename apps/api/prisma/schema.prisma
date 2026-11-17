@@ -733,6 +733,10 @@ model Identity {
   isPrivileged       Boolean           @default(false) @map("is_privileged")
   homeCountry        String            @map("home_country")
   isGroundTruthActor Boolean           @default(false) @map("is_ground_truth_actor")
+  // The population ref this row was generated from (`victim_identity_1`, …), so a rubric's
+  // containment_expectations can name a target by ref and the scorer can find the row it became.
+  // Ground truth (§12.3): it says which account the scenario is about. Never in a student DTO.
+  narrativeRef       String?           @map("narrative_ref")
 
   session InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   manager Identity?            @relation("IdentityManager", fields: [managerIdentityId], references: [id])
@@ -836,6 +840,8 @@ model Device {
   isolationStatus    IsolationStatus @default(not_isolated) @map("isolation_status")
   lastSeenAt         DateTime        @map("last_seen_at")
   isGroundTruthActor Boolean         @default(false) @map("is_ground_truth_actor")
+  // Same role as Identity.narrativeRef — see the note there.
+  narrativeRef       String?         @map("narrative_ref")
 
   session         InvestigationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   primaryIdentity Identity?            @relation(fields: [primaryIdentityId], references: [id])

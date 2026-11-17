@@ -129,17 +129,33 @@ export class AlertsService {
     });
     if (!alert) throw new AppException(404, 'NOT_FOUND', 'Alert not found.');
 
-    const updated = await this.prisma.alert.update({
-      where: { id: alertId },
-      data: {
-        status: dto.status,
-        dismissalReason:
-          dto.status === 'dismissed'
-            ? dto.dismissalReason
-            : alert.dismissalReason,
-      },
-      include: { mitreTechnique: true },
-    });
+    // Dismissing an alert is the student saying "this is not part of the incident", so it
+    // cannot stay linked to one. Escalate-then-dismiss used to leave both states true, and the
+    // scorer would then count it as escalated. Only ever touches open incidents: a closed one
+    // is immutable and its links are what the score was computed from.
+    const unlinkIfDismissed =
+      dto.status === 'dismissed'
+        ? [
+            this.prisma.incidentAlert.deleteMany({
+              where: { alertId, incident: { status: { not: 'closed' } } },
+            }),
+          ]
+        : [];
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.alert.update({
+        where: { id: alertId },
+        data: {
+          status: dto.status,
+          dismissalReason:
+            dto.status === 'dismissed'
+              ? dto.dismissalReason
+              : alert.dismissalReason,
+        },
+        include: { mitreTechnique: true },
+      }),
+      ...unlinkIfDismissed,
+    ]);
 
     await this.investigationActions.record({
       sessionId,

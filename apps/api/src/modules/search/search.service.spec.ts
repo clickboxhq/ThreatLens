@@ -24,6 +24,7 @@ function buildService() {
     fileEvent: { findMany: findManyMock([]) },
     networkEvent: { findMany: findManyMock([]) },
     httpRequest: { findMany: findManyMock([]) },
+    directoryAuditEvent: { findMany: findManyMock([]) },
     investigationSession: { findMany: findManyMock([]) },
     // Recipient addresses are a String[]; Prisma's array filters only compare whole elements,
     // so partial matching goes through one raw query.
@@ -46,7 +47,7 @@ function buildService() {
 // network, and http-request telemetry — the tests below guard the field-routing logic that
 // decides which of the 7 tables a given filter/freetext actually queries.
 describe('SearchService (§2.8, §16.12)', () => {
-  it('with no filters and no freetext, queries all 7 entity types ("browse everything")', async () => {
+  it('with no filters and no freetext, queries all 8 entity types ("browse everything")', async () => {
     const { service, prisma } = buildService();
     await service.search(SESSION_ID, USER, []);
 
@@ -57,6 +58,7 @@ describe('SearchService (§2.8, §16.12)', () => {
     expect(prisma.fileEvent.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.networkEvent.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.httpRequest.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.directoryAuditEvent.findMany).toHaveBeenCalledTimes(1);
   });
 
   it('a sign-in-only filter (sourceCountry) does not query email/cloud/device tables', async () => {
@@ -99,7 +101,10 @@ describe('SearchService (§2.8, §16.12)', () => {
     });
   });
 
-  it('freetext queries email, cloud, process, file, and http (not sign-in or network)', async () => {
+  // This used to assert that freetext skipped sign-ins and network events — which meant an
+  // alert reading "sign-in from Lagos" could not be followed by typing "Lagos", nor the
+  // attacker's address, nor the account's name. Every table is now freetext-searchable.
+  it('freetext queries every telemetry table, sign-ins, network and the directory audit trail included', async () => {
     const { service, prisma } = buildService();
     await service.search(SESSION_ID, USER, [], 'powershell');
 
@@ -108,8 +113,9 @@ describe('SearchService (§2.8, §16.12)', () => {
     expect(prisma.processEvent.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.fileEvent.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.httpRequest.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.signInEvent.findMany).not.toHaveBeenCalled();
-    expect(prisma.networkEvent.findMany).not.toHaveBeenCalled();
+    expect(prisma.signInEvent.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.networkEvent.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.directoryAuditEvent.findMany).toHaveBeenCalledTimes(1);
 
     const processArgs = prisma.processEvent.findMany.mock.calls[0]?.[0] as {
       where: { OR: unknown };
@@ -118,6 +124,74 @@ describe('SearchService (§2.8, §16.12)', () => {
       { imagePath: { contains: 'powershell', mode: 'insensitive' } },
       { commandLine: { contains: 'powershell', mode: 'insensitive' } },
     ]);
+  });
+
+  it('finds a sign-in by city, country, address, application or the account name', async () => {
+    const { service, prisma } = buildService();
+    await service.search(SESSION_ID, USER, [], 'Lagos');
+
+    const args = prisma.signInEvent.findMany.mock.calls[0]?.[0] as {
+      where: { OR: Record<string, unknown>[] };
+    };
+    const fields = args.where.OR.map((clause) => Object.keys(clause)[0]);
+    expect(fields).toEqual(
+      expect.arrayContaining([
+        'sourceIp',
+        'sourceCity',
+        'sourceCountry',
+        'application',
+        'identity',
+      ]),
+    );
+    expect(args.where.OR).toContainEqual({
+      sourceCity: { contains: 'Lagos', mode: 'insensitive' },
+    });
+  });
+
+  it('finds a directory change by what was done, who did it, from where, or to whom', async () => {
+    const { service, prisma } = buildService();
+    prisma.directoryAuditEvent.findMany = findManyMock([
+      {
+        id: 'audit-1',
+        sessionId: SESSION_ID,
+        occurredAt: new Date('2026-11-17T10:00:00Z'),
+        correlationId: 'secret-chain',
+        targetIdentityId: 'identity-1',
+        actorIdentityId: 'identity-1',
+        actorDisplayName: 'Morgan Muller',
+        category: 'mailbox_rule',
+        action: 'Create inbox rule',
+        result: 'success',
+        detail: { forwardTo: 'x@protonmail.com' },
+        sourceIp: '45.1.2.3',
+        isGroundTruthEvidence: true,
+        mitreTechniqueId: 'technique-1',
+      },
+    ]);
+
+    const { results } = await service.search(
+      SESSION_ID,
+      USER,
+      [],
+      'inbox rule',
+    );
+
+    const args = prisma.directoryAuditEvent.findMany.mock.calls[0]?.[0] as {
+      where: { OR: Record<string, unknown>[] };
+    };
+    expect(args.where.OR.map((c) => Object.keys(c)[0])).toEqual([
+      'action',
+      'actorDisplayName',
+      'sourceIp',
+      'targetIdentity',
+    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0].entityType).toBe('directory_audit_event');
+    // Through the student DTO: the answer-key columns never leave.
+    const wire = JSON.stringify(results[0]);
+    expect(wire).not.toContain('isGroundTruthEvidence');
+    expect(wire).not.toContain('secret-chain');
+    expect(wire).not.toContain('technique-1');
   });
 
   it('a network-only filter (remoteIp) queries only network events, even with no other filters set', async () => {

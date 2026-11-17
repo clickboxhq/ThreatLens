@@ -312,3 +312,32 @@ export const BREACH_REUSED_PASSWORD_HINTS = [
   'Dragon!2021',
   'Winter#2024',
 ];
+
+// ---- Everyday identity / mailbox signals -------------------------------------------------
+// The commonest account-takeover persistence in a real SOC queue is not malware: it is an
+// inbox rule that quietly copies the victim's mail out, and a second MFA method so the
+// attacker can sign in again after the password is reset. Both live in the directory audit
+// trail, not in sign-in logs, which is exactly why they are missed.
+
+// Named to look like housekeeping. "RSS Feeds" and "." are what real attackers use, because a
+// victim glancing at their rules list reads straight past them.
+export const ATTACKER_INBOX_RULE_NAMES = ['RSS Feeds', '.', 'Archive sync'];
+export const ATTACKER_FORWARD_DOMAINS = [
+  'protonmail.com',
+  'mail-archive-sync.example.net',
+];
+
+// The authorised counterpart: a finance team's supplier invoices auto-forwarded to the
+// accounts-payable automation vendor, set up by IT under a change ticket. Same detection
+// signature — an external forward — and entirely legitimate.
+export const AP_AUTOMATION_FORWARD_ADDRESS =
+  'invoices@ap-automation-partner.example.net';
+export const IT_CHANGE_ACTORS = [
+  'Marcus Webb (IT Operations)',
+  'Priya Raman (Service Desk)',
+];
+
+// A signed, internal IT script: the benign PowerShell an analyst meets every day on admin
+// workstations. Parent is explorer.exe (a person ran it), not an Office application.
+export const BENIGN_ADMIN_SCRIPT_COMMAND_LINE =
+  'powershell.exe -NoProfile -ExecutionPolicy AllSigned -File "\\\\fs01.contoso-finance.example.com\\it$\\scripts\\Get-PatchCompliance.ps1" -Report';

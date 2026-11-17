@@ -1,8 +1,11 @@
 import type { Alert, MitreTechnique } from '@prisma/client';
 
-// §18.3: excludes isFalsePositiveByDesign and detectionRuleId (internal-only, §8.6).
-// The alert's own MITRE technique IS shown — that's normal triage information, distinct
-// from the ground-truth flags on raw event rows (§16.5).
+// §18.3: excludes isFalsePositiveByDesign, detectionRuleId and relatedAlertId (internal-only,
+// §8.6). relatedAlertId is the generator's own correlation grouping re-keyed by alert id — which
+// alerts belong to the same chain is exactly what a student is asked to work out in triage, so
+// handing it over made correlation a reveal rather than a skill. It is shown once the session
+// is scored, in the debrief. The alert's own MITRE technique IS shown — that's normal triage
+// information, distinct from the ground-truth flags on raw event rows (§16.5).
 export interface StudentAlertDto {
   id: string;
   title: string;
@@ -13,7 +16,6 @@ export interface StudentAlertDto {
   primaryEntityType: string;
   primaryEntityId: string;
   mitreTechnique: { id: string; techniqueId: string; name: string } | null;
-  relatedAlertId: string | null;
   dedupCount: number;
   firstSeenAt: Date;
   lastSeenAt: Date;
@@ -38,7 +40,6 @@ export function toStudentAlertDto(
           name: alert.mitreTechnique.name,
         }
       : null,
-    relatedAlertId: alert.relatedAlertId,
     dedupCount: alert.dedupCount,
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,

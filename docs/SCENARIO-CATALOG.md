@@ -3,7 +3,7 @@
 **As-built.** Generated from `apps/api/prisma/seed.ts`, which is the source of truth — a
 scenario exists because it is in that file, and `npm run prisma:seed` publishes it.
 
-30 scenarios across 8 categories. Every one is a complete narrative: a seeded population of
+36 scenarios across 8 categories. Every one is a complete narrative: a seeded population of
 identities and devices, an authored kill chain, decoy activity to distinguish it from, and a
 rubric the Scoring Engine grades against.
 
@@ -25,13 +25,13 @@ sent to a browser — see [PLATFORM.md](PLATFORM.md#the-ground-truth-boundary).
 
 | Level | Count | What changes |
 | --- | ---: | --- |
-| Beginner | 6 | Short chains, less decoy noise, the signal is findable once you look in the right portal |
-| Intermediate | 10 | More entities, more distractors, usually spans two portals |
-| Advanced | 14 | Long chains, heavy noise, cross-portal correlation required |
+| Beginner | 8 | Short chains, less decoy noise, the signal is findable once you look in the right portal |
+| Intermediate | 13 | More entities, more distractors, usually spans two portals |
+| Advanced | 15 | Long chains, heavy noise, cross-portal correlation required |
 
 ## Not every scenario is an attack
 
-Three scenarios are deliberately **not** true positives. They exist because an analyst who
+Four scenarios are deliberately **not** true positives. They exist because an analyst who
 escalates everything is not doing the job, and a training set of nothing but real attacks
 teaches exactly that reflex.
 
@@ -40,6 +40,7 @@ teaches exactly that reflex.
 | `monitoring-agent-flagged-as-webshell` | False positive | An uptime monitor hitting a health-check script |
 | `batch-export-mistaken-for-enumeration` | False positive | A scheduled reporting job reading many records |
 | `vendor-mail-spf-failure-after-migration` | Benign positive | A genuine vendor whose SPF broke after a mail migration |
+| `helpdesk-reset-after-travel` | Benign positive | A traveller who lost their phone and re-registered MFA after a verified service-desk reset |
 
 The distinction between the two verdicts matters: a **false positive** is activity that was
 never suspicious once understood; a **benign positive** is real, correctly-detected activity
@@ -49,32 +50,38 @@ that happens to be authorised. Grading treats them as different answers.
 
 <!-- BEGIN GENERATED: scenario-tables -->
 
-### Identity (7)
+### Identity (10)
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
+| **Identity — New MFA Method After a Foreign Sign-in**<br>`helpdesk-reset-after-travel` | beginner | 15 | Benign positive | — *(no attack to tag)* |
 | **Identity — Sustained Password Guessing Against One Account**<br>`brute-force-single-account` | beginner | 20 | True positive | `T1110.001` |
 | **Impossible Travel**<br>`impossible-travel` | beginner | 15 | True positive | `T1078` |
 | **Identity — Breach Credentials Replayed Against Staff Accounts**<br>`credential-stuffing-reused-passwords` | intermediate | 25 | True positive | `T1110.004`, `T1078` |
+| **Identity — MFA Fatigue, Then Quiet Persistence**<br>`quiet-account-takeover` | intermediate | 30 | True positive | `T1621`, `T1078`, `T1098.005`, `T1114.003` |
+| **Identity — The Real One in a Noisy Queue**<br>`noisy-tuesday` | intermediate | 30 | True positive | `T1566.002`, `T1078`, `T1098.005` |
 | **Legacy Authentication Bypassing Enforced MFA**<br>`legacy-auth-mfa-bypass` | intermediate | 20 | True positive | `T1078`, `T1114.002` |
 | **MFA Fatigue — Push Bombing**<br>`mfa-fatigue-push-bombing` | intermediate | 20 | True positive | `T1621`, `T1078` |
 | **Password Spraying Campaign**<br>`password-spraying-campaign` | intermediate | 25 | True positive | `T1110.003`, `T1078` |
 | **Identity — Account Added Itself to an Administrator Group**<br>`privilege-escalation-group-membership` | advanced | 30 | True positive | `T1098`, `T1078` |
 
-### Email (3)
+### Email (4)
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
+| **Email — Monday Phish Queue: Who Clicked?**<br>`monday-phish-queue` | beginner | 25 | True positive | `T1566.002`, `T1078`, `T1114.003` |
 | **Email — SPF Failure on a Genuine Vendor Notification**<br>`vendor-mail-spf-failure-after-migration` | beginner | 20 | Benign positive | — *(no attack to tag)* |
 | **Phishing → Stolen Credentials → Risky Sign-in**<br>`phishing-stolen-credentials` | beginner | 30 | True positive | `T1566.002`, `T1078` |
 | **Business Email Compromise — Executive Wire Transfer Fraud**<br>`bec-wire-transfer-fraud` | intermediate | 20 | True positive | `T1656` |
 
-### Endpoint (3)
+### Endpoint (5)
 
 | Scenario | Difficulty | Mins | Correct verdict | Required techniques |
 | --- | --- | ---: | --- | --- |
+| **Endpoint — From Payroll Attachment to Stolen Session**<br>`phish-to-foothold` | intermediate | 35 | True positive | `T1566.001`, `T1204.002`, `T1071.001`, `T1078` |
 | **Credential Dumping — LSASS Memory Access via comsvcs.dll**<br>`credential-dumping-lsass-comsvcs` | advanced | 25 | True positive | `T1003.001`, `T1071.001` |
 | **Endpoint — Kerberoasting for Service Account Compromise**<br>`kerberoasting-service-account-pivot` | advanced | 30 | True positive | `T1558.003`, `T1078.002` |
+| **Identity to Endpoint — Password Spray to Credential Dump**<br>`spray-to-dump` | advanced | 35 | True positive | `T1110.003`, `T1078`, `T1021.002`, `T1003.001` |
 | **Malware Execution via Email Attachment**<br>`malware-execution-via-attachment` | advanced | 35 | True positive | `T1566.001`, `T1204.002`, `T1071.001` |
 
 ### Malware (3)
@@ -123,7 +130,7 @@ that happens to be authorised. Grading treats them as different answers.
 
 ## MITRE coverage
 
-31 distinct ATT&CK techniques are required across the catalogue. Technique tagging is graded on
+33 distinct ATT&CK techniques are required across the catalogue. Technique tagging is graded on
 both precision and recall — tagging every plausible technique to cover yourself scores worse
 than tagging only what the evidence supports.
 

@@ -102,7 +102,7 @@ describe('ScenarioBuilderService.listTemplates', () => {
   it('returns the real, fixed template catalog', () => {
     const { service } = buildService();
     const templates = service.listTemplates();
-    expect(templates.length).toBe(52);
+    expect(templates.length).toBe(57);
     expect(
       templates.find((t) => t.id === 'impossible_travel_first_signin_v1'),
     ).toBeTruthy();
@@ -130,6 +130,60 @@ describe('ScenarioBuilderService.validate', () => {
     def.kill_chain[0].entity_ref = 'nobody';
     const errors = await service.validate(def);
     expect(errors.some((e) => e.includes('nobody'))).toBe(true);
+  });
+
+  // §12.4 component 4 is now real, so a rubric can only expect what a student can do and
+  // the scorer can resolve: a real Response-panel action, against a ref in the population.
+  it('rejects a containment expectation naming an action the Response panel does not offer', async () => {
+    const { service } = buildService();
+    const def = validDefinition();
+    def.scoring_rubric.containment_expectations = [
+      { action: 'nuke_from_orbit', target: 'victim_1' },
+    ];
+    const errors = await service.validate(def);
+    expect(errors.some((e) => e.includes('nuke_from_orbit'))).toBe(true);
+  });
+
+  it('rejects a containment expectation whose target is not in the population', async () => {
+    const { service } = buildService();
+    const def = validDefinition();
+    def.scoring_rubric.containment_expectations = [
+      { action: 'revoke_tokens', target: 'attacker_laptop' },
+    ];
+    const errors = await service.validate(def);
+    expect(errors.some((e) => e.includes('attacker_laptop'))).toBe(true);
+  });
+
+  it('accepts a containment expectation against a narrative device as well as an identity', async () => {
+    const { service } = buildService();
+    const def = validDefinition();
+    def.population.narrative_devices = [
+      {
+        ref: 'victim_laptop',
+        attributes: { hostname: 'LGL-WKS-02', os_platform: 'windows' },
+      },
+    ];
+    def.scoring_rubric.containment_expectations = [
+      { action: 'isolate_device', target: 'victim_laptop' },
+      { action: 'force_password_reset', target: 'victim_1' },
+    ];
+    const errors = await service.validate(def);
+    expect(errors).toEqual([]);
+  });
+
+  it('rejects containment on a scenario whose correct verdict is not an attack', async () => {
+    // The right response to a benign finding is no action; expecting one would grade the
+    // student against the opposite of what the investigation checklist teaches.
+    const { service } = buildService();
+    const def = validDefinition();
+    def.scoring_rubric.required_verdict = 'benign_positive';
+    def.scoring_rubric.containment_expectations = [
+      { action: 'revoke_tokens', target: 'victim_1' },
+    ];
+    const errors = await service.validate(def);
+    expect(errors.some((e) => e.includes('cannot expect containment'))).toBe(
+      true,
+    );
   });
 
   it('requires a device_ref for a device-scoped template', async () => {
@@ -306,12 +360,12 @@ describe('ScenarioBuilderService.create', () => {
     expect(result.slug).toBe('new-impossible-travel');
   });
 
-  // Regression guard for the second silent-crash bug this feature shipped with:
-  // ScoringService reads `scoring_rubric.containment_expectations.length` unconditionally, so a
-  // stored definition missing that key throws inside the scoring job (session stuck at
-  // "submitted" forever, no visible error) exactly the way a missing `attributes` wrapper threw
-  // inside telemetry generation. The author never has to supply this — it's always empty in
-  // every real scenario — but the *stored* definition must still have the key.
+  // Regression guard for a silent-crash bug this feature once shipped with: the Scoring Engine
+  // reads `scoring_rubric.containment_expectations` as a list, so a stored definition missing
+  // the key threw inside the scoring job (session stuck at "submitted" forever, no visible
+  // error) exactly the way a missing `attributes` wrapper threw inside telemetry generation.
+  // An author may omit it — that means "expect no containment" — but the *stored* definition
+  // must still carry the key.
   it('completes the stored definition with containment_expectations and distractor_pool even though the author never supplies them', async () => {
     const { service, prisma } = buildService();
 
@@ -327,6 +381,27 @@ describe('ScenarioBuilderService.create', () => {
     };
     expect(stored.scoring_rubric.containment_expectations).toEqual([]);
     expect(stored.distractor_pool).toEqual([]);
+  });
+
+  it('stores the containment expectations an author did supply, unchanged', async () => {
+    const { service, prisma } = buildService();
+    const dto = scenarioDto();
+    dto.groundTruthDefinition.scoring_rubric.containment_expectations = [
+      { action: 'revoke_tokens', target: 'victim_1' },
+    ];
+
+    await service.create(buildUser(), dto);
+
+    const call = (prisma.scenarioVersion.create as jest.Mock).mock
+      .calls[0][0] as {
+      data: { groundTruthDefinition: unknown };
+    };
+    const stored = call.data.groundTruthDefinition as {
+      scoring_rubric: { containment_expectations: unknown[] };
+    };
+    expect(stored.scoring_rubric.containment_expectations).toEqual([
+      { action: 'revoke_tokens', target: 'victim_1' },
+    ]);
   });
 });
 

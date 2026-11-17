@@ -79,8 +79,17 @@ export interface AuthoredGroundTruthDefinition {
     required_techniques: string[];
     required_verdict: IncidentVerdict;
     min_evidence_items: number;
+    // Optional for authors: a scenario with none expects no containment, and the Scoring
+    // Engine then treats any response action as over-containment (§12.4). Each entry names an
+    // action the Response panel actually offers and a population ref it should be taken against.
+    containment_expectations?: AuthoredContainmentExpectation[];
   };
   hints: AuthoredHint[];
+}
+
+export interface AuthoredContainmentExpectation {
+  action: string;
+  target: string;
 }
 
 const SCENARIO_CATEGORIES: ScenarioCategory[] = [

@@ -84,10 +84,12 @@ export function ScenarioBriefing({
               Your objective
             </div>
             <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
-              Work the telemetry, pin what actually proves your conclusion, and take any containment
-              the evidence calls for. You'll research indicators, document your reasoning, and close
-              with a verdict you can defend — evidence precision and technique accuracy are both
-              scored, so noise costs you as much as a missed signal.
+              Triage the alerts, work the telemetry, pin what actually proves your conclusion, and
+              take any containment the evidence calls for — against the specific account or device.
+              You'll research indicators, document your reasoning, and close with a verdict you can
+              defend. Triage, evidence precision, technique accuracy and containment are all scored,
+              so noise costs you as much as a missed signal, and action on a benign finding costs as
+              much as inaction on a real one.
             </p>
           </div>
         </div>
@@ -103,10 +105,12 @@ export function ScenarioBriefing({
               How this investigation is structured
             </div>
             <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
-              You'll move through this incident one stage at a time — investigate the telemetry,
-              build your evidence, take response action if warranted, research indicators, document
-              what you found, then review and submit a verdict. You can move back and forth between
-              stages freely until you submit; nothing here is a timed quiz.
+              You'll move through this incident one stage at a time — start in the alert queue and
+              decide which alerts are this incident, then investigate the telemetry, build your
+              evidence, take response action against the right accounts and devices if warranted,
+              research indicators, document what you found, and review and submit a verdict. You can
+              move back and forth between stages freely until you submit; nothing here is a timed
+              quiz.
             </p>
           </div>
         </div>

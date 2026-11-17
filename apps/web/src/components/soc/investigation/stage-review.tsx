@@ -19,6 +19,8 @@ export function StageReview({
   sessionId,
   incidentId,
   locked,
+  alertsDecided,
+  alertsTotal,
   evidenceCount,
   timelineCount,
   actionsCount,
@@ -29,6 +31,8 @@ export function StageReview({
   sessionId: string | undefined;
   incidentId: string | undefined;
   locked: boolean;
+  alertsDecided: number;
+  alertsTotal: number;
   evidenceCount: number;
   timelineCount: number;
   actionsCount: number;
@@ -36,7 +40,17 @@ export function StageReview({
   hintsUsed: number;
   onNavigate: (stage: Stage) => void;
 }) {
-  const summaryRows: { label: string; count: number; stage: Stage }[] = [
+  const undecided = alertsTotal - alertsDecided;
+  const summaryRows: { label: string; count: number | string; stage: Stage; warn?: string }[] = [
+    {
+      label: "Alerts triaged",
+      count: `${alertsDecided} of ${alertsTotal}`,
+      stage: "triage",
+      warn:
+        undecided > 0
+          ? `${undecided} ${undecided === 1 ? "alert has" : "alerts have"} no decision yet — each one left undecided counts against triage accuracy.`
+          : undefined,
+    },
     { label: "Evidence pinned", count: evidenceCount, stage: "evidence" },
     { label: "Timeline entries", count: timelineCount, stage: "evidence" },
     { label: "Response actions taken", count: actionsCount, stage: "response" },
@@ -57,17 +71,22 @@ export function StageReview({
       <Panel title="Investigation summary" className="mt-4">
         <ul className="flex flex-col divide-y divide-border">
           {summaryRows.map((r) => (
-            <li key={r.label} className="flex items-center justify-between py-2.5 text-[12.5px]">
-              <span className="text-secondary">{r.label}</span>
-              <div className="flex items-center gap-3">
-                <span className="tabular-nums font-medium">{r.count}</span>
-                <button
-                  onClick={() => onNavigate(r.stage)}
-                  className="text-[11px] text-[color:var(--info)] hover:underline"
-                >
-                  Review
-                </button>
+            <li key={r.label} className="py-2.5 text-[12.5px]">
+              <div className="flex items-center justify-between">
+                <span className="text-secondary">{r.label}</span>
+                <div className="flex items-center gap-3">
+                  <span className="tabular-nums font-medium">{r.count}</span>
+                  <button
+                    onClick={() => onNavigate(r.stage)}
+                    className="text-[11px] text-[color:var(--info)] hover:underline"
+                  >
+                    Review
+                  </button>
+                </div>
               </div>
+              {r.warn && !locked && (
+                <p className="mt-1 text-[11px] text-[color:var(--warning)]">{r.warn}</p>
+              )}
             </li>
           ))}
         </ul>

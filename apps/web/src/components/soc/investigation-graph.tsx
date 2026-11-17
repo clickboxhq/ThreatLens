@@ -29,6 +29,8 @@ const LANE_HEIGHT = 110;
 const LANE_LABEL_X = 24;
 const EVENT_X_START = 220;
 const EVENT_X_SPAN = 1400;
+// An event node is w-44 (176px); this leaves a visible gap between neighbours in one lane.
+const EVENT_MIN_GAP = 196;
 
 type EntityNodeData = { label: string; entityType: TimelineEntityType; eventCount: number };
 type EventNodeData = { label: string; time: string; pinned: boolean };
@@ -77,8 +79,10 @@ const nodeTypes = { entity: EntityNode, event: EventNode };
  * swimlane layout, one lane per entity (identity/device/mailbox), events placed left-to-right by
  * time — this reads more like an actual attack-chain reconstruction than a generic force-directed
  * node graph would, and it's what the timeline panel right next to it is already teaching the
- * Student to build by hand. Cross-lane edges come from TimelineItemDto.relatedItemIds — the same
- * correlation grouping the backend already computes, now drawn instead of only listed.
+ * Student to build by hand. The animated edges come from TimelineItemDto.relatedItemIds, which
+ * is now the Student's own correlation: two events are joined when an alert they escalated fired
+ * on both. It used to be the generator's hidden grouping, which drew the answer before the
+ * Student had worked it out; the real grouping is shown in the debrief once the case is scored.
  *
  * Threat-intel lookups aren't folded in yet — there's no clean way to join a free-text indicator
  * value to a specific timeline event without guessing, and a graph node that pretends to connect
@@ -144,13 +148,21 @@ export function InvestigationGraph({
       });
     }
 
+    // Pure time placement stacked events on top of each other whenever two in the same lane
+    // were close together — a phishing email and the sign-in it led to 45 minutes later sat
+    // in one unreadable heap, in exactly the scenario the graph exists to explain. Order is
+    // still time order; each event is just guaranteed to clear the one before it in its lane.
+    const lastXByLane = new Map<number, number>();
     for (const item of sorted) {
       const lane = laneIndexByEntity.get(item.entityId)!;
       const t = new Date(item.occurredAt).getTime();
+      const prev = lastXByLane.get(lane);
+      const x = prev === undefined ? xForTime(t) : Math.max(xForTime(t), prev + EVENT_MIN_GAP);
+      lastXByLane.set(lane, x);
       nodes.push({
         id: `event:${item.id}`,
         type: "event",
-        position: { x: xForTime(t), y: lane * LANE_HEIGHT + 10 },
+        position: { x, y: lane * LANE_HEIGHT + 10 },
         data: {
           label: item.summary,
           time: new Date(item.occurredAt).toLocaleTimeString(undefined, {
@@ -201,22 +213,33 @@ export function InvestigationGraph({
   }
 
   return (
-    <div className="h-[480px] w-full overflow-hidden rounded-md border border-border">
-      <ReactFlowProvider>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.15 }}
-          proOptions={{ hideAttribution: true }}
-          colorMode="system"
-        >
-          <Background gap={20} size={1} />
-          <Controls showInteractive={false} />
-          <MiniMap pannable zoomable className="!bg-card" />
-        </ReactFlow>
-      </ReactFlowProvider>
+    <div className="w-full overflow-hidden rounded-md border border-border">
+      <div className="h-[480px]">
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.15 }}
+            // Events span a fixed 1,400px of time axis. At React Flow's default 0.5 minimum,
+            // fitView could not shrink that into a laptop-width panel and cut the entity lanes
+            // off the left edge — the one column that says whose events these are.
+            minZoom={0.2}
+            proOptions={{ hideAttribution: true }}
+            colorMode="system"
+          >
+            <Background gap={20} size={1} />
+            <Controls showInteractive={false} />
+            <MiniMap pannable zoomable className="!bg-card" />
+          </ReactFlow>
+        </ReactFlowProvider>
+      </div>
+      <p className="border-t border-border bg-card/60 px-3 py-2 text-[11px] text-muted-foreground">
+        Each lane is one account or device. An animated line joins two events when an alert you
+        escalated fired on both — escalate alerts in Triage to connect them. Events with no line
+        between them are still on your timeline; nothing here is hidden from you.
+      </p>
     </div>
   );
 }
