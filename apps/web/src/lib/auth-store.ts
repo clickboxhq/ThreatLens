@@ -51,8 +51,9 @@ type Session = { accessToken: string; refreshToken: string; expiresIn: number; u
 type LoginOutcome =
   | { mfaRequired: false; user: AuthUser }
   | { mfaRequired: true; mfaChallengeId: string }
-  // A privileged account that has not enrolled MFA yet. Login cannot complete until it does,
-  // but the challenge lets it enrol without a token — see auth.service.ts's mfaEnrolSetup.
+  // An account that has not enrolled MFA yet — every new account, straight after signup, and
+  // any older one on its next sign-in. Login cannot complete until it does, but the challenge
+  // lets it enrol without a token — see auth.service.ts's mfaEnrolSetup.
   | { mfaEnrolmentRequired: true; enrolmentChallengeId: string };
 
 const USER_STORAGE_KEY = "threatlens_user";
@@ -78,7 +79,7 @@ interface AuthState {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<LoginOutcome>;
   completeMfaLogin: (mfaChallengeId: string, code: string) => Promise<AuthUser>;
-  /** Start enrolment for an account blocked at login pending mandatory MFA. */
+  /** Start enrolment for an account blocked at login (or signup) pending mandatory MFA. */
   startMfaEnrolment: (
     enrolmentChallengeId: string,
   ) => Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }>;
@@ -87,12 +88,14 @@ interface AuthState {
     enrolmentChallengeId: string,
     code: string,
   ) => Promise<{ user: AuthUser; recoveryCodes: string[] }>;
+  /** Creates the account and signs in — which, with MFA mandatory, means handing back the
+   * enrolment challenge the signup page walks the new user through. */
   signup: (
     email: string,
     password: string,
     displayName: string,
     role?: "student" | "instructor",
-  ) => Promise<{ userId: string; emailVerificationRequired: boolean }>;
+  ) => Promise<LoginOutcome>;
   logout: () => void;
   markEmailVerified: () => void;
   requestEmailVerification: () => Promise<void>;
@@ -122,7 +125,7 @@ function applySession(result: Session): void {
 // happens client-side, via useAuthHydration() below, after mount — the same
 // useHydrated()/HydrationBoundary pattern this app already uses for its other
 // Zustand/localStorage-backed state.
-export const useAuthStore = create<AuthState>()(() => ({
+export const useAuthStore = create<AuthState>()((_set, get) => ({
   user: null,
 
   async login(email, password) {
@@ -168,14 +171,16 @@ export const useAuthStore = create<AuthState>()(() => ({
   },
 
   async signup(email, password, displayName, role) {
-    const result = await apiClient.post<{ userId: string; emailVerificationRequired: boolean }>(
-      "/auth/signup",
-      { email, password, displayName, role },
-    );
-    // SOCVerse issues no session on signup itself (§15.1: email verification is separate from
-    // being able to log in at all) — log in right after so the caller lands authenticated.
-    await useAuthStore.getState().login(email, password);
-    return result;
+    await apiClient.post<{ userId: string; emailVerificationRequired: boolean }>("/auth/signup", {
+      email,
+      password,
+      displayName,
+      role,
+    });
+    // The API issues no session on signup itself (§15.1: email verification is separate from
+    // being able to log in at all) — log in right after. Two-factor is mandatory, so for a new
+    // account that login is an enrolment challenge, not a session: the caller takes it from here.
+    return get().login(email, password);
   },
 
   logout() {
@@ -261,12 +266,26 @@ export function useAuthHydration(): void {
     if (persisted && getAccessToken()) {
       useAuthStore.setState({ user: persisted });
     }
-    return onTokensChanged(() => {
+    // Another tab changed the cached user. The common case: the verification link opens in a
+    // new tab, which marks the email verified there — and the tab the person came from kept
+    // showing "verify your email" until they signed out and back in. Every tab now picks up
+    // what any tab learns. (The storage event never fires in the tab that made the change.)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== USER_STORAGE_KEY || !e.newValue || !getAccessToken()) return;
+      const next = readPersistedUser();
+      if (next) useAuthStore.setState({ user: next });
+    };
+    window.addEventListener("storage", onStorage);
+    const offTokens = onTokensChanged(() => {
       if (!getAccessToken()) {
         persistUser(null);
         useAuthStore.setState({ user: null });
       }
     });
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      offTokens();
+    };
   }, []);
 }
 

@@ -14,6 +14,12 @@ import { EmailService } from '../../common/email/email.service';
 import { AppException } from '../../common/exceptions/app-exception';
 import type { User } from '@prisma/client';
 
+// These tests hash real argon2id passwords — deliberately slow — and, since MFA became
+// mandatory, many also enrol or verify a TOTP before they reach what they test. Alone they
+// finish well inside Jest's 5s default; in a full parallel run on a busy machine a few did
+// not, and failed as timeouts rather than on anything they assert.
+jest.setTimeout(30_000);
+
 const TEST_IP = '203.0.113.10';
 
 function user(overrides: Partial<User> = {}): User {
@@ -385,25 +391,41 @@ describe('AuthService profile persistence', () => {
     professionalRole: 'SOC Analyst',
   } as unknown as Partial<User>;
 
+  // A password alone never issues a session now that MFA is mandatory, so signing in means
+  // login() then mfaVerify() — and mfaVerify is what hands the client its user.
   async function loginWith(overrides: Partial<Record<string, unknown>>) {
     const argon2 = await import('argon2');
     const passwordHash = await argon2.hash('correct horse battery staple', {
       type: argon2.argon2id,
     });
-    const u = user({ passwordHash, ...overrides });
+    const secret = generateSecret();
+    const u = user({
+      passwordHash,
+      mfaEnabled: true,
+      mfaSecret: secret,
+      ...overrides,
+    });
     const { service } = buildService(new Map([[u.id, u]]));
-    return service.login(
+    const challenge = await service.login(
       { email: u.email, password: 'correct horse battery staple' },
+      TEST_IP,
+    );
+    if (!('mfaRequired' in challenge)) {
+      throw new Error('expected an MFA challenge');
+    }
+    return service.mfaVerify(
+      challenge.mfaChallengeId,
+      await generateTotp({ secret }),
       TEST_IP,
     );
   }
 
-  // The client caches whatever login returns. When that was a four-field subset, a signed-in
-  // user had no avatar and no first/last name, so the app rendered initials and the signup
-  // displayName — a profile that looked saved until you signed out and back in.
-  it('login() returns the avatar and profile fields, not just id/name/role', async () => {
+  // The client caches whatever signing in returns. When that was a four-field subset, a
+  // signed-in user had no avatar and no first/last name, so the app rendered initials and the
+  // signup displayName — a profile that looked saved until you signed out and back in.
+  it('signing in returns the avatar and profile fields, not just id/name/role', async () => {
     const result = await loginWith(PROFILE);
-    expect('user' in result && result.user).toMatchObject({
+    expect(result.user).toMatchObject({
       firstName: 'Danielle',
       lastName: 'Okonkwo',
       avatarType: 'upload',
@@ -412,25 +434,38 @@ describe('AuthService profile persistence', () => {
     });
   });
 
-  it('login() and getMe() agree on the shape they return', async () => {
+  it('signing in, finishing enrolment and getMe() agree on the user they return', async () => {
     // They drifted apart once already; asserting the key sets match is what stops it silently
-    // happening again.
+    // happening again. Enrolment is in here because it once returned no user at all, which the
+    // web client stored as-is — every new account would have started its first session with
+    // nobody signed in.
+    const signedIn = await loginWith(PROFILE);
+
     const argon2 = await import('argon2');
     const passwordHash = await argon2.hash('correct horse battery staple', {
       type: argon2.argon2id,
     });
-    const u = user({ passwordHash, ...PROFILE });
-    const { service } = buildService(new Map([[u.id, u]]));
-
-    const result = await service.login(
-      { email: u.email, password: 'correct horse battery staple' },
+    const fresh = user({ passwordHash, ...PROFILE });
+    const users = new Map([[fresh.id, fresh]]);
+    const { service } = buildService(users);
+    const login = await service.login(
+      { email: fresh.email, password: 'correct horse battery staple' },
       TEST_IP,
     );
-    const me = await service.getMe(u.id);
-
-    expect('user' in result && Object.keys(result.user).sort()).toEqual(
-      Object.keys(me).sort(),
+    if (!('enrolmentChallengeId' in login)) {
+      throw new Error('expected an enrolment challenge');
+    }
+    await service.mfaEnrolSetup(login.enrolmentChallengeId);
+    const enrolled = await service.mfaEnrolComplete(
+      login.enrolmentChallengeId,
+      await generateTotp({ secret: users.get(fresh.id)!.mfaSecret! }),
+      TEST_IP,
     );
+    const me = await service.getMe(fresh.id);
+
+    const keys = Object.keys(me).sort();
+    expect(Object.keys(signedIn.user).sort()).toEqual(keys);
+    expect(Object.keys(enrolled.user).sort()).toEqual(keys);
   });
 
   describe('updateProfile keeps displayName in step with the name fields', () => {
@@ -498,22 +533,29 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     expect('mfaRequired' in result && result.mfaRequired).toBe(true);
   });
 
-  it('login() issues tokens directly for an account without MFA', async () => {
-    const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', {
-      type: argon2.argon2id,
-    });
-    const plain = user({ passwordHash });
-    const users = new Map([[plain.id, plain]]);
-    const { service } = buildService(users);
+  // MFA is mandatory for every account, students included: a brand-new account reaches this
+  // straight after signup, and must enrol before it gets a session at all.
+  it.each(['student', 'instructor'] as const)(
+    'login() issues no tokens to a %s without MFA, handing back an enrolment challenge',
+    async (role) => {
+      const argon2 = await import('argon2');
+      const passwordHash = await argon2.hash('correct horse battery staple', {
+        type: argon2.argon2id,
+      });
+      const plain = user({ passwordHash, role });
+      const users = new Map([[plain.id, plain]]);
+      const { service } = buildService(users);
 
-    const result = await service.login(
-      { email: plain.email, password: 'correct horse battery staple' },
-      TEST_IP,
-    );
-    expect('mfaRequired' in result).toBe(false);
-    expect('accessToken' in result && result.accessToken).toBeTruthy();
-  });
+      const result = await service.login(
+        { email: plain.email, password: 'correct horse battery staple' },
+        TEST_IP,
+      );
+      expect('accessToken' in result).toBe(false);
+      expect(
+        'enrolmentChallengeId' in result && result.enrolmentChallengeId,
+      ).toBeTruthy();
+    },
+  );
 
   // Deleting a user set deletedAt and bumped sessionVersion, which ended the sessions they
   // already had — and nothing stopped them signing straight back in. A platform admin
@@ -631,64 +673,15 @@ describe('AuthService MFA (§15.1, §16.2)', () => {
     ).rejects.toThrow(AppException);
   });
 
-  it('mfaDisable() is blocked for org_admin and platform_admin (§15.2 mandatory MFA)', async () => {
-    const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', {
-      type: argon2.argon2id,
+  // Switching MFA off would only send the account back through enrolment at its next sign-in,
+  // so it is refused outright, for every role. Recovery from a lost authenticator is an admin
+  // reset or the break-glass CLI, both of which need a human.
+  it('mfaDisable() is refused for every account', async () => {
+    const { service } = buildService(new Map());
+    await expect(service.mfaDisable()).rejects.toMatchObject({
+      status: 403,
+      code: 'MFA_MANDATORY_FOR_ROLE',
     });
-    const admin = user({
-      role: 'org_admin',
-      mfaEnabled: true,
-      mfaSecret: generateSecret(),
-      passwordHash,
-    });
-    const users = new Map([[admin.id, admin]]);
-    const { service } = buildService(users);
-
-    await expect(
-      service.mfaDisable(admin.id, 'correct horse battery staple'),
-    ).rejects.toThrow(AppException);
-    expect(users.get(admin.id)!.mfaEnabled).toBe(true);
-  });
-
-  it('mfaDisable() succeeds for a student with the correct password and clears the secret and recovery codes', async () => {
-    const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', {
-      type: argon2.argon2id,
-    });
-    const enrolled = user({
-      mfaEnabled: true,
-      mfaSecret: generateSecret(),
-      mfaRecoveryCodesHash: ['deadbeef'],
-      passwordHash,
-    });
-    const users = new Map([[enrolled.id, enrolled]]);
-    const { service } = buildService(users);
-
-    await service.mfaDisable(enrolled.id, 'correct horse battery staple');
-    const updated = users.get(enrolled.id)!;
-    expect(updated.mfaEnabled).toBe(false);
-    expect(updated.mfaSecret).toBeNull();
-    expect(updated.mfaRecoveryCodesHash).toHaveLength(0);
-  });
-
-  it('mfaDisable() rejects an incorrect password', async () => {
-    const argon2 = await import('argon2');
-    const passwordHash = await argon2.hash('correct horse battery staple', {
-      type: argon2.argon2id,
-    });
-    const enrolled = user({
-      mfaEnabled: true,
-      mfaSecret: generateSecret(),
-      passwordHash,
-    });
-    const users = new Map([[enrolled.id, enrolled]]);
-    const { service } = buildService(users);
-
-    await expect(
-      service.mfaDisable(enrolled.id, 'wrong password'),
-    ).rejects.toThrow(AppException);
-    expect(users.get(enrolled.id)!.mfaEnabled).toBe(true);
   });
 });
 
@@ -1138,7 +1131,7 @@ describe('AuthService audit logging (§6.22)', () => {
     );
   }
 
-  it('records a `login` entry for a successful non-MFA login and nothing for password-reset requests', async () => {
+  it('records no `login` for a password alone, and records it once enrolment completes the sign-in', async () => {
     const passwordHash = await argon2.hash('correct horse battery staple', {
       type: argon2.argon2id,
     });
@@ -1146,11 +1139,25 @@ describe('AuthService audit logging (§6.22)', () => {
     const users = new Map([[target.id, target]]);
     const { service, auditLog } = buildService(users);
 
-    await service.login(
+    const login = await service.login(
       { email: target.email, password: 'correct horse battery staple' },
       TEST_IP,
     );
-    expect(actionsRecorded(auditLog)).toEqual(['login']);
+    expect(actionsRecorded(auditLog)).toEqual([]);
+
+    const challengeId =
+      'enrolmentChallengeId' in login ? login.enrolmentChallengeId : '';
+    await service.mfaEnrolSetup(challengeId);
+    await service.mfaEnrolComplete(
+      challengeId,
+      await generateTotp({ secret: users.get(target.id)!.mfaSecret! }),
+      TEST_IP,
+    );
+    expect(actionsRecorded(auditLog)).toEqual([
+      'mfa_enabled',
+      'auth.mfa_enrolment_completed',
+      'login',
+    ]);
   });
 
   it('records `login_failed` on a bad password, and `account_locked` on the failure that crosses the threshold', async () => {
@@ -1188,7 +1195,7 @@ describe('AuthService audit logging (§6.22)', () => {
     expect(actionsRecorded(auditLog)).toEqual(['login']);
   });
 
-  it('records `mfa_enabled` and `mfa_disabled`', async () => {
+  it('records `mfa_enabled`', async () => {
     const passwordHash = await argon2.hash('correct horse battery staple', {
       type: argon2.argon2id,
     });
@@ -1200,9 +1207,6 @@ describe('AuthService audit logging (§6.22)', () => {
     const validCode = await generateTotp({ secret: setup.secret });
     await service.mfaEnable(target.id, validCode);
     expect(actionsRecorded(auditLog)).toEqual(['mfa_enabled']);
-
-    await service.mfaDisable(target.id, 'correct horse battery staple');
-    expect(actionsRecorded(auditLog)).toEqual(['mfa_enabled', 'mfa_disabled']);
   });
 
   it('records `password_reset` on a completed reset', async () => {
@@ -1241,7 +1245,9 @@ describe('AuthService audit logging (§6.22)', () => {
 // prevented *disabling* it — an admin who never enrolled simply logged in with a password
 // forever. These cover the enforcement and, just as importantly, the escape hatch that stops
 // the enforcement becoming a lockout.
-describe('mandatory MFA enrolment for privileged roles', () => {
+// MFA has since become mandatory for every account, not just these two roles — the student
+// and instructor cases are in the MFA describe above; the admin cases stay here.
+describe('mandatory MFA enrolment', () => {
   const PASSWORD = 'correct horse battery staple';
 
   async function privileged(role: 'platform_admin' | 'org_admin') {
@@ -1278,21 +1284,6 @@ describe('mandatory MFA enrolment for privileged roles', () => {
       TEST_IP,
     );
     expect('mfaEnrolmentRequired' in result).toBe(true);
-  });
-
-  it('leaves unprivileged accounts entirely alone', async () => {
-    // Students and instructors must keep logging in with a password only.
-    const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
-    for (const role of ['student', 'instructor'] as const) {
-      const learner = user({ role, mfaEnabled: false, passwordHash });
-      const { service } = buildService(new Map([[learner.id, learner]]));
-      const result = await service.login(
-        { email: learner.email, password: PASSWORD },
-        TEST_IP,
-      );
-      expect('mfaEnrolmentRequired' in result).toBe(false);
-      expect('accessToken' in result).toBe(true);
-    }
   });
 
   it('still asks an enrolled admin for a code rather than re-enrolment', async () => {
@@ -1344,9 +1335,10 @@ describe('mandatory MFA enrolment for privileged roles', () => {
     });
     const done = await service.mfaEnrolComplete(challengeId, code, TEST_IP);
 
-    // Tokens AND recovery codes: the login completes, and they leave with the only thing that
-    // can recover this account later.
+    // Tokens, the user AND recovery codes: the login completes, and they leave with the only
+    // thing that can recover this account later.
     expect(done.accessToken).toBeTruthy();
+    expect(done.user.id).toBe(admin.id);
     expect(done.recoveryCodes.length).toBeGreaterThan(0);
     expect(users.get(admin.id)!.mfaEnabled).toBe(true);
   });

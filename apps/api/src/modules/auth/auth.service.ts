@@ -121,17 +121,18 @@ function toAuthUserDto(user: {
 }
 
 export type LoginResult =
-  | (TokenPair & { user: AuthUserDto })
   | { mfaRequired: true; mfaChallengeId: string }
-  // A privileged account that has not enrolled MFA yet. Distinct from mfaRequired: nothing to
-  // verify against, so the client must take the caller through enrolment before login can
-  // complete.
+  // An account that has not enrolled MFA yet — every brand-new account, straight after signup.
+  // Distinct from mfaRequired: nothing to verify against, so the client must take the caller
+  // through enrolment before login can complete.
   | { mfaEnrolmentRequired: true; enrolmentChallengeId: string };
 
 const MFA_ISSUER = 'ThreatLens';
 const RECOVERY_CODE_COUNT = 10;
-// §15.2: mandatory MFA for the two privileged roles, given their access breadth.
-const MFA_MANDATORY_ROLES = new Set(['org_admin', 'platform_admin']);
+// MFA is mandatory for every account. §15.2 first required it of the two privileged roles
+// only; a learner's account holds a paid subscription and a scored record, and the product
+// teaches account takeover, so it now applies to all. Enforced at login (enrolment before any
+// token is issued) and by refusing to switch it off.
 // ±1 time step (30s) of clock-drift tolerance, matching the classic otplib `window: 1` default.
 const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
 
@@ -352,35 +353,18 @@ export class AuthService {
       return { mfaRequired: true, mfaChallengeId };
     }
 
-    // §15.2: MFA is mandatory for the privileged roles, and this is where that is actually
-    // enforced rather than merely declared. Such an account cannot complete login without
-    // enrolling — but it is handed an enrolment challenge to do so, because withholding the
+    // MFA is mandatory, and this is where that is actually enforced rather than merely
+    // declared. An account without it cannot complete login without enrolling — a new account
+    // reaches this straight after signup, an older one on its next sign-in, an admin-reset one
+    // after the reset. It is handed an enrolment challenge to do so, because withholding the
     // token AND requiring a token to enrol would lock the account out permanently.
-    if (MFA_MANDATORY_ROLES.has(user.role)) {
-      const enrolmentChallengeId = await this.mfaChallenges.createEnrolment(
-        user.id,
-      );
-      return { mfaEnrolmentRequired: true, enrolmentChallengeId };
-    }
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-    await this.auditLog.record({
-      actorUserId: user.id,
-      actorIp: sourceIp,
-      action: 'login',
-      targetType: 'user',
-      targetId: user.id,
-      correlationId,
-    });
-
-    const tokens = await this.issueTokenPair(user);
-    return {
-      ...tokens,
-      user: toAuthUserDto(user),
-    };
+    //
+    // So a password alone never issues tokens: they come only from mfaVerify() or
+    // mfaEnrolComplete(), and those are where lastLoginAt and the audit entry are recorded.
+    const enrolmentChallengeId = await this.mfaChallenges.createEnrolment(
+      user.id,
+    );
+    return { mfaEnrolmentRequired: true, enrolmentChallengeId };
   }
 
   /**
@@ -566,9 +550,9 @@ export class AuthService {
    * Complete enrolment and finish the login it was blocking, returning tokens alongside the
    * recovery codes.
    *
-   * The codes matter more here than anywhere else in the product: for a role in
-   * MFA_MANDATORY_ROLES the password-reset path deliberately does NOT clear MFA, so if the
-   * authenticator is lost these codes are the only remaining way into the account.
+   * The codes matter more here than anywhere else in the product: the password-reset path
+   * deliberately does NOT clear MFA, so if the authenticator is lost these codes are the only
+   * self-service way back into the account.
    */
   async mfaEnrolComplete(
     enrolmentChallengeId: string,
@@ -610,9 +594,22 @@ export class AuthService {
       targetId: userId,
       correlationId,
     });
+    // Enrolment finishes a login, so it is recorded as one — the same entry mfaVerify writes.
+    // Every new account's first session starts here, and it used to leave no `login` at all.
+    await this.auditLog.record({
+      actorUserId: userId,
+      actorIp: sourceIp,
+      action: 'login',
+      targetType: 'user',
+      targetId: userId,
+      correlationId,
+    });
 
+    // The user goes back with the tokens, as from login and mfaVerify. It used to be left out,
+    // and the web client stores whatever `user` it is handed — so finishing enrolment signed
+    // the caller in with no user at all until a reload put them back on the login page.
     const tokens = await this.issueTokenPair(user);
-    return { ...tokens, recoveryCodes };
+    return { ...tokens, user: toAuthUserDto(user), recoveryCodes };
   }
 
   /** §16.2 `POST /auth/mfa/enable`: verifies the pending secret and turns MFA on, issuing one-time recovery codes. */
@@ -666,45 +663,21 @@ export class AuthService {
     return { recoveryCodes };
   }
 
-  /** §16.2 `POST /auth/mfa/disable`. Blocked for the roles §15.1 makes MFA mandatory for. */
-  async mfaDisable(
-    userId: string,
-    password: string,
-    sourceIp?: string,
-    correlationId?: string,
-  ): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.passwordHash) {
-      throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid password.');
-    }
-    if (MFA_MANDATORY_ROLES.has(user.role)) {
-      throw new AppException(
+  /**
+   * §16.2 `POST /auth/mfa/disable`. Always refused now that MFA is mandatory for every account:
+   * switching it off would only send the account back through enrolment at its next sign-in.
+   * Lost-authenticator recovery is an admin reset (admin-users.service.ts resetMfa) or the
+   * break-glass CLI, both of which need a human. The endpoint stays so an older client gets a
+   * clear refusal rather than a 404.
+   */
+  mfaDisable(): Promise<never> {
+    return Promise.reject(
+      new AppException(
         403,
         'MFA_MANDATORY_FOR_ROLE',
-        "MFA cannot be disabled for this account's role.",
-      );
-    }
-    if (!(await argon2.verify(user.passwordHash, password))) {
-      throw new AppException(401, 'INVALID_CREDENTIALS', 'Invalid password.');
-    }
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        mfaEnabled: false,
-        mfaSecret: null,
-        mfaRecoveryCodesHash: [],
-        sessionVersion: { increment: 1 },
-      },
-    });
-    await this.auditLog.record({
-      actorUserId: userId,
-      actorIp: sourceIp,
-      action: 'mfa_disabled',
-      targetType: 'user',
-      targetId: userId,
-      correlationId,
-    });
+        'Two-factor authentication is required on every ThreatLens account and cannot be turned off.',
+      ),
+    );
   }
 
   // The JWT only ever carries id/role (§15.1) — this is the one place a Student's own email,
@@ -807,7 +780,7 @@ export class AuthService {
     if (!user) throw new AppException(404, 'NOT_FOUND', 'User not found.');
     return {
       enabled: user.mfaEnabled,
-      mandatory: MFA_MANDATORY_ROLES.has(user.role),
+      mandatory: true,
     };
   }
 

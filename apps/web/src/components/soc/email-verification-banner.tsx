@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Mail } from "lucide-react";
 import { useAuthStore, useAuthUser } from "@/lib/auth-store";
 import { ApiError } from "@/lib/api-client";
@@ -10,11 +10,34 @@ import { ApiError } from "@/lib/api-client";
 export function EmailVerificationBanner() {
   const user = useAuthUser();
   const requestEmailVerification = useAuthStore((s) => s.requestEmailVerification);
+  const refreshMe = useAuthStore((s) => s.refreshMe);
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const unverified = !!user && !user.emailVerified;
 
-  if (!user || user.emailVerified) return null;
+  // The link is usually opened somewhere else — a new tab (covered by the store's cross-tab
+  // sync) or the phone the email arrived on, which this tab can never hear about. So while the
+  // banner is showing, ask the server again whenever the person comes back to this tab.
+  useEffect(() => {
+    if (!unverified) return;
+    let last = 0;
+    const recheck = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - last < 5000) return;
+      last = now;
+      void refreshMe().catch(() => {});
+    };
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
+  }, [unverified, refreshMe]);
+
+  if (!unverified) return null;
 
   async function resend() {
     setSending(true);
