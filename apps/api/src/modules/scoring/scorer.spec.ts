@@ -174,6 +174,19 @@ describe('computeScore (§12.4)', () => {
       );
       expect(result.responsePercent).toBe(0);
     });
+
+    it('does not zero a true positive whose rubric lists no containment', () => {
+      // A scenario version published before expectations were authored — which in-flight
+      // sessions stay pinned to — must not punish the analyst who isolates a compromised host.
+      const result = computeScore(
+        baseInput({
+          containmentExpectationCount: 0,
+          unnecessaryContainmentCount: 2,
+          requiredVerdict: 'true_positive',
+        }),
+      );
+      expect(result.responsePercent).toBe(100);
+    });
   });
 
   it('deducts the hint penalty from the final overall percent', () => {

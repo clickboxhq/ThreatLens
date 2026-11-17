@@ -109,15 +109,22 @@ export function computeScore(input: ScoringInput): RubricBreakdown {
         )
       : 100;
 
-  // Response: the fraction of expected containment taken against the right target. When the
-  // rubric expects nothing — a false or benign positive — the correct response is no action,
-  // and taking one is the over-containment the investigation checklist warns about: it scores
-  // zero, not a discount. Extra actions in a scenario that does expect containment are
-  // reported in the debrief but not penalised here.
+  // Response: the fraction of expected containment taken against the right target. On a false
+  // or benign positive the correct response is no action, and taking one is the
+  // over-containment the investigation checklist warns about: it scores zero, not a discount.
+  // The zero keys on the verdict, not on the expectation list being empty: a true positive
+  // whose rubric lists no containment (a version published before expectations were authored,
+  // which in-flight sessions stay pinned to, or a builder scenario that left them out) has
+  // nothing to measure against, so it scores full marks rather than punishing a reasonable
+  // isolate. Extra actions where containment is expected are reported in the debrief but not
+  // penalised here.
+  const overContained =
+    input.requiredVerdict !== 'true_positive' &&
+    input.unnecessaryContainmentCount > 0;
   const responsePercent =
     input.containmentExpectationCount > 0
       ? (input.containmentMetCount / input.containmentExpectationCount) * 100
-      : input.unnecessaryContainmentCount > 0
+      : overContained
         ? 0
         : 100;
 
